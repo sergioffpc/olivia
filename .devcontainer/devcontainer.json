@@ -1,0 +1,36 @@
+{
+  "name": "olivia",
+  "image": "mcr.microsoft.com/devcontainers/rust:1",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+  // Rootless podman: map the host user onto the image's vscode user (uid 1000).
+  "runArgs": ["--userns=keep-id"],
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": false,
+  // Everything generated lives in named volumes, not in the host's home or workspace.
+  "containerEnv": {
+    "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target",
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+  },
+  "mounts": [
+    "source=olivia-cargo-registry,target=/usr/local/cargo/registry,type=volume",
+    "source=olivia-cargo-target,target=/home/vscode/.cache/cargo-target,type=volume",
+    "source=olivia-claude-config,target=/home/vscode/.claude,type=volume",
+    "source=olivia-gh-config,target=/home/vscode/.config/gh,type=volume"
+  ],
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "vivaxy.vscode-conventional-commits"
+      ]
+    }
+  }
+}
