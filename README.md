@@ -11,8 +11,15 @@ cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ```
+
+CI also runs `cargo-deny` against `deny.toml`.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and must be signed. The devcontainer enables the `commit-msg` hook in `.githooks/`.
 
 Branches follow git flow, through pull requests: `feature/*` targets `develop`, while `release/*` and `hotfix/*` target `main` and then merge back into `develop`.
+
+## License
+
+[MIT](LICENSE)

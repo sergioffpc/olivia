@@ -12,6 +12,7 @@ Before finishing a change, run:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ```
 
 ## Commits
