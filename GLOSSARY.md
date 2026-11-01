@@ -12,6 +12,18 @@ _Avoid_: App, application, scene
 One of the three moments in which Olivia calls the game: load, update or draw.
 _Avoid_: Callback, hook, stage
 
+**Game loop**:
+What drives a game through its phases, from load until it quits or a phase fails.
+_Avoid_: Main loop, runner
+
+**Config**:
+What a game fixes before the game loop starts: its identity and how its window begins.
+_Avoid_: Settings, options
+
+**Setup**:
+The handles the load phase receives.
+_Avoid_: Init, context
+
 **Handle**:
 A reference to one Olivia module that a phase hands to the game for the duration of that call.
 _Avoid_: Context, service
@@ -23,6 +35,10 @@ _Avoid_: Tick, frame (a frame is one draw)
 **Interpolation factor**:
 How far the time since the last update has advanced into the next fixed step, from 0 to 1. Draw uses it to render between two states.
 _Avoid_: Alpha
+
+**Timer**:
+The read-only view of the game's time: the fixed step, the time it has advanced through and the frame rate.
+_Avoid_: Clock, stopwatch
 
 **World**:
 The physics simulation the game owns: the bodies and colliders in it, stepped once per update.
