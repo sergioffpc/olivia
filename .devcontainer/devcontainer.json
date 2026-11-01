@@ -13,8 +13,7 @@
   "updateRemoteUserUID": false,
   // Everything generated lives in named volumes, not in the host's home or workspace.
   "containerEnv": {
-    "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target",
-    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+    "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target"
   },
   "mounts": [
     "source=olivia-cargo-registry,target=/usr/local/cargo/registry,type=volume",
@@ -27,9 +26,7 @@
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb",
-        "tamasfe.even-better-toml",
-        "vivaxy.vscode-conventional-commits"
+        "vadimcn.vscode-lldb"
       ]
     }
   }

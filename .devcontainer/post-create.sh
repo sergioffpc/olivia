@@ -10,3 +10,8 @@ sudo chown -R "$(id -u):$(id -g)" \
 
 git config core.hooksPath .githooks
 rustup toolchain install
+
+# .claude/settings.json only enables the plugin; it must still be installed
+# into the config volume, which starts empty.
+claude plugin marketplace add anthropics/claude-plugins-official
+claude plugin install mattpocock-skills@claude-plugins-official --scope user
