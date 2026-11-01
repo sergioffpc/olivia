@@ -11,6 +11,8 @@ license = "MIT"
 olivia-math = { path = "crates/olivia-math" }
 # Must stay at the version rapier2d uses (ADR 0001).
 glam = { version = "0.33", features = ["bytemuck"] }
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = "0.3"
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
