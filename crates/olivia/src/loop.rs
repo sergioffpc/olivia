@@ -25,7 +25,7 @@ pub fn run_with<G: Game, C: Clock>(_config: Config, mut clock: C) -> Result<()> 
     let quit = Cell::new(false);
 
     loop {
-        for _ in 0..timer.start_frame(clock.next_frame()) {
+        for _ in 0..timer.steps_for_frame(clock.next_frame()) {
             trace_span!("update").in_scope(|| game.update(Update::new(&timer, &quit)))?;
             timer.finish_step();
             if quit.get() {

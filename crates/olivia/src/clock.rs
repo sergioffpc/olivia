@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::timer::STEP;
+use crate::timer::FIXED_STEP;
 
 /// Where the loop gets its time from.
 pub trait Clock {
@@ -18,7 +18,7 @@ pub(crate) struct SystemClock {
 impl Clock for SystemClock {
     fn next_frame(&mut self) -> Duration {
         if let Some(last) = self.last {
-            thread::sleep((last + STEP).saturating_duration_since(Instant::now()));
+            thread::sleep((last + FIXED_STEP).saturating_duration_since(Instant::now()));
         }
         let now = Instant::now();
         let frame_time = self.last.map_or(Duration::ZERO, |last| now - last);

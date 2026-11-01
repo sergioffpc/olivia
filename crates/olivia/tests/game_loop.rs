@@ -17,7 +17,7 @@ thread_local! {
     static FACTORS: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
     static ELAPSED: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static LAST_DT: Cell<f32> = const { Cell::new(0.0) };
-    static LAST_FPS: Cell<f32> = const { Cell::new(0.0) };
+    static LAST_FRAME_RATE: Cell<f32> = const { Cell::new(0.0) };
 }
 
 fn trace(phase: char) {
@@ -240,10 +240,10 @@ impl<const QUIT_AT: u32> Game for Timed<QUIT_AT> {
 
     fn update(&mut self, u: Update<'_>) -> Result<()> {
         LAST_DT.set(u.timer.dt());
-        LAST_FPS.set(u.timer.fps());
+        LAST_FRAME_RATE.set(u.timer.frame_rate());
         ELAPSED.with_borrow_mut(|elapsed| elapsed.push(u.timer.elapsed()));
         self.updates += 1;
-        if self.updates == QUIT_AT || u.timer.fps() > 0.0 {
+        if self.updates == QUIT_AT || u.timer.frame_rate() > 0.0 {
             u.quit();
         }
         Ok(())
@@ -271,9 +271,13 @@ fn elapsed_advances_one_fixed_step_per_update_and_skips_dropped_steps() {
 }
 
 #[test]
-fn fps_counts_frames_over_the_last_second() {
+fn frame_rate_counts_frames_over_the_last_second() {
     let _ = drive::<Timed<1000>>(&[STEP * 2]);
-    assert!((LAST_FPS.get() - 30.0).abs() < 0.1, "{}", LAST_FPS.get());
+    assert!(
+        (LAST_FRAME_RATE.get() - 30.0).abs() < 0.1,
+        "{}",
+        LAST_FRAME_RATE.get()
+    );
 }
 
 #[test]
@@ -293,7 +297,11 @@ fn staying_behind_warns_once_until_the_loop_catches_up() {
 }
 
 #[test]
-fn fps_ignores_the_first_frame_when_no_time_has_passed() {
+fn frame_rate_ignores_the_first_frame_when_no_time_has_passed() {
     let _ = drive::<Timed<1000>>(&[Duration::ZERO, STEP * 2]);
-    assert!((LAST_FPS.get() - 30.0).abs() < 0.1, "{}", LAST_FPS.get());
+    assert!(
+        (LAST_FRAME_RATE.get() - 30.0).abs() < 0.1,
+        "{}",
+        LAST_FRAME_RATE.get()
+    );
 }
