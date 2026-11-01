@@ -21,13 +21,5 @@
     "source=olivia-claude-config,target=/home/vscode/.claude,type=volume",
     "source=olivia-gh-config,target=/home/vscode/.config/gh,type=volume"
   ],
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb"
-      ]
-    }
-  }
+  "postCreateCommand": "bash .devcontainer/post-create.sh"
 }
