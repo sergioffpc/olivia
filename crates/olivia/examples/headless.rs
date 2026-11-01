@@ -22,10 +22,8 @@ impl Game for Countdown {
         Ok(())
     }
 
-    fn draw(&self, f: &mut Frame<'_>) {
-        // A game with a window would draw here, between two update states.
-        let _ = f.interpolation_factor();
-    }
+    // A game with a window would draw here, between two update states.
+    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 fn main() -> Result<()> {

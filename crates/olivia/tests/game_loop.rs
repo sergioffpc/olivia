@@ -275,3 +275,25 @@ fn fps_counts_frames_over_the_last_second() {
     let _ = drive::<Timed<1000>>(&[STEP * 2]);
     assert!((LAST_FPS.get() - 30.0).abs() < 0.1, "{}", LAST_FPS.get());
 }
+
+#[test]
+fn staying_behind_warns_once_until_the_loop_catches_up() {
+    let far_behind = STEP * 20;
+    let deltas = [
+        Duration::ZERO,
+        far_behind,
+        far_behind,
+        STEP,
+        far_behind,
+        STEP,
+    ];
+    let (records, _) = recorded(|| drive::<Traced<27>>(&deltas));
+    let warnings = records.iter().filter(|(level, _)| *level == Level::WARN);
+    assert_eq!(warnings.count(), 2);
+}
+
+#[test]
+fn fps_ignores_the_first_frame_when_no_time_has_passed() {
+    let _ = drive::<Timed<1000>>(&[Duration::ZERO, STEP * 2]);
+    assert!((LAST_FPS.get() - 30.0).abs() < 0.1, "{}", LAST_FPS.get());
+}

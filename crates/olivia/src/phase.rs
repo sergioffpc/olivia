@@ -38,7 +38,7 @@ impl<'a> Update<'a> {
     }
 }
 
-/// The argument of [`Game::draw`](crate::Game::draw).
+/// The handle [`Game::draw`](crate::Game::draw) receives to produce one frame.
 #[derive(Debug)]
 pub struct Frame<'a> {
     interpolation_factor: f32,

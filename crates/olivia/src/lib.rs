@@ -1,16 +1,19 @@
 //! Olivia, a 2D game library.
 
+mod clock;
 mod config;
-mod game_loop;
+mod r#loop;
 mod phase;
 mod timer;
 
 pub use olivia_math as math;
 
-pub use config::Config;
-pub use game_loop::run;
 #[doc(hidden)]
-pub use game_loop::{Clock, run_with};
+pub use clock::Clock;
+pub use config::Config;
+pub use r#loop::run;
+#[doc(hidden)]
+pub use r#loop::run_with;
 pub use phase::{Frame, Setup, Update};
 pub use timer::Timer;
 
