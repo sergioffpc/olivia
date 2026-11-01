@@ -1,6 +1,6 @@
 # olivia
 
-Rust binary crate.
+Rust workspace for the Olivia 2D game library: the umbrella `olivia` crate plus one `olivia-*` crate per module, all under `crates/`.
 
 ## Environment
 

@@ -1,6 +1,12 @@
-[package]
-name = "olivia"
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
+olivia-math = { path = "crates/olivia-math" }
+# Must stay at the version rapier2d uses (ADR 0001).
+glam = { version = "0.33", features = ["bytemuck"] }

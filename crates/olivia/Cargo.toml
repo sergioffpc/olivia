@@ -1,0 +1,7 @@
+[package]
+name = "olivia"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+olivia-math.workspace = true
