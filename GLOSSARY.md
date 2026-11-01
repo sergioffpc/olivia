@@ -44,9 +44,9 @@ _Avoid_: Layer, render pass
 Audio loaded and ready to play. It holds no playing state, so one sound can play many times at once.
 _Avoid_: Source, clip
 
-**Playback**:
-One playing of a sound, and the thing the game controls while it lasts. Letting go of a playback does not stop it.
-_Avoid_: Voice, instance
+**Cue**:
+One playing of a sound, and the thing the game controls while it lasts. Letting go of a cue does not stop it.
+_Avoid_: Playback, voice, instance
 
 **Emitter**:
 A position in the game's space that sounds play from. Every sound playing from an emitter moves with it.
