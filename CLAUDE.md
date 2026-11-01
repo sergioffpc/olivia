@@ -18,6 +18,16 @@ cargo test
 
 Use Conventional Commits: `<type>[(scope)][!]: <description>`. The `commit-msg` hook in `.githooks/` rejects anything else.
 
+All commits must be signed.
+
+## Branches
+
+Git flow, through pull requests: `main` and `develop` are protected and take no direct pushes. `develop` is the default branch.
+
+- `feature/*` branches from `develop` and merges into `develop`.
+- `release/*` branches from `develop` and merges into `main`, then `main` merges back into `develop`.
+- `hotfix/*` branches from `main` and merges into `main`, then `main` merges back into `develop`.
+
 ## Agent skills
 
 ### Issue tracker
