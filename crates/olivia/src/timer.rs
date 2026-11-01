@@ -9,7 +9,7 @@ pub(crate) const FIXED_STEP: Duration = Duration::from_nanos(1_000_000_000 / 60)
 const MAX_STEPS_PER_FRAME: u128 = 8;
 
 /// How long the frame rate is measured over before it is updated.
-const FPS_WINDOW: Duration = Duration::from_secs(1);
+const FRAME_RATE_WINDOW: Duration = Duration::from_secs(1);
 
 /// The game's time, read-only.
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub struct Timer {
     /// Whether the last frame had to drop fixed steps.
     was_behind: bool,
     /// The frame rate measured over the last full window.
-    fps: f32,
+    frame_rate: f32,
     /// The frames counted in the window being measured.
     window_frames: u32,
     /// The time the window being measured has covered so far.
@@ -43,10 +43,10 @@ impl Timer {
         self.elapsed.as_secs_f64()
     }
 
-    /// The frames per second measured over the last full second, 0 before the first one ends.
+    /// The frames drawn per second, measured over the last full second; 0 before the first one ends.
     #[must_use]
-    pub fn fps(&self) -> f32 {
-        self.fps
+    pub fn frame_rate(&self) -> f32 {
+        self.frame_rate
     }
 
     pub(crate) fn new() -> Self {
@@ -55,7 +55,7 @@ impl Timer {
             // Seeded with one step, so an update always runs before the first draw.
             unstepped: FIXED_STEP,
             was_behind: false,
-            fps: 0.0,
+            frame_rate: 0.0,
             window_frames: 0,
             window_time: Duration::ZERO,
         }
@@ -63,7 +63,7 @@ impl Timer {
 
     /// Accounts for a frame that took `frame_time` and returns how many fixed steps it runs.
     pub(crate) fn steps_for_frame(&mut self, frame_time: Duration) -> u128 {
-        self.measure_fps(frame_time);
+        self.measure_frame_rate(frame_time);
         self.unstepped += frame_time;
 
         let step_nanos = FIXED_STEP.as_nanos();
@@ -91,20 +91,20 @@ impl Timer {
     }
 
     /// Counts a frame, and updates the frame rate once a full window has passed.
-    fn measure_fps(&mut self, frame_time: Duration) {
+    fn measure_frame_rate(&mut self, frame_time: Duration) {
         // The first frame takes no time and would skew the rate.
         if frame_time.is_zero() {
             return;
         }
         self.window_frames += 1;
         self.window_time += frame_time;
-        if self.window_time >= FPS_WINDOW {
+        if self.window_time >= FRAME_RATE_WINDOW {
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "a frame count stays far below 2^24"
             )]
             let frames = self.window_frames as f32;
-            self.fps = frames / self.window_time.as_secs_f32();
+            self.frame_rate = frames / self.window_time.as_secs_f32();
             self.window_frames = 0;
             self.window_time = Duration::ZERO;
         }
