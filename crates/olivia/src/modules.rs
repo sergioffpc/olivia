@@ -1,3 +1,5 @@
+#[cfg(feature = "audio")]
+use olivia_audio::Audio;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
@@ -10,6 +12,8 @@ use crate::{Config, Result};
 /// The modules a game's phases borrow, built from its [`Config`] before the window opens.
 #[derive(Debug)]
 pub struct Modules {
+    #[cfg(feature = "audio")]
+    pub(crate) audio: Audio,
     #[cfg(feature = "filesystem")]
     pub(crate) filesystem: Filesystem,
     #[cfg(feature = "graphics")]
@@ -30,6 +34,8 @@ impl Modules {
     )]
     pub fn new(config: &Config) -> Result<Self> {
         Ok(Self {
+            #[cfg(feature = "audio")]
+            audio: Audio::default(),
             #[cfg(feature = "filesystem")]
             filesystem: config.filesystem()?,
             #[cfg(feature = "graphics")]

@@ -2,6 +2,8 @@ use std::cell::Cell;
 #[cfg(not(feature = "graphics"))]
 use std::marker::PhantomData;
 
+#[cfg(feature = "audio")]
+use olivia_audio::Audio;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
@@ -20,6 +22,9 @@ use crate::{Modules, Timer};
 pub struct Setup<'a> {
     /// The game's window.
     pub window: &'a mut Window,
+    /// The game's audio.
+    #[cfg(feature = "audio")]
+    pub audio: &'a mut Audio,
     /// The game's assets and saves.
     #[cfg(feature = "filesystem")]
     pub filesystem: &'a mut Filesystem,
@@ -30,12 +35,14 @@ pub struct Setup<'a> {
 
 impl<'a> Setup<'a> {
     #[cfg_attr(
-        not(any(feature = "filesystem", feature = "graphics")),
+        not(any(feature = "audio", feature = "filesystem", feature = "graphics")),
         expect(unused_variables)
     )]
     pub(crate) fn new(window: &'a mut Window, modules: &'a mut Modules) -> Self {
         Self {
             window,
+            #[cfg(feature = "audio")]
+            audio: &mut modules.audio,
             #[cfg(feature = "filesystem")]
             filesystem: &mut modules.filesystem,
             #[cfg(feature = "graphics")]
@@ -50,6 +57,9 @@ impl<'a> Setup<'a> {
 pub struct Update<'a> {
     /// The game's window.
     pub window: &'a mut Window,
+    /// The game's audio.
+    #[cfg(feature = "audio")]
+    pub audio: &'a mut Audio,
     /// The game's assets and saves.
     #[cfg(feature = "filesystem")]
     pub filesystem: &'a mut Filesystem,
@@ -68,7 +78,12 @@ pub struct Update<'a> {
 
 impl<'a> Update<'a> {
     #[cfg_attr(
-        not(any(feature = "filesystem", feature = "graphics", feature = "input")),
+        not(any(
+            feature = "audio",
+            feature = "filesystem",
+            feature = "graphics",
+            feature = "input"
+        )),
         expect(unused_variables)
     )]
     pub(crate) fn new(
@@ -80,6 +95,8 @@ impl<'a> Update<'a> {
     ) -> Self {
         Self {
             window,
+            #[cfg(feature = "audio")]
+            audio: &mut modules.audio,
             #[cfg(feature = "filesystem")]
             filesystem: &mut modules.filesystem,
             #[cfg(feature = "graphics")]

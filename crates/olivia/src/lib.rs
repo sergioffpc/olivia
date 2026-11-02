@@ -7,6 +7,8 @@ mod modules;
 mod phase;
 mod timer;
 
+#[cfg(feature = "audio")]
+pub use olivia_audio as audio;
 #[cfg(feature = "filesystem")]
 pub use olivia_filesystem as filesystem;
 #[cfg(feature = "graphics")]

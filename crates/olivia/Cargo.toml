@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["filesystem", "graphics", "input", "physics"]
+default = ["audio", "filesystem", "graphics", "input", "physics"]
+audio = ["dep:olivia-audio"]
 filesystem = ["dep:olivia-filesystem"]
 graphics = ["dep:olivia-graphics"]
 input = ["dep:olivia-input"]
@@ -13,6 +14,7 @@ physics = ["dep:olivia-physics"]
 enhanced-determinism = ["olivia-physics?/enhanced-determinism"]
 
 [dependencies]
+olivia-audio = { workspace = true, optional = true }
 olivia-filesystem = { workspace = true, optional = true }
 olivia-graphics = { workspace = true, optional = true }
 olivia-input = { workspace = true, optional = true }
@@ -25,6 +27,10 @@ tracing.workspace = true
 hecs.workspace = true
 tempfile.workspace = true
 tracing-subscriber.workspace = true
+
+[[example]]
+name = "audio"
+required-features = ["audio", "filesystem", "input"]
 
 [[example]]
 name = "clear"
