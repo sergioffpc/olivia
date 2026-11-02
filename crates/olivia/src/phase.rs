@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
-use olivia_graphics::{Graphics, Target};
+use olivia_graphics::{Camera, Graphics, Target, View};
 #[cfg(feature = "graphics")]
 use olivia_math::Color;
 use olivia_window::{Window, WindowEvent};
@@ -136,5 +136,11 @@ impl<'a> Frame<'a> {
     #[cfg(feature = "graphics")]
     pub fn clear(&mut self, color: Color) {
         self.target.clear(color);
+    }
+
+    /// Starts drawing through `camera`. Only a [`View`] draws, and views draw in creation order.
+    #[cfg(feature = "graphics")]
+    pub fn view(&mut self, camera: Camera) -> View<'_> {
+        self.target.view(camera)
     }
 }

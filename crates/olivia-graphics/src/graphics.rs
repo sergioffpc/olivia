@@ -1,8 +1,11 @@
-use olivia_math::Color;
+use olivia_math::{Color, Vec2};
 use olivia_window::Window;
 
 use crate::Error;
+use crate::camera::Camera;
 use crate::gpu::Gpu;
+use crate::texture::Texture;
+use crate::view::{Mesh, Vertex, View};
 
 /// How drawing runs, fixed before the window opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,9 +52,61 @@ impl Graphics {
     #[doc(hidden)]
     pub fn target(&mut self) -> Target<'_> {
         Target {
+            viewport: self.gpu.as_ref().map_or(Vec2::ZERO, Gpu::viewport),
             gpu: self.gpu.as_mut(),
             clear_color: Color::BLACK,
+            mesh: Mesh::default(),
         }
+    }
+
+    /// Decodes a PNG or JPEG image into a texture.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UndecodableImage`] if `bytes` are not a PNG or JPEG image.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the image is larger than the GPU supports.
+    pub fn texture(&mut self, bytes: &[u8]) -> Result<Texture, Error> {
+        let image = image::load_from_memory(bytes)
+            .map_err(|error| Error::UndecodableImage(error.into()))?
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        Ok(self.upload(width, height, image.into_raw()))
+    }
+
+    /// Creates a texture from plain RGBA pixels, row by row from the top-left corner.
+    ///
+    /// # Errors
+    ///
+    /// Never fails today; the `Result` matches [`texture`](Self::texture).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the texture is empty, if `pixels` does not hold 4 bytes per pixel, or if the
+    /// texture is larger than the GPU supports.
+    pub fn texture_rgba(
+        &mut self,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Result<Texture, Error> {
+        assert!(width > 0 && height > 0, "a texture cannot be empty");
+        assert_eq!(
+            u128::from(width) * u128::from(height) * 4,
+            pixels.len() as u128,
+            "a {width} by {height} texture needs 4 bytes per pixel"
+        );
+        Ok(self.upload(width, height, pixels.to_vec()))
+    }
+
+    fn upload(&self, width: u32, height: u32, rgba: Vec<u8>) -> Texture {
+        let bind_group = self
+            .gpu
+            .as_ref()
+            .map(|gpu| gpu.upload(width, height, &rgba));
+        Texture::new(width, height, rgba, bind_group)
     }
 
     /// The underlying `wgpu` device and queue. Unstable: they change with `wgpu`.
@@ -72,6 +127,9 @@ impl Graphics {
 pub struct Target<'a> {
     gpu: Option<&'a mut Gpu>,
     clear_color: Color,
+    /// The window's logical size when the frame started; zero with no GPU.
+    viewport: Vec2,
+    mesh: Mesh,
 }
 
 impl Target<'_> {
@@ -86,9 +144,21 @@ impl Target<'_> {
         self.clear_color = color;
     }
 
+    /// Starts drawing through `camera`, after anything drawn so far.
+    pub fn view(&mut self, camera: Camera) -> View<'_> {
+        View::new(&mut self.mesh, camera, self.viewport)
+    }
+
+    /// What the frame has drawn so far, in order.
+    #[must_use]
+    pub fn vertices(&self) -> &[Vertex] {
+        &self.mesh.vertices
+    }
+
     /// Shows the frame and returns whether it reached the window.
     #[must_use]
     pub fn present(self) -> bool {
-        self.gpu.is_some_and(|gpu| gpu.present(self.clear_color))
+        self.gpu
+            .is_some_and(|gpu| gpu.present(self.clear_color, &self.mesh, self.viewport))
     }
 }
