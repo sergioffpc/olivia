@@ -1,8 +1,10 @@
-//! Characters built from parts on a skeleton.
+//! Characters built from parts on a skeleton, and the animations they play.
 
+mod animation;
 mod character;
 mod skeleton;
 
+pub use animation::{Animation, Play};
 pub use character::Character;
 
 /// A failure of this module.
@@ -24,4 +26,10 @@ pub enum Error {
     /// The joints do not form a skeleton.
     #[error("invalid skeleton: {0}")]
     InvalidSkeleton(String),
+    /// The animation file breaks a rule of the format.
+    #[error("invalid animation: {0}")]
+    InvalidAnimation(String),
+    /// The animation names a joint the skeleton lacks.
+    #[error("the skeleton has no joint {0:?}")]
+    MissingJoint(String),
 }

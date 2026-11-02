@@ -9,8 +9,8 @@ const VERSION: u64 = 1;
 
 /// Read on its own, so that a newer file with another shape still reports its version.
 #[derive(Deserialize)]
-struct Header {
-    version: u64,
+pub(crate) struct Header {
+    pub(crate) version: u64,
 }
 
 #[derive(Deserialize)]
@@ -28,53 +28,80 @@ struct Entry {
     parent_point: Option<[f32; 2]>,
 }
 
+/// A valid skeleton.
+#[derive(Debug)]
+pub(crate) struct Skeleton {
+    /// The joints in the order of the file.
+    pub(crate) joints: Vec<Joint>,
+    /// The index of each joint, with every joint after the one it hangs from.
+    pub(crate) walk: Vec<usize>,
+}
+
 /// A joint of a valid skeleton.
 #[derive(Debug)]
 pub(crate) struct Joint {
+    /// Its name, which animations use.
+    pub(crate) name: String,
     /// The image name of its part.
     pub(crate) part: String,
     /// Its pixel on its part's image.
     pub(crate) point: Vec2,
-    /// Where it is from the root joint as drawn, in pixels.
+    /// The index of the joint it hangs from.
+    pub(crate) parent: Option<usize>,
+    /// Where it is from the joint it hangs from as drawn, in pixels.
     pub(crate) offset: Vec2,
 }
 
 /// Reads a `skeleton.json`, keeping the order of its joints.
-pub(crate) fn parse(bytes: &[u8]) -> Result<Vec<Joint>, Error> {
+pub(crate) fn parse(bytes: &[u8]) -> Result<Skeleton, Error> {
     let Header { version } = serde_json::from_slice(bytes)?;
     if version != VERSION {
         return Err(Error::UnknownVersion(version));
     }
-    let File { joints } = serde_json::from_slice(bytes)?;
-    let offsets = offsets(&joints)?;
-    let joint = |(entry, offset): (Entry, Vec2)| Joint {
-        part: entry.part,
-        point: entry.point.into(),
-        offset,
+    let File { joints: entries } = serde_json::from_slice(bytes)?;
+    let walk = walk(&entries)?;
+    let joint = |entry: &Entry| {
+        let parent = |part: &String| entries.iter().position(|other| other.part == *part);
+        let parent = entry.parent.as_ref().and_then(parent);
+        let from_parent = |(parent, point): (usize, [f32; 2])| {
+            Vec2::from(point) - Vec2::from(entries[parent].point)
+        };
+        Joint {
+            name: entry.name.clone(),
+            part: entry.part.clone(),
+            point: entry.point.into(),
+            parent,
+            offset: parent
+                .zip(entry.parent_point)
+                .map_or(Vec2::ZERO, from_parent),
+        }
     };
-    Ok(joints.into_iter().zip(offsets).map(joint).collect())
+    Ok(Skeleton {
+        joints: entries.iter().map(joint).collect(),
+        walk,
+    })
 }
 
 /// Walks the tree from the root, finding each joint from the one it hangs from.
-fn offsets(joints: &[Entry]) -> Result<Vec<Vec2>, Error> {
-    let root = root(joints)?;
-    let mut offsets = vec![None; joints.len()];
-    offsets[root] = Some(Vec2::ZERO);
-    let mut hung = vec![root];
-    while let Some(parent) = hung.pop() {
+fn walk(joints: &[Entry]) -> Result<Vec<usize>, Error> {
+    let mut walk = vec![root(joints)?];
+    let mut next = 0;
+    while let Some(&parent) = walk.get(next) {
+        next += 1;
         for (index, joint) in joints.iter().enumerate() {
             if joint.parent.as_ref() == Some(&joints[parent].part) {
-                let parent_point = joint.parent_point.ok_or_else(|| {
-                    invalid(format!("joint {:?} has no parent_point", joint.name))
-                })?;
-                let from_parent = Vec2::from(parent_point) - Vec2::from(joints[parent].point);
-                offsets[index] = offsets[parent].map(|offset| offset + from_parent);
-                hung.push(index);
+                if joint.parent_point.is_none() {
+                    let reason = format!("joint {:?} has no parent_point", joint.name);
+                    return Err(invalid(reason));
+                }
+                walk.push(index);
             }
         }
     }
-    let offsets: Option<Vec<Vec2>> = offsets.into_iter().collect();
-    offsets.ok_or_else(|| invalid("the joints form a cycle".to_owned()))
+    if walk.len() < joints.len() {
+        return Err(invalid("the joints form a cycle".to_owned()));
+    }
+    Ok(walk)
 }
 
 /// Finds the only joint with no parent, once names, parts and parents are known to be sound.
