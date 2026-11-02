@@ -34,6 +34,10 @@ printf 'pcm.!default pulse\nctl.!default pulse\n' >"$HOME/.asoundrc"
 git config core.hooksPath .githooks
 rustup toolchain install
 
+# The devcontainer feature can leave out the native package claude runs from.
+claude --version >/dev/null 2>&1 ||
+    sudo env PATH="$PATH" npm install -g @anthropic-ai/claude-code --include=optional
+
 # .claude/settings.json only enables the plugin; it must still be installed
 # into the config volume, which starts empty.
 claude plugin marketplace add anthropics/claude-plugins-official
