@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use olivia_math::Vec2;
+use olivia_window::Attributes;
 
 /// How a game starts, fixed before [`run`](crate::run).
 ///
@@ -81,5 +82,15 @@ impl Config {
     pub fn assets(mut self, path: impl Into<PathBuf>) -> Self {
         self.assets = Some(path.into());
         self
+    }
+
+    /// How the window starts.
+    pub(crate) fn window_attributes(self) -> Attributes {
+        Attributes {
+            title: self.title,
+            size: self.size,
+            resizable: self.resizable,
+            fullscreen: self.fullscreen,
+        }
     }
 }

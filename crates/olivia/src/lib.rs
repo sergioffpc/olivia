@@ -7,13 +7,12 @@ mod phase;
 mod timer;
 
 pub use olivia_math as math;
+pub use olivia_window as window;
 
-#[doc(hidden)]
-pub use clock::Clock;
 pub use config::Config;
-pub use r#loop::run;
 #[doc(hidden)]
-pub use r#loop::run_with;
+pub use r#loop::GameLoop;
+pub use r#loop::run;
 pub use phase::{Frame, Setup, Update};
 pub use timer::Timer;
 
@@ -22,7 +21,7 @@ pub type Result<T = (), E = Box<dyn std::error::Error + Send + Sync>> = std::res
 
 /// A game: the state it owns and the phases Olivia drives.
 pub trait Game: Sized {
-    /// Builds the game. Runs once, before anything else.
+    /// Builds the game. Runs once, after the window exists and before anything else.
     ///
     /// # Errors
     ///

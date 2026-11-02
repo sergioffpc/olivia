@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 olivia-math.workspace = true
+olivia-window.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

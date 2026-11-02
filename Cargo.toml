@@ -9,10 +9,19 @@ license = "MIT"
 
 [workspace.dependencies]
 olivia-math = { path = "crates/olivia-math" }
+olivia-window = { path = "crates/olivia-window" }
 # Must stay at the version rapier2d uses (ADR 0001).
 glam = { version = "0.33", features = ["bytemuck"] }
+thiserror = "2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = "0.3"
+# The notitle decorations avoid ab_glyph, whose ttf-parser is unmaintained.
+winit = { version = "0.30", default-features = false, features = [
+    "wayland",
+    "wayland-csd-adwaita-notitle",
+    "wayland-dlopen",
+    "x11",
+] }
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
