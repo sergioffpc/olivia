@@ -1,10 +1,13 @@
-//! The game loop, driven by a fake clock.
+//! The game loop, driven frame by frame on made-up frame times.
 
 use std::cell::{Cell, RefCell};
+use std::iter;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use olivia::{Clock, Config, Frame, Game, Result, Setup, Update, run, run_with};
+use olivia::math::Vec2;
+use olivia::window::Window;
+use olivia::{Frame, Game, GameLoop, Result, Setup, Update};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::Layer;
@@ -22,24 +25,6 @@ thread_local! {
 
 fn trace(phase: char) {
     TRACE.with_borrow_mut(|t| t.push(phase));
-}
-
-/// Replays `deltas` as frame times, then repeats the last one.
-struct FakeClock<'a> {
-    deltas: &'a [Duration],
-}
-
-impl Clock for FakeClock<'_> {
-    fn next_frame(&mut self) -> Duration {
-        match self.deltas {
-            [delta] => *delta,
-            [delta, rest @ ..] => {
-                self.deltas = rest;
-                *delta
-            }
-            [] => Duration::ZERO,
-        }
-    }
 }
 
 /// Traces each phase as `L`, `U` or `D`, and quits on update number `QUIT_AT`.
@@ -68,10 +53,20 @@ impl<const QUIT_AT: u32> Game for Traced<QUIT_AT> {
     }
 }
 
-/// Runs `G` under the fake clock and returns the phases it went through.
+/// Runs `G` on frames that take `deltas`, repeating the last one until it stops.
+fn run_frames<G: Game>(deltas: &[Duration]) -> Result<()> {
+    let mut window = Window::headless();
+    let mut game_loop = GameLoop::<G>::new(&mut window, Vec2::ZERO)?;
+    let last = deltas.last().copied().unwrap_or_default();
+    let mut frame_times = deltas.iter().copied().chain(iter::repeat(last));
+    while game_loop.run_frame(frame_times.next().unwrap_or_default(), &mut window)? {}
+    Ok(())
+}
+
+/// Runs `G` and returns the phases it went through.
 fn drive<G: Game>(deltas: &[Duration]) -> (Result<()>, String) {
     TRACE.take();
-    let result = run_with::<G, _>(Config::new("test"), FakeClock { deltas });
+    let result = run_frames::<G>(deltas);
     (result, TRACE.take())
 }
 
@@ -219,13 +214,6 @@ fn an_err_from_update_stops_the_loop_at_once() {
 fn quitting_stops_the_steps_left_in_a_frame() {
     let (_, phases) = drive::<Traced<2>>(&[STEP * 3]);
     assert_eq!(phases, "LUU");
-}
-
-#[test]
-fn run_drives_a_game_on_the_wall_clock_until_it_quits() {
-    TRACE.take();
-    assert!(run::<Traced<2>>(Config::new("test")).is_ok());
-    assert_eq!(TRACE.take(), "LUDU");
 }
 
 /// Records the timer, and quits on update number `QUIT_AT` or once the frame rate is known.

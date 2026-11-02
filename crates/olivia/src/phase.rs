@@ -1,20 +1,21 @@
 use std::cell::Cell;
 use std::marker::PhantomData;
 
+use olivia_window::{Window, WindowEvent};
+
 use crate::Timer;
 
 /// The handles available to [`Game::load`](crate::Game::load).
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct Setup<'a> {
-    handles: PhantomData<&'a mut ()>,
+    /// The game's window.
+    pub window: &'a mut Window,
 }
 
-impl Setup<'_> {
-    pub(crate) fn new() -> Self {
-        Self {
-            handles: PhantomData,
-        }
+impl<'a> Setup<'a> {
+    pub(crate) fn new(window: &'a mut Window) -> Self {
+        Self { window }
     }
 }
 
@@ -22,14 +23,28 @@ impl Setup<'_> {
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct Update<'a> {
+    /// The game's window.
+    pub window: &'a mut Window,
+    /// What happened to the window since the last update. Only the first step of a frame has any.
+    pub events: &'a [WindowEvent],
     /// The fixed step, elapsed time and frame rate.
     pub timer: &'a Timer,
     quit: &'a Cell<bool>,
 }
 
 impl<'a> Update<'a> {
-    pub(crate) fn new(timer: &'a Timer, quit: &'a Cell<bool>) -> Self {
-        Self { timer, quit }
+    pub(crate) fn new(
+        window: &'a mut Window,
+        events: &'a [WindowEvent],
+        timer: &'a Timer,
+        quit: &'a Cell<bool>,
+    ) -> Self {
+        Self {
+            window,
+            events,
+            timer,
+            quit,
+        }
     }
 
     /// Asks the loop to stop once this update returns.
