@@ -7,15 +7,19 @@
     "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
   },
   // Rootless podman: map the host user onto the image's vscode user (uid 1000).
-  "runArgs": ["--userns=keep-id"],
+  // /dev/dri with the host's groups gives the GPU; keep-groups needs crun.
+  "runArgs": ["--userns=keep-id", "--device=/dev/dri", "--group-add=keep-groups"],
   "containerUser": "vscode",
   "remoteUser": "vscode",
   "updateRemoteUserUID": false,
   // Everything generated lives in named volumes, not in the host's home or workspace.
   "containerEnv": {
-    "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target"
+    "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target",
+    "PULSE_SERVER": "unix:/run/host-pulse/native"
   },
   "mounts": [
+    // The host's sound server, PulseAudio or PipeWire, whose socket outlives its restarts this way.
+    "source=${localEnv:XDG_RUNTIME_DIR}/pulse,target=/run/host-pulse,type=bind",
     "source=olivia-cargo-registry,target=/usr/local/cargo/registry,type=volume",
     "source=olivia-cargo-target,target=/home/vscode/.cache/cargo-target,type=volume",
     "source=olivia-claude-config,target=/home/vscode/.claude,type=volume",
