@@ -84,7 +84,8 @@ impl Draw {
     }
 
     /// Sets the order within a [`View`](crate::View), with no fixed range, where larger is on top
-    /// and ties keep call order. The default is `0.0`.
+    /// and ties keep call order. The default is `0.0`. [`depth`](crate::depth) names the usual
+    /// values.
     #[must_use]
     pub fn depth(mut self, depth: f32) -> Self {
         self.depth = depth;

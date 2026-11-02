@@ -1,6 +1,7 @@
 //! Drawing to the game's window.
 
 mod camera;
+pub mod depth;
 mod draw;
 mod gpu;
 mod graphics;

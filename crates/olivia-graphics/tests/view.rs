@@ -2,6 +2,7 @@
 
 use std::f32::consts::FRAC_PI_2;
 
+use olivia_graphics::depth::{ATMOSPHERE, BACKDROP, PLAYFIELD};
 use olivia_graphics::{Blend, Camera, Config, Draw, Filter, Graphics, Target, Texture, Vertex};
 use olivia_math::{Color, Rect, Vec2};
 
@@ -223,6 +224,17 @@ fn equal_depths_keep_call_order() {
 fn depth_has_no_fixed_range_and_nan_does_not_break_the_sort() {
     let depths = [f32::NAN, f32::INFINITY, 0.0, f32::NEG_INFINITY, 1e30];
     assert_eq!(drawn_order(&depths), [3.0, 2.0, 4.0, 1.0, 0.0]);
+}
+
+#[test]
+fn the_backdrop_draws_under_the_playfield_and_the_atmosphere_over_it() {
+    let depths = [ATMOSPHERE, BACKDROP, PLAYFIELD];
+    assert_eq!(drawn_order(&depths), [1.0, 2.0, 0.0]);
+}
+
+#[test]
+fn the_playfield_is_the_default_depth() {
+    assert_eq!(Draw::new().depth(PLAYFIELD), Draw::new());
 }
 
 #[test]
