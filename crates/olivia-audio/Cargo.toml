@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 kira.workspace = true
+olivia-math.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

@@ -1,11 +1,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use kira::backend::Backend;
-use kira::sound::Region;
 use kira::sound::static_sound::StaticSoundData;
 use kira::sound::streaming::StreamingSoundData;
-use kira::{AudioManager, Decibels, PlaySoundError};
+use kira::sound::{Region, SoundData};
+use kira::track::{MainTrackHandle, SpatialTrackHandle};
+use kira::{Decibels, PlaySoundError};
 
 use crate::cue::{Cue, Playing, decibels, panning, playback_rate};
 use crate::{Error, Play};
@@ -23,6 +23,32 @@ enum Data {
     /// The compressed bytes, which each play decodes through a cursor of its own.
     Streamed(Arc<[u8]>),
 }
+
+/// A `kira` track that sounds can start on.
+pub(crate) trait Track {
+    fn play<D: SoundData>(&mut self, data: D) -> Result<D::Handle, PlaySoundError<D::Error>>;
+    fn is_full(&self) -> bool;
+}
+
+/// Implements [`Track`] for `kira` handles, which share these methods but no trait.
+macro_rules! impl_track {
+    ($($handle:ty),+) => {$(
+        impl Track for $handle {
+            fn play<D: SoundData>(
+                &mut self,
+                data: D,
+            ) -> Result<D::Handle, PlaySoundError<D::Error>> {
+                <$handle>::play(self, data)
+            }
+
+            fn is_full(&self) -> bool {
+                self.num_sounds() >= self.sound_capacity()
+            }
+        }
+    )+};
+}
+
+impl_track!(MainTrackHandle, SpatialTrackHandle);
 
 impl Sound {
     pub(crate) fn decoded(bytes: Vec<u8>) -> Result<Self, Error> {
@@ -42,10 +68,10 @@ impl Sound {
         })
     }
 
-    /// Starts this sound on `manager` as `play` says.
-    pub(crate) fn start<B: Backend>(
+    /// Starts this sound on `track` as `play` says.
+    pub(crate) fn start(
         &self,
-        manager: &mut AudioManager<B>,
+        track: &mut impl Track,
         play: Play,
     ) -> Result<Cue, Box<dyn std::error::Error>> {
         let volume = Decibels(decibels(play.volume));
@@ -59,12 +85,11 @@ impl Sound {
                     .panning(panning)
                     .playback_rate(playback_rate)
                     .loop_region(loop_region);
-                Playing::Decoded(manager.play(data)?)
+                Playing::Decoded(track.play(data)?)
             }
             Data::Streamed(bytes) => {
                 // `kira` starts the decoding thread before it refuses a sound, and never ends it.
-                let track = manager.main_track();
-                if track.num_sounds() >= track.sound_capacity() {
+                if track.is_full() {
                     return Err(PlaySoundError::<()>::SoundLimitReached.into());
                 }
                 let data = StreamingSoundData::from_cursor(Cursor::new(Arc::clone(bytes)))?
@@ -72,7 +97,7 @@ impl Sound {
                     .panning(panning)
                     .playback_rate(playback_rate)
                     .loop_region(loop_region);
-                Playing::Streamed(manager.play(data)?)
+                Playing::Streamed(track.play(data)?)
             }
         };
         Ok(Cue::new(playing))
