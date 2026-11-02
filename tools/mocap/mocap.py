@@ -103,14 +103,23 @@ def smooth(angles, times):
     return gaussian_filter1d(medians, sigma, axis=0, mode="nearest")
 
 
+def within_half_a_turn(column, centre):
+    """Moves continuous angles by whole turns, to bring their median near `centre`."""
+    return column - 2 * np.pi * np.round((np.median(column) - centre) / (2 * np.pi))
+
+
 def bend_one_way(angles):
-    """Facing right, a forearm only folds forwards (anticlockwise) and a shin only backwards."""
+    """Facing right, a forearm only folds forwards (anticlockwise) and a shin only backwards.
+
+    Unwrapping leaves a column on whichever turn its first frame was, so each one first moves to
+    the turn around its joint's bend, or a video starting fully folded would flatten.
+    """
     bent = angles.copy()
     for index, joint in enumerate(JOINTS):
         if joint.startswith("elbow"):
-            bent[:, index] = np.minimum(bent[:, index], 0.0)
+            bent[:, index] = np.minimum(within_half_a_turn(bent[:, index], -np.pi / 2), 0.0)
         elif joint.startswith("knee"):
-            bent[:, index] = np.maximum(bent[:, index], 0.0)
+            bent[:, index] = np.maximum(within_half_a_turn(bent[:, index], np.pi / 2), 0.0)
     return bent
 
 

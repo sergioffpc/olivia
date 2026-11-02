@@ -117,6 +117,28 @@ def test_elbows_and_knees_bend_one_way_only():
     assert_degrees(backwards, "knee_right", 0.0)
 
 
+FOLDED = [("elbow_right", "near_arm", -1.0), ("knee_right", "near_leg", 1.0)]
+
+
+@pytest.mark.parametrize("joint, part, side", FOLDED)
+def test_a_video_starting_fully_folded_stays_folded(joint, part, side):
+    # Half a turn and a degree: its wrapped angle is on the side the joint can't bend to.
+    rows = mocap.rotations(*video(*[pose(**{part: (90.0, 90.0 + side * 181.0)})] * 10))
+
+    assert_degrees(rows, joint, -side * 179.0)
+
+
+@pytest.mark.parametrize("joint, part, side", FOLDED)
+def test_a_video_starting_fully_folded_unfolds(joint, part, side):
+    bends = side * np.linspace(181.0, 60.0, 30)
+    poses = [pose(**{part: (90.0, 90.0 + bend)}) for bend in bends]
+
+    rows = mocap.rotations(*video(*poses))
+
+    # The filter only flattens the ends of the ramp.
+    assert np.allclose(np.degrees(column(rows, joint))[5:-5], bends[5:-5], atol=0.5)
+
+
 def test_a_one_frame_spike_is_removed():
     poses = [pose()] * 20
     poses[10] = pose(near_arm=(0.0, 0.0))
