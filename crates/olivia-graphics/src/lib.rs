@@ -1,8 +1,10 @@
 //! Drawing to the game's window.
 
+mod atlas;
 mod camera;
 pub mod depth;
 mod draw;
+mod font;
 mod gpu;
 mod graphics;
 mod pipeline;
@@ -12,6 +14,7 @@ mod view;
 
 pub use camera::Camera;
 pub use draw::{Blend, Draw, Filter};
+pub use font::Font;
 #[doc(hidden)]
 pub use gpu::sample_count;
 pub use graphics::Graphics;
@@ -35,6 +38,9 @@ pub enum Error {
     /// The bytes are not a PNG or JPEG image.
     #[error("failed to decode the image")]
     UndecodableImage(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// The bytes are not a font.
+    #[error("failed to decode the font")]
+    UndecodableFont,
 }
 
 impl Error {

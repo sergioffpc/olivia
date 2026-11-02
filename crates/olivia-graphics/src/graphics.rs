@@ -5,6 +5,7 @@ use olivia_window::Window;
 
 use crate::Error;
 use crate::camera::Camera;
+use crate::font::Font;
 use crate::gpu::Gpu;
 use crate::texture::Texture;
 use crate::view::{DrawCalls, Mesh, View};
@@ -118,6 +119,15 @@ impl Graphics {
             .as_ref()
             .map(|gpu| gpu.upload(width, height, &rgba));
         Texture::new(width, height, rgba, bind_group)
+    }
+
+    /// Decodes a TrueType or OpenType font.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UndecodableFont`] if `bytes` are not a font.
+    pub fn font(&mut self, bytes: &[u8]) -> Result<Font, Error> {
+        Font::new(bytes, self.gpu.as_ref().map(Gpu::atlas_gpu))
     }
 
     /// The underlying `wgpu` device and queue. Unstable: they change with `wgpu`.

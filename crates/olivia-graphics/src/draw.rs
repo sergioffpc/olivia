@@ -57,7 +57,7 @@ impl Draw {
 
     /// Sets the pivot, normalised to the object's box, where `(0, 0)` is its top-left corner and
     /// `(1, 1)` its bottom-right one, and which lands on the object's position. By default it is
-    /// the top-left corner of sprites and rectangles, the centre of circles, `pos` for polygons
+    /// the top-left corner of sprites, rectangles and text, the centre of circles, `pos` for polygons
     /// and `a` for lines. A line's width does not count towards the box.
     #[must_use]
     pub fn origin(mut self, origin: Vec2) -> Self {

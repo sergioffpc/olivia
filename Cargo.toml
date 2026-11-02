@@ -13,6 +13,8 @@ olivia-graphics = { path = "crates/olivia-graphics" }
 olivia-math = { path = "crates/olivia-math" }
 olivia-window = { path = "crates/olivia-window" }
 bytemuck = { version = "1", features = ["derive"] }
+# No fontconfig: a font comes only from the bytes a game hands over.
+cosmic-text = { version = "0.19", default-features = false, features = ["std", "swash"] }
 directories = "6"
 # Must stay at the version rapier2d uses (ADR 0001).
 glam = { version = "0.33", features = ["bytemuck"] }

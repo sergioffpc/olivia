@@ -9,6 +9,7 @@ use tracing::trace_span;
 
 use crate::camera::Camera;
 use crate::draw::{Blend, Draw, Filter};
+use crate::font::{Font, Glyph, Layout};
 use crate::shape;
 use crate::texture::{Image, Texture};
 
@@ -184,32 +185,66 @@ impl<'a> View<'a> {
 
     /// Draws `texture` with its pivot at `pos`, one unit to each of its pixels.
     pub fn sprite(&mut self, texture: &Texture, pos: Vec2, draw: Draw) {
-        let turn = Vec2::from_angle(draw.rotation);
-        let (uv_start, uv_end) = texture.uv();
-        let color = premultiplied(draw.color);
-        let origin = draw.origin.unwrap_or(Vec2::ZERO);
-        let vertex = |corner: Vec2| Vertex {
-            position: self.camera.world_to_screen(
-                pos + turn.rotate((corner - origin) * texture.size() * draw.scale),
-                self.viewport,
-            ),
-            uv: uv_start + corner * (uv_end - uv_start),
-            color,
+        let size = texture.size();
+        let to_screen = self.to_screen(pos, size, draw);
+        let rect = Rect {
+            pos: Vec2::ZERO,
+            size,
         };
-        let [top_left, top_right] = [vertex(Vec2::ZERO), vertex(Vec2::X)];
-        let [bottom_left, bottom_right] = [vertex(Vec2::Y), vertex(Vec2::ONE)];
-        self.calls.push(
-            Arc::clone(&texture.image),
-            draw,
-            [
-                top_left,
-                top_right,
-                bottom_left,
-                bottom_left,
-                top_right,
-                bottom_right,
-            ],
-        );
+        let vertices = quad(&to_screen, rect, texture.uv(), premultiplied(draw.color));
+        self.calls.push(Arc::clone(&texture.image), draw, vertices);
+    }
+
+    /// Draws `text` at `size` with its pivot at `pos`, starting a line at each line break.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` is not positive and finite, or if a glyph is larger than the GPU supports.
+    pub fn text(&mut self, font: &Font, size: f32, text: &str, pos: Vec2, draw: Draw) {
+        self.draw_layout(&font.layout(size, None, text), pos, draw);
+    }
+
+    /// Draws `text` at `size` with its pivot at `pos`, wrapped to lines no wider than `width`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` is not positive and finite, if `width` is not positive, or if a glyph is
+    /// larger than the GPU supports.
+    pub fn text_wrapped(
+        &mut self,
+        font: &Font,
+        size: f32,
+        width: f32,
+        text: &str,
+        pos: Vec2,
+        draw: Draw,
+    ) {
+        self.draw_layout(&font.layout(size, Some(width), text), pos, draw);
+    }
+
+    /// Adds one call for each run of glyphs on the same page of the atlas.
+    fn draw_layout(&mut self, layout: &Layout, pos: Vec2, draw: Draw) {
+        let to_screen = self.to_screen(pos, layout.size, draw);
+        let color = premultiplied(draw.color);
+        let same_page = |a: &Glyph, b: &Glyph| Arc::ptr_eq(&a.slot.image, &b.slot.image);
+        for run in layout.glyphs.chunk_by(same_page) {
+            let vertices = run
+                .iter()
+                .flat_map(|glyph| quad(&to_screen, glyph.rect, glyph.slot.uv, color));
+            let image = Arc::clone(&run[0].slot.image);
+            self.calls.push(image, draw, vertices);
+        }
+    }
+
+    /// Takes a point of a box of `size`, from its top-left corner, to where `draw` puts it on the
+    /// screen with the box's pivot at `pos`.
+    fn to_screen(&self, pos: Vec2, size: Vec2, draw: Draw) -> impl Fn(Vec2) -> Vec2 + use<> {
+        let (camera, viewport) = (self.camera, self.viewport);
+        let turn = Vec2::from_angle(draw.rotation);
+        let pivot = draw.origin.unwrap_or(Vec2::ZERO) * size;
+        move |point| {
+            camera.world_to_screen(pos + turn.rotate((point - pivot) * draw.scale), viewport)
+        }
     }
 
     /// Fills `rect`, which hangs from its top-left corner.
@@ -286,4 +321,28 @@ impl<'a> View<'a> {
 
 fn premultiplied(Color { r, g, b, a }: Color) -> [f32; 4] {
     [r * a, g * a, b * a, a]
+}
+
+/// The two triangles of `rect`, sampling from the first to the second corner of `uv`.
+fn quad(
+    to_screen: &impl Fn(Vec2) -> Vec2,
+    rect: Rect,
+    (uv_start, uv_end): (Vec2, Vec2),
+    color: [f32; 4],
+) -> [Vertex; 6] {
+    let vertex = |corner: Vec2| Vertex {
+        position: to_screen(rect.pos + corner * rect.size),
+        uv: uv_start + corner * (uv_end - uv_start),
+        color,
+    };
+    let [top_left, top_right] = [vertex(Vec2::ZERO), vertex(Vec2::X)];
+    let [bottom_left, bottom_right] = [vertex(Vec2::Y), vertex(Vec2::ONE)];
+    [
+        top_left,
+        top_right,
+        bottom_left,
+        bottom_left,
+        top_right,
+        bottom_right,
+    ]
 }

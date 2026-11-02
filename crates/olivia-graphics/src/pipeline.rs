@@ -36,7 +36,7 @@ const ADD: BlendState = BlendState {
 pub(crate) struct Pipeline {
     alpha: RenderPipeline,
     add: RenderPipeline,
-    texture_layout: BindGroupLayout,
+    pub(crate) texture_layout: BindGroupLayout,
     linear: BindGroup,
     nearest: BindGroup,
 }
@@ -188,7 +188,7 @@ impl Pipeline {
     }
 }
 
-fn premultiplied(rgba: &[u8]) -> Vec<u8> {
+pub(crate) fn premultiplied(rgba: &[u8]) -> Vec<u8> {
     let mut premultiplied = rgba.to_vec();
     for pixel in premultiplied.as_chunks_mut::<4>().0 {
         let [r, g, b, a] = pixel.map(u16::from);

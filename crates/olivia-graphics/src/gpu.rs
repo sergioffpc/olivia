@@ -14,6 +14,7 @@ use wgpu::{
 };
 
 use crate::Error;
+use crate::atlas::AtlasGpu;
 use crate::graphics::Config;
 use crate::pipeline::Pipeline;
 use crate::view::Mesh;
@@ -207,6 +208,15 @@ impl Gpu {
     pub(crate) fn upload(&self, width: u32, height: u32, rgba: &[u8]) -> BindGroup {
         self.pipeline
             .upload(&self.device, &self.queue, width, height, rgba)
+    }
+
+    /// What a font needs to keep its glyphs on the GPU.
+    pub(crate) fn atlas_gpu(&self) -> AtlasGpu {
+        AtlasGpu {
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            texture_layout: self.pipeline.texture_layout.clone(),
+        }
     }
 
     /// A multisampled texture the size of the surface.

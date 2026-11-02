@@ -13,7 +13,8 @@ pub struct Texture {
     region: Rect,
 }
 
-/// The pixels a texture and its regions share, and their copy on the GPU.
+/// The pixels a texture and its regions share, and their copy on the GPU, or a page of a glyph
+/// atlas, which has only the copy on the GPU.
 pub(crate) struct Image {
     width: u32,
     height: u32,
@@ -23,6 +24,20 @@ pub(crate) struct Image {
 }
 
 impl Image {
+    pub(crate) fn new(
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+        bind_group: Option<BindGroup>,
+    ) -> Self {
+        Self {
+            width,
+            height,
+            rgba,
+            bind_group,
+        }
+    }
+
     #[expect(
         clippy::cast_precision_loss,
         reason = "a GPU texture's side stays far below 2^24"
@@ -48,12 +63,7 @@ impl Texture {
         rgba: Vec<u8>,
         bind_group: Option<BindGroup>,
     ) -> Self {
-        let image = Image {
-            width,
-            height,
-            rgba,
-            bind_group,
-        };
+        let image = Image::new(width, height, rgba, bind_group);
         Self {
             region: Rect {
                 pos: Vec2::ZERO,
