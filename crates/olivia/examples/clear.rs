@@ -21,7 +21,7 @@ impl Game for Demo {
     }
 
     fn draw(&self, f: &mut Frame<'_>) {
-        f.clear(Color::rgb(0.2, 0.3, 0.5));
+        f.clear(Color::rgb(0.0, 0.0, 1.0));
     }
 }
 
