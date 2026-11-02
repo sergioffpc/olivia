@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+#[cfg(feature = "filesystem")]
+use olivia_filesystem::{Error, Filesystem};
 use olivia_math::Vec2;
 use olivia_window::Attributes;
 
@@ -77,7 +79,8 @@ impl Config {
         self
     }
 
-    /// Overrides where the game's assets are read from.
+    /// Overrides where the game's assets are read from. The default is `assets/` next to the
+    /// executable, or at the project root under `cargo run`.
     #[must_use]
     pub fn assets(mut self, path: impl Into<PathBuf>) -> Self {
         self.assets = Some(path.into());
@@ -92,5 +95,11 @@ impl Config {
             resizable: self.resizable,
             fullscreen: self.fullscreen,
         }
+    }
+
+    /// The filesystem of the game this configures.
+    #[cfg(feature = "filesystem")]
+    pub(crate) fn filesystem(&self) -> Result<Filesystem, Error> {
+        Filesystem::new(&self.identity, self.assets.clone())
     }
 }

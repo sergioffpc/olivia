@@ -1,9 +1,11 @@
 use std::cell::Cell;
 use std::marker::PhantomData;
 
+#[cfg(feature = "filesystem")]
+use olivia_filesystem::Filesystem;
 use olivia_window::{Window, WindowEvent};
 
-use crate::Timer;
+use crate::{Modules, Timer};
 
 /// The handles available to [`Game::load`](crate::Game::load).
 #[non_exhaustive]
@@ -11,11 +13,19 @@ use crate::Timer;
 pub struct Setup<'a> {
     /// The game's window.
     pub window: &'a mut Window,
+    /// The game's assets and saves.
+    #[cfg(feature = "filesystem")]
+    pub filesystem: &'a mut Filesystem,
 }
 
 impl<'a> Setup<'a> {
-    pub(crate) fn new(window: &'a mut Window) -> Self {
-        Self { window }
+    #[cfg_attr(not(feature = "filesystem"), expect(unused_variables))]
+    pub(crate) fn new(window: &'a mut Window, modules: &'a mut Modules) -> Self {
+        Self {
+            window,
+            #[cfg(feature = "filesystem")]
+            filesystem: &mut modules.filesystem,
+        }
     }
 }
 
@@ -25,6 +35,9 @@ impl<'a> Setup<'a> {
 pub struct Update<'a> {
     /// The game's window.
     pub window: &'a mut Window,
+    /// The game's assets and saves.
+    #[cfg(feature = "filesystem")]
+    pub filesystem: &'a mut Filesystem,
     /// What happened to the window since the last update. Only the first step of a frame has any.
     pub events: &'a [WindowEvent],
     /// The fixed step, elapsed time and frame rate.
@@ -33,14 +46,18 @@ pub struct Update<'a> {
 }
 
 impl<'a> Update<'a> {
+    #[cfg_attr(not(feature = "filesystem"), expect(unused_variables))]
     pub(crate) fn new(
         window: &'a mut Window,
+        modules: &'a mut Modules,
         events: &'a [WindowEvent],
         timer: &'a Timer,
         quit: &'a Cell<bool>,
     ) -> Self {
         Self {
             window,
+            #[cfg(feature = "filesystem")]
+            filesystem: &mut modules.filesystem,
             events,
             timer,
             quit,

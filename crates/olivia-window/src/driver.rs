@@ -24,15 +24,18 @@ pub struct Attributes {
 
 /// What [`run`] drives once the window exists.
 pub trait Driver: Sized {
+    /// What [`start`](Self::start) receives from [`run`].
+    type Seed;
+
     /// What stops the driver, which a failure to create the window must fit into.
     type Error: From<Error>;
 
-    /// Starts on the new window, whose logical size is `size`.
+    /// Starts from `seed` on the new window, whose logical size is `size`.
     ///
     /// # Errors
     ///
     /// An `Err` closes the window and returns from [`run`].
-    fn start(window: &mut Window, size: Vec2) -> Result<Self, Self::Error>;
+    fn start(seed: Self::Seed, window: &mut Window, size: Vec2) -> Result<Self, Self::Error>;
 
     /// Receives an event from the window.
     fn event(&mut self, event: WindowEvent);
@@ -45,16 +48,17 @@ pub trait Driver: Sized {
     fn frame(&mut self, window: &mut Window) -> Result<bool, Self::Error>;
 }
 
-/// Opens a window and drives `D` on it until it stops. Must be called on the main thread, at most
-/// once per process.
+/// Opens a window and drives `D`, started from `seed`, on it until it stops. Must be called on the
+/// main thread, at most once per process.
 ///
 /// # Errors
 ///
 /// Returns [`Error::Create`] if the window cannot be created, or the first `Err` from `D`.
-pub fn run<D: Driver>(attributes: Attributes) -> Result<(), D::Error> {
+pub fn run<D: Driver>(attributes: Attributes, seed: D::Seed) -> Result<(), D::Error> {
     let event_loop = EventLoop::new().map_err(Error::create)?;
     let mut host = Host::<D> {
         attributes,
+        seed: Some(seed),
         running: None,
         result: Ok(()),
     };
@@ -73,12 +77,14 @@ struct Running<D> {
 
 struct Host<D: Driver> {
     attributes: Attributes,
+    /// Taken by the first resume; later ones find the window already there.
+    seed: Option<D::Seed>,
     running: Option<Running<D>>,
     result: Result<(), D::Error>,
 }
 
 impl<D: Driver> Host<D> {
-    fn start(&self, event_loop: &ActiveEventLoop) -> Result<Running<D>, D::Error> {
+    fn start(&self, seed: D::Seed, event_loop: &ActiveEventLoop) -> Result<Running<D>, D::Error> {
         let Attributes {
             title,
             size,
@@ -97,7 +103,7 @@ impl<D: Driver> Host<D> {
 
         let size = logical_size(raw.inner_size(), raw.scale_factor());
         let mut window = Window::new(raw);
-        let driver = D::start(&mut window, size)?;
+        let driver = D::start(seed, &mut window, size)?;
         Ok(Running {
             driver,
             window,
@@ -115,10 +121,10 @@ impl<D: Driver> Host<D> {
 
 impl<D: Driver> ApplicationHandler for Host<D> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.running.is_some() {
+        let Some(seed) = self.seed.take() else {
             return;
-        }
-        match self.start(event_loop) {
+        };
+        match self.start(seed, event_loop) {
             Ok(running) => {
                 self.running = Some(running);
                 event_loop.set_control_flow(ControlFlow::Poll);

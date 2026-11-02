@@ -3,9 +3,12 @@
 mod clock;
 mod config;
 mod r#loop;
+mod modules;
 mod phase;
 mod timer;
 
+#[cfg(feature = "filesystem")]
+pub use olivia_filesystem as filesystem;
 pub use olivia_math as math;
 pub use olivia_window as window;
 
@@ -13,6 +16,8 @@ pub use config::Config;
 #[doc(hidden)]
 pub use r#loop::GameLoop;
 pub use r#loop::run;
+#[doc(hidden)]
+pub use modules::Modules;
 pub use phase::{Frame, Setup, Update};
 pub use timer::Timer;
 

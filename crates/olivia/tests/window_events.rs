@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use olivia::math::Vec2;
 use olivia::window::{Window, WindowEvent};
-use olivia::{Frame, Game, GameLoop, Result, Setup, Update};
+use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
 
 const STEP: Duration = Duration::from_nanos(16_666_666);
 const SIZE: Vec2 = Vec2::new(800.0, 600.0);
@@ -45,7 +45,8 @@ fn start<G: Game>() -> (GameLoop<G>, Window) {
     STEPS.take();
     TRACE.take();
     let mut window = Window::headless();
-    let game_loop = GameLoop::new(&mut window, SIZE).unwrap();
+    let modules = Modules::new(&Config::new("test")).unwrap();
+    let game_loop = GameLoop::new(&mut window, SIZE, modules).unwrap();
     (game_loop, window)
 }
 
