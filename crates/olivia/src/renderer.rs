@@ -1,3 +1,4 @@
+use hecs::Component;
 #[cfg(feature = "animation")]
 use olivia_animation::Character;
 use olivia_graphics::{Camera, Target, View};
@@ -62,44 +63,42 @@ pub(crate) fn render(world: &ecs::World, poses: Poses<'_>, target: &mut Target<'
 
 /// Draws the entities that are part of the HUD, or the ones that are not.
 fn draw_entities(world: &ecs::World, poses: Poses<'_>, view: &mut View<'_>, hud: bool) {
-    let mut sprites = world.query::<(Entity, &Transform, &Sprite, Option<&Hud>)>();
-    for (entity, transform, sprite, marker) in &mut sprites {
-        if marker.is_some() == hud {
-            let pose = poses.of(world, entity, *transform);
-            let draw = sprite.draw.rotation(pose.rotation);
-            view.sprite(&sprite.texture, pose.position, draw);
-        }
-    }
+    each_entity(world, poses, hud, |sprite: &Sprite, pose| {
+        let draw = sprite.draw.rotation(pose.rotation);
+        view.sprite(&sprite.texture, pose.position, draw);
+    });
 
-    let mut texts = world.query::<(Entity, &Transform, &Text, Option<&Hud>)>();
-    for (entity, transform, text, marker) in &mut texts {
-        if marker.is_some() == hud {
-            let pose = poses.of(world, entity, *transform);
-            let draw = text.draw.rotation(pose.rotation);
-            let (font, size, string) = (&text.font, text.size, &text.text);
-            match text.width {
-                Some(width) => view.text_wrapped(font, size, width, string, pose.position, draw),
-                None => view.text(font, size, string, pose.position, draw),
-            }
+    each_entity(world, poses, hud, |text: &Text, pose| {
+        let draw = text.draw.rotation(pose.rotation);
+        let (font, size, string) = (&text.font, text.size, &text.text);
+        match text.width {
+            Some(width) => view.text_wrapped(font, size, width, string, pose.position, draw),
+            None => view.text(font, size, string, pose.position, draw),
         }
-    }
+    });
 
-    let mut shapes = world.query::<(Entity, &Transform, &Shape, Option<&Hud>)>();
-    for (entity, transform, shape, marker) in &mut shapes {
-        if marker.is_some() == hud {
-            let pose = poses.of(world, entity, *transform);
-            draw_shape(view, shape, pose);
-        }
-    }
+    each_entity(world, poses, hud, |shape: &Shape, pose| {
+        draw_shape(view, shape, pose);
+    });
 
     #[cfg(feature = "animation")]
-    {
-        let mut characters = world.query::<(Entity, &Transform, &Character, Option<&Hud>)>();
-        for (entity, transform, character, marker) in &mut characters {
-            if marker.is_some() == hud {
-                let pose = poses.of(world, entity, *transform);
-                character.render(view, pose.position, pose.rotation, poses.factor);
-            }
+    each_entity(world, poses, hud, |character: &Character, pose| {
+        character.render(view, pose.position, pose.rotation, poses.factor);
+    });
+}
+
+/// Calls `draw` with the component `C` and the pose of each entity that is part of the HUD, or of
+/// each that is not.
+fn each_entity<C: Component>(
+    world: &ecs::World,
+    poses: Poses<'_>,
+    hud: bool,
+    mut draw: impl FnMut(&C, Transform),
+) {
+    let mut entities = world.query::<(Entity, &Transform, &C, Option<&Hud>)>();
+    for (entity, transform, component, marker) in &mut entities {
+        if marker.is_some() == hud {
+            draw(component, poses.of(world, entity, *transform));
         }
     }
 }
