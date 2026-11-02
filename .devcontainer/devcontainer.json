@@ -15,9 +15,14 @@
   // Everything generated lives in named volumes, not in the host's home or workspace.
   "containerEnv": {
     "CARGO_TARGET_DIR": "/home/vscode/.cache/cargo-target",
-    "PULSE_SERVER": "unix:/run/host-pulse/native"
+    // Mesa's device_select layer talks to VS Code's X11 socket despite Wayland, and hangs there.
+    "NODEVICE_SELECT": "1",
+    "PULSE_SERVER": "unix:/run/host-pulse/native",
+    "WAYLAND_DISPLAY": "/run/host-wayland/wayland-0"
   },
   "mounts": [
+    // The host's compositor. VS Code's forwarded X11 socket drops file descriptors, which hangs Mesa.
+    "source=${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY},target=/run/host-wayland/wayland-0,type=bind",
     // The host's sound server, PulseAudio or PipeWire, whose socket outlives its restarts this way.
     "source=${localEnv:XDG_RUNTIME_DIR}/pulse,target=/run/host-pulse,type=bind",
     "source=olivia-cargo-registry,target=/usr/local/cargo/registry,type=volume",

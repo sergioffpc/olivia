@@ -19,6 +19,8 @@ sudo apt-get install -y --no-install-recommends \
     libegl1 \
     libvulkan1 \
     libwayland-client0 \
+    libwayland-cursor0 \
+    libwayland-egl1 \
     libx11-xcb1 \
     libxcursor1 \
     libxi6 \
