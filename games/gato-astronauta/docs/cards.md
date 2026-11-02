@@ -1,7 +1,5 @@
 # Sound and movement cards
 
-*Translated from `cartoes_sons_e_movimentos.pdf`.*
-
 ## Sounds
 
 | Card | When | File |

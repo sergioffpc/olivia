@@ -1,6 +1,6 @@
 # Drawing sheets
 
-*Translated from `folhas_para_desenhar.pdf`. Each label is where the drawing goes under `assets/`.*
+*Each label is where the drawing goes under `assets/`.*
 
 | Sheet | Instruction | Label | Files |
 |---|---|---|---|
