@@ -2,7 +2,7 @@
 
 A Super Mario style platformer built on Olivia from what a class makes: one story, drawings on the template sheets, and the sound and movement cards. The rules are fixed; the class changes only the art and the sounds.
 
-Here the class is played by Claude, as a rehearsal of the whole path: [docs/historia.md](docs/historia.md) has the invented story, and every file in `assets/` comes from the scripts in `tools/`. Real drawings and recordings replace them file for file.
+Here the class is played by Claude, as a rehearsal of the whole path: [docs/story.md](docs/story.md) has the invented story, and every file in `assets/` comes from the scripts in `tools/`. Real drawings and recordings replace them file for file.
 
 ## Play
 
