@@ -72,14 +72,13 @@ fn is_change(event: &notify::Result<Event>, settled: SystemTime) -> bool {
         return false;
     };
     let is_edit = match event.kind {
-        EventKind::Create(_) | EventKind::Remove(_) => true,
         EventKind::Modify(ModifyKind::Metadata(_)) => false,
         // All Windows says, also for a directory whose contents changed, and for a file whose
         // metadata reaches the disk only when something next opens it.
         EventKind::Modify(ModifyKind::Any) => {
             event.paths.iter().any(|path| is_written(path, settled))
         }
-        EventKind::Modify(_) => true,
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_) => true,
         _ => false,
     };
     is_edit && !event.paths.iter().all(|path| is_hidden(path))
