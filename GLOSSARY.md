@@ -93,7 +93,7 @@ The one position in the game's space that emitters are heard from.
 _Avoid_: Ear, audio camera
 
 **Character**:
-A set of parts on a skeleton, with what is playing on it. The game owns it.
+A component: a set of parts on a skeleton, with what is playing on it. Olivia advances and draws it at its entity's pose.
 _Avoid_: Actor, puppet, entity
 
 **Skeleton**:
