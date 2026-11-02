@@ -1,6 +1,8 @@
 use std::cell::Cell;
 use std::time::Duration;
 
+#[cfg(feature = "animation")]
+use olivia_animation::Character;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 use olivia_math::Vec2;
@@ -95,6 +97,10 @@ impl<G: Game> GameLoop<G> {
             #[cfg(feature = "physics")]
             trace_span!("physics")
                 .in_scope(|| self.modules.simulation.step(&mut self.modules.world));
+            #[cfg(feature = "animation")]
+            for character in self.modules.world.query_mut::<&mut Character>() {
+                character.advance(self.timer.dt());
+            }
             self.events.clear();
             #[cfg(feature = "input")]
             self.modules.input.on_step();

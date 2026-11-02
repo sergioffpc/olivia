@@ -1,0 +1,13 @@
+[package]
+name = "astronaut-cat"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# Its own workspace: a game built on Olivia, not one of Olivia's crates.
+[workspace]
+
+[dependencies]
+olivia = { path = "../../crates/olivia" }
+tracing-subscriber = "0.3"

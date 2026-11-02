@@ -60,12 +60,15 @@ impl Modules {
 
     /// Draws the world `factor` of the way into the next fixed step.
     #[cfg(feature = "graphics")]
-    #[cfg_attr(not(feature = "physics"), expect(unused_variables))]
+    #[cfg_attr(
+        not(any(feature = "animation", feature = "physics")),
+        expect(unused_variables)
+    )]
     pub(crate) fn render(&mut self, factor: f32) -> Target<'_> {
         let poses = Poses {
             #[cfg(feature = "physics")]
             physics: &self.simulation.physics,
-            #[cfg(feature = "physics")]
+            #[cfg(any(feature = "animation", feature = "physics"))]
             factor,
             #[cfg(not(feature = "physics"))]
             world: std::marker::PhantomData,

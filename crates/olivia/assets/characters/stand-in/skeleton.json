@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "joints": [
+    { "name": "shoulder_left", "parent": "torso", "parent_point": [30, 40], "part": "upper_arm_left", "point": [40, 20] },
+    { "name": "elbow_left", "parent": "upper_arm_left", "parent_point": [40, 160], "part": "lower_arm_left", "point": [35, 10] },
+    { "name": "hip_left", "parent": "torso", "parent_point": [70, 340], "part": "upper_leg_left", "point": [50, 20] },
+    { "name": "knee_left", "parent": "upper_leg_left", "parent_point": [50, 180], "part": "lower_leg_left", "point": [45, 10] },
+    { "name": "hip_right", "parent": "torso", "parent_point": [170, 340], "part": "upper_leg_right", "point": [50, 20] },
+    { "name": "knee_right", "parent": "upper_leg_right", "parent_point": [50, 180], "part": "lower_leg_right", "point": [45, 10] },
+    { "name": "root", "part": "torso", "point": [120, 210] },
+    { "name": "shoulder_right", "parent": "torso", "parent_point": [210, 40], "part": "upper_arm_right", "point": [40, 20] },
+    { "name": "elbow_right", "parent": "upper_arm_right", "parent_point": [40, 160], "part": "lower_arm_right", "point": [35, 10] },
+    { "name": "hand_right", "parent": "lower_arm_right", "parent_point": [35, 160], "part": "launcher", "point": [30, 10] },
+    { "name": "neck", "parent": "torso", "parent_point": [120, 10], "part": "head", "point": [100, 190] }
+  ]
+}
