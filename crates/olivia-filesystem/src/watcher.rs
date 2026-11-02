@@ -1,7 +1,8 @@
+use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
@@ -21,6 +22,8 @@ pub struct Watcher {
     _inner: RecommendedWatcher,
     events: Receiver<notify::Result<Event>>,
     last_change: Option<Instant>,
+    /// When the last change reported was over, or the watch began.
+    settled: SystemTime,
 }
 
 impl Watcher {
@@ -38,6 +41,7 @@ impl Watcher {
             _inner: watcher,
             events,
             last_change: None,
+            settled: SystemTime::now(),
         })
     }
 
@@ -45,27 +49,47 @@ impl Watcher {
     /// been still for a moment. Reading a file is no change, and neither is touching a hidden one,
     /// such as an editor's swap file.
     pub fn changed(&mut self) -> bool {
-        if self.events.try_iter().any(|event| is_change(&event)) {
+        let settled = self.settled;
+        if self
+            .events
+            .try_iter()
+            .any(|event| is_change(&event, settled))
+        {
             self.last_change = Some(Instant::now());
         }
         let is_due = self.last_change.is_some_and(|last| last.elapsed() >= QUIET);
         if is_due {
             self.last_change = None;
+            // The file clock can lag, and the last write was at least `QUIET` ago.
+            self.settled = SystemTime::now() - QUIET / 2;
         }
         is_due
     }
 }
 
-fn is_change(event: &notify::Result<Event>) -> bool {
+fn is_change(event: &notify::Result<Event>, settled: SystemTime) -> bool {
     let Ok(event) = event else {
         return false;
     };
     let is_edit = match event.kind {
         EventKind::Create(_) | EventKind::Remove(_) => true,
-        EventKind::Modify(kind) => !matches!(kind, ModifyKind::Metadata(_)),
+        EventKind::Modify(ModifyKind::Metadata(_)) => false,
+        // All Windows says, also for a directory whose contents changed, and for a file whose
+        // metadata reaches the disk only when something next opens it.
+        EventKind::Modify(ModifyKind::Any) => {
+            event.paths.iter().any(|path| is_written(path, settled))
+        }
+        EventKind::Modify(_) => true,
         _ => false,
     };
     is_edit && !event.paths.iter().all(|path| is_hidden(path))
+}
+
+/// Whether `path` is a file written since `time`.
+fn is_written(path: &Path, time: SystemTime) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| {
+        metadata.is_file() && metadata.modified().is_ok_and(|modified| modified >= time)
+    })
 }
 
 fn is_hidden(path: &Path) -> bool {
