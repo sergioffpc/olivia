@@ -17,7 +17,7 @@ const WORLD: Camera = Camera {
     rotation: 0.0,
 };
 
-/// A torso 20 by 40 with its pivot in the centre, an arm 10 by 30 hanging from its top right and a
+/// A torso 20 by 40 with its root joint in the centre, an arm 10 by 30 hanging from its top right and a
 /// forearm 10 by 20 hanging from the bottom of the arm. The forearm comes first, before the joints
 /// it hangs from.
 const SKELETON: &str = r#"{
@@ -121,7 +121,7 @@ fn a_character_with_nothing_playing_stays_as_drawn() {
 }
 
 #[test]
-fn a_joint_turns_its_part_clockwise_around_its_pivot() {
+fn a_joint_turns_its_part_clockwise_around_it() {
     let mut hero = character();
     hero.play(&shoulder([FRAC_PI_2]), Play::new()).unwrap();
     let mesh = mesh(&hero, 1.0);

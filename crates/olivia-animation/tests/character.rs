@@ -17,7 +17,7 @@ const WORLD: Camera = Camera {
     rotation: 0.0,
 };
 
-/// A torso 20 by 40 with its pivot in the centre, an arm 10 by 30 hanging from its top right and a
+/// A torso 20 by 40 with its root joint in the centre, an arm 10 by 30 hanging from its top right and a
 /// forearm 10 by 20 hanging from the bottom of the arm. The forearm comes first, so it is at the
 /// back, before the joints it hangs from.
 const SKELETON: &str = r#"{

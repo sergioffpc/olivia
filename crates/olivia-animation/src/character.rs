@@ -16,16 +16,16 @@ pub struct Character {
     /// `scale` converts image pixels to game units, and a negative x mirrors the character around
     /// its root joint. `color`, `filter` and `blend` apply to every part. Parts share `depth`, and
     /// draw in the order of the skeleton's joints. The entity's `Transform` overrides `rotation`,
-    /// and `origin` is ignored, because each part has its own pivot.
+    /// and `origin` is ignored, because each part turns around its own joint.
     pub draw: Draw,
     /// The parts in drawing order, from back to front.
     parts: Arc<[Part]>,
     /// The index of each part, with every part after the one it hangs from.
     walk: Arc<[usize]>,
     /// The animation playing, once one has been asked for.
-    base: Option<Layer>,
+    base: Option<Track>,
     /// The overlays over it, the last added on top.
-    overlays: Vec<Layer>,
+    overlays: Vec<Track>,
     /// The length of the last fixed step, in seconds.
     step: f32,
 }
@@ -48,17 +48,17 @@ struct Part {
     /// The name of its joint.
     name: String,
     texture: Texture,
-    /// Its pivot, normalised to the image.
+    /// Its joint, normalised to the image.
     origin: Vec2,
     /// The index of the part it hangs from.
     parent: Option<usize>,
-    /// Where its pivot is from the pivot of the part it hangs from as drawn, in pixels.
+    /// Where its joint is from the joint of the part it hangs from as drawn, in pixels.
     offset: Vec2,
 }
 
 /// An animation in play.
 #[derive(Clone, Debug)]
-struct Layer {
+struct Track {
     animation: Animation,
     looping: bool,
     /// For each part, the animation's column for its joint, if it covers it.
@@ -73,7 +73,7 @@ struct Layer {
     leaving: bool,
 }
 
-impl Layer {
+impl Track {
     /// The angle of each part `behind` seconds before the last fixed step.
     fn angles(&self, behind: f32) -> Vec<f32> {
         let age = self.age - f64::from(behind);
@@ -176,10 +176,10 @@ impl Character {
     /// Returns [`Error::MissingJoint`] if the animation names a joint the skeleton lacks.
     pub fn play(&mut self, animation: &Animation, play: Play) -> Result<(), Error> {
         let base = self.base.as_ref();
-        if base.is_some_and(|layer| layer.animation.is(animation)) {
+        if base.is_some_and(|track| track.animation.same_as(animation)) {
             return Ok(());
         }
-        self.base = Some(self.layer(animation, play, self.base_angles(0.0))?);
+        self.base = Some(self.track(animation, play, self.base_angles(0.0))?);
         Ok(())
     }
 
@@ -190,15 +190,15 @@ impl Character {
     /// Returns [`Error::MissingJoint`] if the animation names a joint the skeleton lacks.
     pub fn overlay(&mut self, animation: &Animation, play: Play) -> Result<(), Error> {
         if self.active(animation).is_none() {
-            let layer = self.layer(animation, play, self.angles(0.0))?;
-            self.overlays.push(layer);
+            let track = self.track(animation, play, self.angles(0.0))?;
+            self.overlays.push(track);
         }
         Ok(())
     }
 
     /// The index of `animation` among the overlays, if it is active.
     fn active(&self, animation: &Animation) -> Option<usize> {
-        let same = |layer: &Layer| !layer.leaving && layer.animation.is(animation);
+        let same = |track: &Track| !track.leaving && track.animation.same_as(animation);
         self.overlays.iter().position(same)
     }
 
@@ -207,23 +207,23 @@ impl Character {
     pub fn remove_overlay(&mut self, animation: &Animation, crossfade: f32) {
         if let Some(index) = self.active(animation) {
             let from = self.angles(0.0);
-            let layer = &mut self.overlays[index];
-            layer.from = from;
-            layer.crossfade = crossfade;
-            layer.age = 0.0;
-            layer.leaving = true;
+            let track = &mut self.overlays[index];
+            track.from = from;
+            track.crossfade = crossfade;
+            track.age = 0.0;
+            track.leaving = true;
         }
     }
 
-    /// A layer starting now, from the angles `from`.
-    fn layer(&self, animation: &Animation, play: Play, from: Vec<f32>) -> Result<Layer, Error> {
+    /// A track starting now, from the angles `from`.
+    fn track(&self, animation: &Animation, play: Play, from: Vec<f32>) -> Result<Track, Error> {
         let joints = animation.joints();
         let lacking = |joint: &&String| !self.parts.iter().any(|part| part.name == **joint);
         if let Some(joint) = joints.iter().find(lacking) {
             return Err(Error::MissingJoint(joint.clone()));
         }
         let column = |part: &Part| joints.iter().position(|joint| *joint == part.name);
-        Ok(Layer {
+        Ok(Track {
             animation: animation.clone(),
             looping: play.looping,
             columns: self.parts.iter().map(column).collect(),
@@ -238,33 +238,33 @@ impl Character {
     /// row. It has not once another has taken over, even during the crossfade.
     #[must_use]
     pub fn finished(&self, animation: &Animation) -> bool {
-        let done = |layer: &Layer| {
-            layer.animation.is(animation)
-                && !layer.leaving
-                && !layer.looping
-                && animation.ended(layer.age)
+        let done = |track: &Track| {
+            track.animation.same_as(animation)
+                && !track.leaving
+                && !track.looping
+                && animation.ended(track.age)
         };
-        let mut layers = self.base.iter().chain(&self.overlays);
-        layers.any(done)
+        let mut tracks = self.base.iter().chain(&self.overlays);
+        tracks.any(done)
     }
 
     /// Moves what is playing on by a fixed step of `dt` seconds.
     #[doc(hidden)]
     pub fn advance(&mut self, dt: f32) {
         self.step = dt;
-        for layer in self.base.iter_mut().chain(&mut self.overlays) {
-            layer.age += f64::from(dt);
+        for track in self.base.iter_mut().chain(&mut self.overlays) {
+            track.age += f64::from(dt);
         }
         // Kept until the whole of the last step is past its crossfade, for what `render` looks back at.
         let dt = f64::from(dt);
         self.overlays
-            .retain(|layer| !layer.leaving || layer.age - dt < f64::from(layer.crossfade));
+            .retain(|track| !track.leaving || track.age - dt < f64::from(track.crossfade));
     }
 
     /// The angle the base gives each part `behind` seconds before the last fixed step.
     fn base_angles(&self, behind: f32) -> Vec<f32> {
         match &self.base {
-            Some(layer) => layer.angles(behind),
+            Some(track) => track.angles(behind),
             None => vec![0.0; self.parts.len()],
         }
     }
@@ -272,23 +272,23 @@ impl Character {
     /// The angle of each part `behind` seconds before the last fixed step.
     fn angles(&self, behind: f32) -> Vec<f32> {
         let mut angles = self.base_angles(behind);
-        for layer in &self.overlays {
-            layer.over(&mut angles, behind);
+        for track in &self.overlays {
+            track.over(&mut angles, behind);
         }
         angles
     }
 
-    /// Where `angles` put the pivot of each part from the root joint, in pixels, and the angle each
+    /// Where `angles` put the joint of each part from the root joint, in pixels, and the angle each
     /// part adds up to.
     fn placed(&self, angles: &[f32]) -> Vec<(Vec2, f32)> {
         let mut placed = vec![(Vec2::ZERO, 0.0); self.parts.len()];
         for &index in self.walk.iter() {
             let part = &self.parts[index];
-            let (pivot, angle) = part
+            let (joint, angle) = part
                 .parent
                 .map_or((Vec2::ZERO, 0.0), |parent| placed[parent]);
-            let pivot = pivot + Vec2::from_angle(angle).rotate(part.offset);
-            placed[index] = (pivot, angle + angles[index]);
+            let joint = joint + Vec2::from_angle(angle).rotate(part.offset);
+            placed[index] = (joint, angle + angles[index]);
         }
         placed
     }
@@ -303,9 +303,9 @@ impl Character {
     #[must_use]
     pub fn joint(&self, name: &str) -> Option<JointPose> {
         let index = self.parts.iter().position(|part| part.name == name)?;
-        let (pivot, angle) = self.placed(&self.angles(0.0))[index];
+        let (joint, angle) = self.placed(&self.angles(0.0))[index];
         Some(JointPose {
-            offset: pivot * self.draw.scale_value(),
+            offset: joint * self.draw.scale_value(),
             rotation: self.mirror() * angle,
         })
     }
@@ -318,10 +318,10 @@ impl Character {
         let mirror = self.mirror();
         let turn = Vec2::from_angle(rotation);
         let placed = self.placed(&self.angles((1.0 - factor) * self.step));
-        for (part, (pivot, angle)) in self.parts.iter().zip(placed) {
+        for (part, (joint, angle)) in self.parts.iter().zip(placed) {
             let draw = self.draw.rotation(rotation + mirror * angle);
-            let pivot = position + turn.rotate(pivot * scale);
-            view.sprite(&part.texture, pivot, draw.origin(part.origin));
+            let joint = position + turn.rotate(joint * scale);
+            view.sprite(&part.texture, joint, draw.origin(part.origin));
         }
     }
 }

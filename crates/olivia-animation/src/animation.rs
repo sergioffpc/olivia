@@ -50,7 +50,7 @@ impl Animation {
     }
 
     /// Whether `other` is this animation, rather than one that holds the same.
-    pub(crate) fn is(&self, other: &Self) -> bool {
+    pub(crate) fn same_as(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.file, &other.file)
     }
 
@@ -59,31 +59,31 @@ impl Animation {
         &self.file.joints
     }
 
-    /// The whole frames in `age` seconds, and how far it is into the next one.
+    /// The whole rows in `age` seconds, and how far it is into the next one.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "the floor of a time that is not negative, and a fraction"
     )]
-    fn frame(&self, age: f64) -> (usize, f32) {
-        let frame = age.max(0.0) * f64::from(self.file.fps);
-        (frame as usize, frame.fract() as f32)
+    fn row(&self, age: f64) -> (usize, f32) {
+        let row = age.max(0.0) * f64::from(self.file.fps);
+        (row as usize, row.fract() as f32)
     }
 
     /// Whether `age` seconds in has reached the last row.
     pub(crate) fn ended(&self, age: f64) -> bool {
-        self.frame(age).0 + 1 >= self.file.rows.len()
+        self.row(age).0 + 1 >= self.file.rows.len()
     }
 
     /// The two rows around `age` seconds in, and how far it is from the first to the second.
     pub(crate) fn rows(&self, age: f64, looping: bool) -> (&[f32], &[f32], f32) {
         let rows = &self.file.rows;
         let count = rows.len();
-        let (frame, between) = self.frame(age);
+        let (row, between) = self.row(age);
         if looping {
-            (&rows[frame % count], &rows[(frame + 1) % count], between)
-        } else if frame + 1 < count {
-            (&rows[frame], &rows[frame + 1], between)
+            (&rows[row % count], &rows[(row + 1) % count], between)
+        } else if row + 1 < count {
+            (&rows[row], &rows[row + 1], between)
         } else {
             (&rows[count - 1], &rows[count - 1], 0.0)
         }

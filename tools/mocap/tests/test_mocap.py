@@ -48,8 +48,8 @@ def pose(
     return points
 
 
-def clip(*poses, fps=30.0, near=RIGHT):
-    """Times, points and visibility for one clip, with `near` the more visible side."""
+def video(*poses, fps=30.0, near=RIGHT):
+    """Times, points and visibility for one video, with `near` the more visible side."""
     points = np.array(poses)
     visibility = np.full((len(poses), 33), 0.2)
     visibility[:, list(near.values())] = 0.9
@@ -61,7 +61,7 @@ def column(rows, joint):
 
 
 def test_the_pose_on_the_sheet_is_all_zeros():
-    rows = mocap.rotations(*clip(*[pose()] * 10))
+    rows = mocap.rotations(*video(*[pose()] * 10))
 
     assert rows.shape == (10, 10)
     assert np.allclose(rows, 0.0)
@@ -72,7 +72,7 @@ def assert_degrees(rows, joint, expected):
 
 
 def test_leaning_forward_turns_the_root_clockwise_and_keeps_hanging_arms_in_the_world():
-    rows = mocap.rotations(*clip(*[pose(torso=-80.0)] * 10))
+    rows = mocap.rotations(*video(*[pose(torso=-80.0)] * 10))
 
     assert_degrees(rows, "root", 10.0)
     assert_degrees(rows, "shoulder_right", -10.0)
@@ -81,7 +81,7 @@ def test_leaning_forward_turns_the_root_clockwise_and_keeps_hanging_arms_in_the_
 
 
 def test_an_arm_raised_in_front_turns_the_shoulder_anticlockwise():
-    rows = mocap.rotations(*clip(*[pose(near_arm=(0.0, 0.0))] * 10))
+    rows = mocap.rotations(*video(*[pose(near_arm=(0.0, 0.0))] * 10))
 
     assert_degrees(rows, "shoulder_right", -90.0)
     assert_degrees(rows, "elbow_right", 0.0)
@@ -91,7 +91,7 @@ def test_an_arm_raised_in_front_turns_the_shoulder_anticlockwise():
 def test_the_more_visible_side_is_written_as_right():
     poses = [pose(near_arm=(0.0, 0.0))] * 10
 
-    rows = mocap.rotations(*clip(*poses, near=LEFT))
+    rows = mocap.rotations(*video(*poses, near=LEFT))
 
     assert_degrees(rows, "shoulder_right", 0.0)
     assert_degrees(rows, "shoulder_left", -90.0)
@@ -101,15 +101,15 @@ def test_a_video_filmed_facing_left_comes_out_facing_right():
     facing_right = pose(torso=-80.0, near_arm=(0.0, 45.0), near_leg=(60.0, 120.0))
     facing_left = facing_right * (-1.0, 1.0) + (1000.0, 0.0)
 
-    rows = mocap.rotations(*clip(*[facing_left] * 10))
+    rows = mocap.rotations(*video(*[facing_left] * 10))
 
-    assert np.allclose(rows, mocap.rotations(*clip(*[facing_right] * 10)))
+    assert np.allclose(rows, mocap.rotations(*video(*[facing_right] * 10)))
     assert_degrees(rows, "root", 10.0)
 
 
 def test_elbows_and_knees_bend_one_way_only():
-    bent = mocap.rotations(*clip(*[pose(near_arm=(90.0, 0.0), near_leg=(90.0, 180.0))] * 10))
-    backwards = mocap.rotations(*clip(*[pose(near_arm=(90.0, 100.0), near_leg=(90.0, 80.0))] * 10))
+    bent = mocap.rotations(*video(*[pose(near_arm=(90.0, 0.0), near_leg=(90.0, 180.0))] * 10))
+    backwards = mocap.rotations(*video(*[pose(near_arm=(90.0, 100.0), near_leg=(90.0, 80.0))] * 10))
 
     assert_degrees(bent, "elbow_right", -90.0)
     assert_degrees(bent, "knee_right", 90.0)
@@ -121,7 +121,7 @@ def test_a_one_frame_spike_is_removed():
     poses = [pose()] * 20
     poses[10] = pose(near_arm=(0.0, 0.0))
 
-    rows = mocap.rotations(*clip(*poses))
+    rows = mocap.rotations(*video(*poses))
 
     assert np.abs(np.degrees(column(rows, "shoulder_right"))).max() < 0.01
 
@@ -130,7 +130,7 @@ def test_jitter_across_half_a_turn_stays_small():
     # A hanging arm sits half a turn from the torso, where raw joint angles flip between ±180°.
     poses = [pose(near_arm=(90.0 + 2.0 * (-1) ** frame, 90.0)) for frame in range(20)]
 
-    rows = mocap.rotations(*clip(*poses))
+    rows = mocap.rotations(*video(*poses))
 
     assert np.degrees(np.abs(column(rows, "shoulder_right"))).max() <= 2.0
 
@@ -139,7 +139,7 @@ def test_it_resamples_to_30_fps_by_time():
     arms = np.linspace(90.0, 30.0, 61)
     poses = [pose(near_arm=(arm, arm)) for arm in arms]
 
-    rows = mocap.rotations(*clip(*poses, fps=60.0))
+    rows = mocap.rotations(*video(*poses, fps=60.0))
 
     assert len(rows) == 31
     # The filter only flattens the ends of the ramp.
@@ -147,8 +147,8 @@ def test_it_resamples_to_30_fps_by_time():
     assert np.allclose(shoulder[3:-3], np.linspace(0.0, -60.0, 31)[3:-3], atol=0.5)
 
 
-def test_a_clip_with_uneven_frame_times_keeps_its_duration():
-    times, points, visibility = clip(*[pose()] * 4)
+def test_a_video_with_uneven_frame_times_keeps_its_duration():
+    times, points, visibility = video(*[pose()] * 4)
     times = np.array([0.0, 0.1, 0.5, 1.0])
 
     assert len(mocap.rotations(times, points, visibility)) == 31
@@ -159,18 +159,18 @@ def test_a_motion_past_half_a_turn_resamples_along_the_short_way():
     arms = [-75.0, -85.0, -95.0, -105.0, -115.0, -125.0, -135.0, -145.0, -155.0, -165.0]
     poses = [pose(near_arm=(arm, arm)) for arm in arms]
 
-    rows = mocap.rotations(*clip(*poses, fps=15.0))
+    rows = mocap.rotations(*video(*poses, fps=15.0))
 
     steps = np.degrees(mocap.largest_steps(rows))
     assert steps[mocap.JOINTS.index("shoulder_right")] < 8.0
 
 
 def test_a_single_pose_gives_a_single_row():
-    assert mocap.rotations(*clip(pose())).shape == (1, 10)
+    assert mocap.rotations(*video(pose())).shape == (1, 10)
 
 
 def missing(times, points, visibility, frames):
-    """The clip with no pose in `frames`, as `read_poses` leaves those frames."""
+    """The video with no pose in `frames`, as `read_poses` leaves those frames."""
     points, visibility = points.copy(), visibility.copy()
     points[frames] = np.nan
     visibility[frames] = np.nan
@@ -178,7 +178,7 @@ def missing(times, points, visibility, frames):
 
 
 def test_frames_with_no_pose_are_trimmed_at_each_end():
-    times, points, visibility = missing(*clip(*[pose()] * 10), [0, 1, 9])
+    times, points, visibility = missing(*video(*[pose()] * 10), [0, 1, 9])
 
     trimmed_times, trimmed_points, trimmed_visibility = mocap.trim(times, points, visibility)
 
@@ -188,14 +188,14 @@ def test_frames_with_no_pose_are_trimmed_at_each_end():
 
 
 def test_a_stretch_with_no_pose_in_the_middle_is_an_error_naming_its_time_range():
-    data = missing(*clip(*[pose()] * 30), [9, 10, 11, 12])
+    data = missing(*video(*[pose()] * 30), [9, 10, 11, 12])
 
     with pytest.raises(SystemExit, match=r"no pose from 0\.30 s to 0\.40 s"):
         mocap.trim(*data)
 
 
-def test_a_clip_with_no_pose_at_all_is_an_error():
-    data = missing(*clip(*[pose()] * 3), [0, 1, 2])
+def test_a_video_with_no_pose_at_all_is_an_error():
+    data = missing(*video(*[pose()] * 3), [0, 1, 2])
 
     with pytest.raises(SystemExit, match="no pose"):
         mocap.trim(*data)
@@ -203,7 +203,7 @@ def test_a_clip_with_no_pose_at_all_is_an_error():
 
 def test_low_visibility_rejects_nothing():
     poses = [pose(far_arm=(0.0, 0.0))] * 10
-    times, points, visibility = clip(*poses)
+    times, points, visibility = video(*poses)
     visibility[:, list(LEFT.values())] = 0.0
 
     rows = mocap.rotations(times, points, visibility)

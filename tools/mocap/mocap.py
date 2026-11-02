@@ -32,8 +32,9 @@ NOSE, EAR_LEFT, EAR_RIGHT = 0, 7, 8
 LEFT = {"shoulder": 11, "elbow": 13, "wrist": 15, "hip": 23, "knee": 25, "ankle": 27}
 RIGHT = {"shoulder": 12, "elbow": 14, "wrist": 16, "hip": 24, "knee": 26, "ankle": 28}
 
-# The sheet's pose as raw joint angles: upright with every limb hanging straight down, so limbs
-# sit half a turn from the torso. See the stand-in's skeleton.json; the template is not in the repo.
+# The sheet's pose as raw joint angles: upright with every part hanging straight down, so upper
+# arms and legs sit half a turn from the torso. See the stand-in's skeleton.json; the template is
+# not in the repo.
 REST = {
     "root": -np.pi / 2,
     "neck": 0.0,
@@ -49,7 +50,7 @@ def wrap(angles):
     return (angles + np.pi) % (2 * np.pi) - np.pi
 
 
-def segment(start, end):
+def segment_angle(start, end):
     """The world angle of each frame's segment: clockwise from +x, in pixels with y down."""
     delta = end - start
     return np.arctan2(delta[:, 1], delta[:, 0])
@@ -75,14 +76,14 @@ def joint_angles(points, near):
     hips = points[:, [LEFT["hip"], RIGHT["hip"]]].mean(axis=1)
     shoulders = points[:, [LEFT["shoulder"], RIGHT["shoulder"]]].mean(axis=1)
     ears = points[:, [EAR_LEFT, EAR_RIGHT]].mean(axis=1)
-    torso = segment(hips, shoulders)
+    torso = segment_angle(hips, shoulders)
 
-    angles = {"root": torso, "neck": wrap(segment(shoulders, ears) - torso)}
+    angles = {"root": torso, "neck": wrap(segment_angle(shoulders, ears) - torso)}
     for name, side in (("right", near), ("left", far)):
-        upper_arm = segment(points[:, side["shoulder"]], points[:, side["elbow"]])
-        lower_arm = segment(points[:, side["elbow"]], points[:, side["wrist"]])
-        upper_leg = segment(points[:, side["hip"]], points[:, side["knee"]])
-        lower_leg = segment(points[:, side["knee"]], points[:, side["ankle"]])
+        upper_arm = segment_angle(points[:, side["shoulder"]], points[:, side["elbow"]])
+        lower_arm = segment_angle(points[:, side["elbow"]], points[:, side["wrist"]])
+        upper_leg = segment_angle(points[:, side["hip"]], points[:, side["knee"]])
+        lower_leg = segment_angle(points[:, side["knee"]], points[:, side["ankle"]])
         angles[f"shoulder_{name}"] = wrap(upper_arm - torso)
         angles[f"elbow_{name}"] = wrap(lower_arm - upper_arm)
         angles[f"hip_{name}"] = wrap(upper_leg - torso)
@@ -94,7 +95,8 @@ def smooth(angles, times):
     """A median to remove spikes, then a zero-phase Gaussian, over continuous angles."""
     if len(times) < 2:
         return angles
-    # Limbs hang half a turn from the torso, where wrapped angles flip sign on every bit of jitter.
+    # Upper arms and legs hang half a turn from the torso, where wrapped angles flip sign on every
+    # bit of jitter.
     continuous = np.unwrap(angles, axis=0)
     medians = median_filter(continuous, size=(MEDIAN_FRAMES, 1), mode="nearest")
     sigma = GAUSSIAN_SECONDS / np.median(np.diff(times))
