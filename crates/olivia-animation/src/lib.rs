@@ -5,7 +5,7 @@ mod character;
 mod skeleton;
 
 pub use animation::{Animation, Play};
-pub use character::Character;
+pub use character::{Character, JointPose};
 
 /// A failure of this module.
 #[non_exhaustive]

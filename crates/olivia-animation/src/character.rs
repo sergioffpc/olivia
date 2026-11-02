@@ -30,6 +30,18 @@ pub struct Character {
     step: f32,
 }
 
+/// Where a joint is and how its part is turned, read with [`Character::joint`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JointPose {
+    /// Where the joint is from the root joint, in game units, with the character's scale and
+    /// mirror applied. It is relative to the entity: add its `Transform`, and account for the
+    /// entity's rotation if it has any.
+    pub offset: Vec2,
+    /// The angle the part adds up to, in radians, where zero is as drawn. It is the angle shown on
+    /// screen, so a mirrored character gives its negative.
+    pub rotation: f32,
+}
+
 /// One image, and how it hangs.
 #[derive(Debug)]
 struct Part {
@@ -281,12 +293,29 @@ impl Character {
         placed
     }
 
+    /// How the scale shows angles: -1 if it mirrors the character, or else 1.
+    fn mirror(&self) -> f32 {
+        let scale = self.draw.scale_value();
+        if scale.x * scale.y < 0.0 { -1.0 } else { 1.0 }
+    }
+
+    /// The pose of the joint called `name` at the last fixed step, if there is one.
+    #[must_use]
+    pub fn joint(&self, name: &str) -> Option<JointPose> {
+        let index = self.parts.iter().position(|part| part.name == name)?;
+        let (pivot, angle) = self.placed(&self.angles(0.0))[index];
+        Some(JointPose {
+            offset: pivot * self.draw.scale_value(),
+            rotation: self.mirror() * angle,
+        })
+    }
+
     /// Draws the character with its root joint at `position`, turned by `rotation`, and its pose
     /// `factor` of the way between the last two fixed steps, as `interpolated_position` has it.
     #[doc(hidden)]
     pub fn render(&self, view: &mut View<'_>, position: Vec2, rotation: f32, factor: f32) {
         let scale = self.draw.scale_value();
-        let mirror = if scale.x * scale.y < 0.0 { -1.0 } else { 1.0 };
+        let mirror = self.mirror();
         let turn = Vec2::from_angle(rotation);
         let placed = self.placed(&self.angles((1.0 - factor) * self.step));
         for (part, (pivot, angle)) in self.parts.iter().zip(placed) {
