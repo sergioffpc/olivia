@@ -24,6 +24,8 @@ pub struct Character {
     walk: Arc<[usize]>,
     /// The animation playing, once one has been asked for.
     base: Option<Layer>,
+    /// The overlays over it, the last added on top.
+    overlays: Vec<Layer>,
     /// The length of the last fixed step, in seconds.
     step: f32,
 }
@@ -55,6 +57,8 @@ struct Layer {
     crossfade: f32,
     /// Seconds since it started, at the last fixed step.
     age: f64,
+    /// Whether this overlay is on its way out, moving from `from` to what is below it.
+    leaving: bool,
 }
 
 impl Layer {
@@ -68,6 +72,21 @@ impl Layer {
             shortest(*from, to, fade)
         };
         self.columns.iter().zip(&self.from).map(angle).collect()
+    }
+
+    /// Puts this overlay over `angles`, on the joints it covers.
+    fn over(&self, angles: &mut [f32], behind: f32) {
+        let own = self.angles(behind);
+        let fade = self.fade(self.age - f64::from(behind));
+        for (index, column) in self.columns.iter().enumerate() {
+            if column.is_some() {
+                angles[index] = if self.leaving {
+                    shortest(self.from[index], angles[index], fade)
+                } else {
+                    own[index]
+                };
+            }
+        }
     }
 
     /// How far the crossfade has gone at `age`, from 0 to 1. Before it began it has not moved.
@@ -125,6 +144,7 @@ impl Character {
             parts: parts.collect::<Result<_, Error>>()?,
             walk: skeleton.walk.into(),
             base: None,
+            overlays: Vec::new(),
             step: 0.0,
         })
     }
@@ -147,12 +167,44 @@ impl Character {
         if base.is_some_and(|layer| layer.animation.is(animation)) {
             return Ok(());
         }
-        self.base = Some(self.layer(animation, play)?);
+        self.base = Some(self.layer(animation, play, self.base_angles(0.0))?);
         Ok(())
     }
 
-    /// A layer starting now.
-    fn layer(&self, animation: &Animation, play: Play) -> Result<Layer, Error> {
+    /// Plays `animation` over the base, on only the joints it covers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MissingJoint`] if the animation names a joint the skeleton lacks.
+    pub fn overlay(&mut self, animation: &Animation, play: Play) -> Result<(), Error> {
+        if self.active(animation).is_none() {
+            let layer = self.layer(animation, play, self.angles(0.0))?;
+            self.overlays.push(layer);
+        }
+        Ok(())
+    }
+
+    /// The index of `animation` among the overlays, if it is active.
+    fn active(&self, animation: &Animation) -> Option<usize> {
+        let same = |layer: &Layer| !layer.leaving && layer.animation.is(animation);
+        self.overlays.iter().position(same)
+    }
+
+    /// Takes `animation` off, moving its joints to what is below it over `crossfade` seconds.
+    /// Removing one that isn't active does nothing.
+    pub fn remove_overlay(&mut self, animation: &Animation, crossfade: f32) {
+        if let Some(index) = self.active(animation) {
+            let from = self.angles(0.0);
+            let layer = &mut self.overlays[index];
+            layer.from = from;
+            layer.crossfade = crossfade;
+            layer.age = 0.0;
+            layer.leaving = true;
+        }
+    }
+
+    /// A layer starting now, from the angles `from`.
+    fn layer(&self, animation: &Animation, play: Play, from: Vec<f32>) -> Result<Layer, Error> {
         let joints = animation.joints();
         let lacking = |joint: &&String| !self.parts.iter().any(|part| part.name == **joint);
         if let Some(joint) = joints.iter().find(lacking) {
@@ -163,37 +215,55 @@ impl Character {
             animation: animation.clone(),
             looping: play.looping,
             columns: self.parts.iter().map(column).collect(),
-            from: self.angles(0.0),
+            from,
             crossfade: play.crossfade,
             age: 0.0,
+            leaving: false,
         })
     }
 
-    /// Whether `animation` is active, doesn't loop and has reached its last row. It has not once
-    /// another has taken over, even during the crossfade.
+    /// Whether `animation` is active, as base or overlay, doesn't loop and has reached its last
+    /// row. It has not once another has taken over, even during the crossfade.
     #[must_use]
     pub fn finished(&self, animation: &Animation) -> bool {
         let done = |layer: &Layer| {
-            layer.animation.is(animation) && !layer.looping && animation.ended(layer.age)
+            layer.animation.is(animation)
+                && !layer.leaving
+                && !layer.looping
+                && animation.ended(layer.age)
         };
-        self.base.as_ref().is_some_and(done)
+        let mut layers = self.base.iter().chain(&self.overlays);
+        layers.any(done)
     }
 
     /// Moves what is playing on by a fixed step of `dt` seconds.
     #[doc(hidden)]
     pub fn advance(&mut self, dt: f32) {
         self.step = dt;
-        if let Some(layer) = &mut self.base {
+        for layer in self.base.iter_mut().chain(&mut self.overlays) {
             layer.age += f64::from(dt);
+        }
+        // Kept until the whole of the last step is past its crossfade, for what `render` looks back at.
+        let dt = f64::from(dt);
+        self.overlays
+            .retain(|layer| !layer.leaving || layer.age - dt < f64::from(layer.crossfade));
+    }
+
+    /// The angle the base gives each part `behind` seconds before the last fixed step.
+    fn base_angles(&self, behind: f32) -> Vec<f32> {
+        match &self.base {
+            Some(layer) => layer.angles(behind),
+            None => vec![0.0; self.parts.len()],
         }
     }
 
     /// The angle of each part `behind` seconds before the last fixed step.
     fn angles(&self, behind: f32) -> Vec<f32> {
-        match &self.base {
-            Some(layer) => layer.angles(behind),
-            None => vec![0.0; self.parts.len()],
+        let mut angles = self.base_angles(behind);
+        for layer in &self.overlays {
+            layer.over(&mut angles, behind);
         }
+        angles
     }
 
     /// Where `angles` put the pivot of each part from the root joint, in pixels, and the angle each
