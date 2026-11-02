@@ -3,9 +3,9 @@ all-features = true
 
 [advisories]
 ignore = [
-    # Unmaintained, with no known flaw. winit's Wayland title bar reaches it through ab_glyph and
-    # parses only the system's fonts with it.
-    { id = "RUSTSEC-2026-0192", reason = "no alternative in winit's title bar; no known flaw" },
+    # Unmaintained, with no known flaw. winit's Wayland title bar reaches it through ab_glyph, and
+    # cosmic-text through fontdb, where it reads the fonts a game loads.
+    { id = "RUSTSEC-2026-0192", reason = "no alternative in winit or cosmic-text; no known flaw" },
 ]
 
 [licenses]
