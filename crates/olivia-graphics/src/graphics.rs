@@ -253,6 +253,12 @@ impl Target<'_> {
         self.clear_color
     }
 
+    /// The window's logical size when the frame started; zero with no GPU.
+    #[must_use]
+    pub fn viewport(&self) -> Vec2 {
+        self.viewport
+    }
+
     /// Sets the colour the frame clears to.
     pub fn clear(&mut self, color: Color) {
         self.clear_color = color;

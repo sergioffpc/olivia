@@ -8,7 +8,7 @@ use std::time::Duration;
 use olivia::filesystem::Error;
 use olivia::math::Vec2;
 use olivia::window::Window;
-use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update, run};
+use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update, run};
 use tempfile::TempDir;
 
 thread_local! {
@@ -28,8 +28,6 @@ impl Game for Reader {
         READ.with_borrow_mut(|read| read.push(u.filesystem.read("one.txt").unwrap()));
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 #[test]
@@ -58,8 +56,6 @@ impl Game for Greeter {
     fn update(&mut self, _u: Update<'_>) -> Result<()> {
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 #[test]

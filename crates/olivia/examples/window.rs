@@ -3,7 +3,7 @@
 //! Run it with `cargo run --example window`.
 
 use olivia::window::WindowEvent;
-use olivia::{Config, Frame, Game, Result, Setup, Update};
+use olivia::{Config, Game, Result, Setup, Update};
 
 struct Demo;
 
@@ -21,8 +21,6 @@ impl Game for Demo {
         }
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 fn main() -> Result<()> {

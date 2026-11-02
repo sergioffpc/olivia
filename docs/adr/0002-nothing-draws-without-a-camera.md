@@ -1,6 +1,6 @@
 # Nothing is drawn without a camera
 
-`Frame` has no drawing methods. `f.view(camera)` returns a `View`, and only a `View` draws, so forgetting the camera does not compile and a frame with no view shows just its clear colour. Screen-space drawing such as a HUD is not a separate mode: it uses `Camera::screen(viewport)`, where `(0, 0)` is the top-left corner and one unit is one logical pixel. The cost is one extra type and a camera line in even the smallest game, in exchange for a single coordinate model and no hidden camera state on `Frame`.
+Since ADR 0003 the camera is a component: an entity is drawn through every `Camera` entity, so a game with no camera shows just its clear colour. The only exception is the HUD, a phase of the renderer: an entity marked `Hud` is drawn after the world through `Camera::screen(viewport)`, where `(0, 0)` is the top-left corner and one unit is one logical pixel. Inside the graphics crate only a `View` draws, and a `View` needs a `Camera`. The cost is a camera entity in every game that shows a world, in exchange for a single coordinate model and no hidden camera state.
 
 ## Considered Options
 

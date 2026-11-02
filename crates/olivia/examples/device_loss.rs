@@ -3,17 +3,16 @@
 //!
 //! Run it with `RUST_LOG=olivia_graphics=debug cargo run --example device_loss`.
 
-use olivia::graphics::{Camera, Draw, Font, Texture};
+use olivia::ecs::{Clear, Entity, Hud, Sprite, Text, Transform};
+use olivia::graphics::Draw;
 use olivia::math::{Color, Vec2};
 use olivia::window::WindowEvent;
-use olivia::{Config, Frame, Game, Result, Setup, Update};
+use olivia::{Config, Game, Result, Setup, Update};
 
 const SECONDS_BETWEEN_LOSSES: f32 = 3.0;
 
 struct Demo {
-    hero: Texture,
-    font: Font,
-    viewport: Vec2,
+    count: Entity,
     until_loss: f32,
     losses: u32,
 }
@@ -22,39 +21,40 @@ impl Game for Demo {
     fn load(s: Setup<'_>) -> Result<Self> {
         let hero = s.filesystem.read("hero.png")?;
         let font = s.filesystem.read("DejaVuSansMono.ttf")?;
+        let hero = s.graphics.texture(&hero)?;
+        let font = s.graphics.font(&font)?;
+
+        s.world.spawn((Clear(Color::rgb(0.1, 0.15, 0.2)),));
+        let scaled = Draw::new().scale(Vec2::splat(4.0));
+        s.world.spawn((
+            Hud,
+            Transform::at(16.0, 16.0),
+            Sprite::new(hero).draw(scaled),
+        ));
+        let count = s.world.spawn((
+            Hud,
+            Transform::at(16.0, 120.0),
+            Text::new(font, 24.0, "devices lost: 0"),
+        ));
         Ok(Self {
-            hero: s.graphics.texture(&hero)?,
-            font: s.graphics.font(&font)?,
-            viewport: Vec2::ZERO,
+            count,
             until_loss: SECONDS_BETWEEN_LOSSES,
             losses: 0,
         })
     }
 
     fn update(&mut self, u: Update<'_>) -> Result<()> {
-        for event in u.events {
-            match event {
-                WindowEvent::Resized(size) => self.viewport = *size,
-                WindowEvent::CloseRequested => u.quit(),
-                _ => {}
-            }
+        if u.events.contains(&WindowEvent::CloseRequested) {
+            u.quit();
         }
         self.until_loss -= u.timer.dt();
         if self.until_loss <= 0.0 {
             self.until_loss = SECONDS_BETWEEN_LOSSES;
             self.losses += 1;
+            u.world.get::<&mut Text>(self.count)?.text = format!("devices lost: {}", self.losses);
             u.graphics.raw().0.destroy();
         }
         Ok(())
-    }
-
-    fn draw(&self, f: &mut Frame<'_>) {
-        f.clear(Color::rgb(0.1, 0.15, 0.2));
-        let mut hud = f.view(Camera::screen(self.viewport));
-        let scaled = Draw::new().scale(Vec2::splat(4.0));
-        hud.sprite(&self.hero, Vec2::new(16.0, 16.0), scaled);
-        let text = format!("devices lost: {}", self.losses);
-        hud.text(&self.font, 24.0, &text, Vec2::new(16.0, 120.0), Draw::new());
     }
 }
 
