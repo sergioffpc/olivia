@@ -3,15 +3,7 @@ use std::collections::HashSet;
 use olivia_math::Vec2;
 use serde::Deserialize;
 
-use crate::Error;
-
-const VERSION: u64 = 1;
-
-/// Read on its own, so that a newer file with another shape still reports its version.
-#[derive(Deserialize)]
-pub(crate) struct Header {
-    pub(crate) version: u64,
-}
+use crate::{Error, read};
 
 #[derive(Deserialize)]
 struct File {
@@ -54,11 +46,7 @@ pub(crate) struct Joint {
 
 /// Reads a `skeleton.json`, keeping the order of its joints.
 pub(crate) fn parse(bytes: &[u8]) -> Result<Skeleton, Error> {
-    let Header { version } = serde_json::from_slice(bytes)?;
-    if version != VERSION {
-        return Err(Error::UnknownVersion(version));
-    }
-    let File { joints: entries } = serde_json::from_slice(bytes)?;
+    let File { joints: entries } = read(bytes)?;
     let walk = walk(&entries)?;
     let joint = |entry: &Entry| {
         let parent = |part: &String| entries.iter().position(|other| other.part == *part);

@@ -4,8 +4,13 @@ mod animation;
 mod character;
 mod skeleton;
 
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+
 pub use animation::{Animation, Play};
 pub use character::{Character, JointPose};
+
+const VERSION: u64 = 1;
 
 /// A failure of this module.
 #[non_exhaustive]
@@ -16,7 +21,7 @@ pub enum Error {
     Filesystem(#[from] olivia_filesystem::Error),
     /// A file is not the JSON it should be.
     #[error("failed to parse the JSON")]
-    Json(#[from] serde_json::Error),
+    Json(#[source] Box<dyn std::error::Error + Send + Sync>),
     /// An image cannot be decoded.
     #[error("failed to load an image")]
     Graphics(#[from] olivia_graphics::Error),
@@ -32,4 +37,25 @@ pub enum Error {
     /// The animation names a joint the skeleton lacks.
     #[error("the skeleton has no joint {0:?}")]
     MissingJoint(String),
+}
+
+impl Error {
+    fn json(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
+        Self::Json(error.into())
+    }
+}
+
+/// Read on its own, so that a newer file with another shape still reports its version.
+#[derive(Deserialize)]
+struct Header {
+    version: u64,
+}
+
+/// Reads a JSON file of the version this reader knows.
+fn read<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {
+    let Header { version } = serde_json::from_slice(bytes).map_err(Error::json)?;
+    if version != VERSION {
+        return Err(Error::UnknownVersion(version));
+    }
+    serde_json::from_slice(bytes).map_err(Error::json)
 }

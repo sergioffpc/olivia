@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::Error;
-use crate::skeleton::Header;
-
-const VERSION: u64 = 1;
+use crate::{Error, read};
 
 /// Timed poses for joints, shared and stateless. Cheap to clone.
 ///
@@ -33,11 +30,7 @@ impl Animation {
     /// version this reader does not know, or [`Error::InvalidAnimation`] if its `fps` is zero, it
     /// has no rows, or a row's length differs from `joints`.
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
-        let Header { version } = serde_json::from_slice(bytes)?;
-        if version != VERSION {
-            return Err(Error::UnknownVersion(version));
-        }
-        let file: File = serde_json::from_slice(bytes)?;
+        let file: File = read(bytes)?;
         if file.fps == 0 {
             return Err(invalid("fps is zero".to_owned()));
         }
