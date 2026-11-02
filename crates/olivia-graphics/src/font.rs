@@ -19,14 +19,14 @@ const MAX_LAYOUTS: usize = 1024;
 /// A typeface to draw text with. Cheap to clone, and released when the last clone is dropped.
 #[derive(Clone, Debug)]
 pub struct Font {
-    typesetter: Arc<Mutex<Typesetter>>,
+    pub(crate) typesetter: Arc<Mutex<Typesetter>>,
 }
 
 /// What a layout is cached by, with the size and the width as bits.
 type LayoutKey = (u32, Option<u32>, String);
 
 /// One font and what turns text into its glyphs.
-struct Typesetter {
+pub(crate) struct Typesetter {
     /// Holds this font alone, so no text can fall back to another.
     system: FontSystem,
     attrs: AttrsOwned,
@@ -63,6 +63,17 @@ impl fmt::Debug for Typesetter {
 }
 
 impl Typesetter {
+    /// Starts an empty atlas on `gpu`. Every glyph is rasterised again as text asks for it, and
+    /// the layouts go too, as they point into the old atlas.
+    pub(crate) fn rebuild(typesetter: &Mutex<Self>, gpu: Option<AtlasGpu>) {
+        let mut typesetter = typesetter
+            .lock()
+            .expect("an earlier panic left this font unusable");
+        typesetter.layouts.clear();
+        typesetter.glyphs.clear();
+        typesetter.atlas = Atlas::new(gpu);
+    }
+
     /// `text` at `size`, wrapped to `width` if there is one, from the cache if it is there.
     fn layout(&mut self, size: f32, width: Option<f32>, text: &str) -> Arc<Layout> {
         let key = (size.to_bits(), width.map(f32::to_bits), text.to_owned());

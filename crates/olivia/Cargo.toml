@@ -29,6 +29,10 @@ name = "filesystem"
 required-features = ["filesystem"]
 
 [[example]]
+name = "device_loss"
+required-features = ["filesystem", "graphics"]
+
+[[example]]
 name = "draw_options"
 required-features = ["graphics"]
 

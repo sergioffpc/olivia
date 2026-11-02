@@ -1,8 +1,10 @@
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use olivia_math::{Rect, Vec2};
 use wgpu::BindGroup;
+
+use crate::gpu::Gpu;
 
 /// An image to draw, or a region of one. Cheap to clone, and released when the last clone and
 /// region are dropped.
@@ -19,8 +21,9 @@ pub(crate) struct Image {
     width: u32,
     height: u32,
     rgba: Vec<u8>,
-    /// What a draw binds; none in a headless game.
-    pub(crate) bind_group: Option<BindGroup>,
+    /// What a draw binds; none in a headless game. Replaced when the device is, so that textures
+    /// stay valid.
+    bind_group: RwLock<Option<BindGroup>>,
 }
 
 impl Image {
@@ -34,8 +37,25 @@ impl Image {
             width,
             height,
             rgba,
-            bind_group,
+            bind_group: RwLock::new(bind_group),
         }
+    }
+
+    /// What a draw binds; none in a headless game.
+    pub(crate) fn bind_group(&self) -> Option<BindGroup> {
+        self.bind_group
+            .read()
+            .expect("an earlier panic left this image unusable")
+            .clone()
+    }
+
+    /// Copies the pixels to `gpu`, whose copy replaces the last one.
+    pub(crate) fn rebuild(&self, gpu: Option<&Gpu>) {
+        let bind_group = gpu.map(|gpu| gpu.upload(self.width, self.height, &self.rgba));
+        *self
+            .bind_group
+            .write()
+            .expect("an earlier panic left this image unusable") = bind_group;
     }
 
     #[expect(

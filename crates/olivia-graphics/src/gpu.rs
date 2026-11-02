@@ -1,4 +1,6 @@
+use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use bytemuck::cast_slice;
 use olivia_math::{Color, Vec2};
@@ -8,9 +10,9 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BufferUsages, Color as ClearColor, CommandEncoderDescriptor, CurrentSurfaceTexture,
     Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, LoadOp, Operations,
-    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
-    StoreOp, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    PollType, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use crate::Error;
@@ -35,14 +37,19 @@ pub fn sample_count(requested: u32, supported: &[u32]) -> u32 {
 pub(crate) struct Gpu {
     pub(crate) device: Device,
     pub(crate) queue: Queue,
+    /// Set by `wgpu` when the device is lost, from whichever thread finds out.
+    device_lost: Arc<AtomicBool>,
+    instance: Instance,
     surface: Surface<'static>,
+    /// Whether the last frame found the surface lost.
+    surface_lost: bool,
     config: SurfaceConfiguration,
     sample_count: u32,
     pipeline: Pipeline,
     /// What a frame renders to before resolving to the surface; none without MSAA.
     multisampled: Option<TextureView>,
     /// Read for its size each frame, so a resize needs no event.
-    window: Arc<RawWindow>,
+    pub(crate) window: Arc<RawWindow>,
 }
 
 impl Gpu {
@@ -69,6 +76,9 @@ impl Gpu {
             ..DeviceDescriptor::default()
         }))
         .map_err(|error| Error::NoDevice(error.into()))?;
+        let device_lost = Arc::new(AtomicBool::new(false));
+        let lost = Arc::clone(&device_lost);
+        device.set_device_lost_callback(move |_, _| lost.store(true, Ordering::Relaxed));
 
         let size = window.inner_size();
         let mut surface_config = surface
@@ -107,7 +117,10 @@ impl Gpu {
         let mut gpu = Self {
             device,
             queue,
+            device_lost,
+            instance,
             surface,
+            surface_lost: false,
             config: surface_config,
             sample_count,
             pipeline,
@@ -116,6 +129,28 @@ impl Gpu {
         };
         gpu.configure();
         Ok(gpu)
+    }
+
+    /// Whether the device is lost, and everything made from it with it.
+    pub(crate) fn is_device_lost(&self) -> bool {
+        // A destroyed device only reports its loss from a poll. A failed poll has nothing to add.
+        let _ = self.device.poll(PollType::Poll);
+        self.device_lost.load(Ordering::Relaxed)
+    }
+
+    /// Replaces the surface if the last frame found it lost.
+    pub(crate) fn recreate_lost_surface(&mut self) -> Result<(), Error> {
+        if !mem::take(&mut self.surface_lost) {
+            return Ok(());
+        }
+        // Replacing it drops the old swapchain, and `configure` then builds the new one.
+        self.surface = self
+            .instance
+            .create_surface(Arc::clone(&self.window))
+            .map_err(Error::no_adapter)?;
+        debug!("surface recreated");
+        self.configure();
+        Ok(())
     }
 
     /// The window's logical size.
@@ -145,6 +180,10 @@ impl Gpu {
             }
             CurrentSurfaceTexture::Outdated => {
                 self.configure();
+                return false;
+            }
+            CurrentSurfaceTexture::Lost => {
+                self.surface_lost = true;
                 return false;
             }
             // Whatever stopped this frame may be gone by the next one.
@@ -192,7 +231,7 @@ impl Gpu {
             pass.set_vertex_buffer(0, vertices.slice(..));
             for batch in &mesh.batches {
                 pass.set_pipeline(self.pipeline.raw(batch.blend));
-                pass.set_bind_group(0, batch.image.bind_group.as_ref(), &[]);
+                pass.set_bind_group(0, batch.image.bind_group().as_ref(), &[]);
                 pass.set_bind_group(1, self.pipeline.sampler(batch.filter), &[]);
                 pass.draw(batch.vertices.clone(), 0..1);
             }
