@@ -1,0 +1,28 @@
+//! Drawing to the game's window.
+
+mod gpu;
+mod graphics;
+
+#[doc(hidden)]
+pub use gpu::sample_count;
+pub use graphics::Graphics;
+#[doc(hidden)]
+pub use graphics::{Config, Target};
+
+/// A failure of this module.
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// No GPU adapter can draw to the window.
+    #[error("found no GPU adapter")]
+    NoAdapter(#[source] Option<Box<dyn std::error::Error + Send + Sync>>),
+    /// The GPU adapter gave no device.
+    #[error("failed to get a GPU device")]
+    NoDevice(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl Error {
+    fn no_adapter(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
+        Self::NoAdapter(Some(error.into()))
+    }
+}

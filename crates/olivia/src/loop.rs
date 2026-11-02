@@ -15,8 +15,9 @@ use crate::{Config, Frame, Game, Modules, Result, Setup, Timer, Update};
 /// # Errors
 ///
 /// Returns an error if the identity is invalid, before any window opens;
-/// [`window::Error`](crate::window::Error) if the window cannot be created; or the first `Err` from
-/// [`Game::load`] or [`Game::update`]. The window is closed by then.
+/// [`window::Error`](crate::window::Error) if the window cannot be created; a `graphics::Error` if
+/// no GPU can draw to it; or the first `Err` from [`Game::load`] or [`Game::update`]. The window is
+/// closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
     let modules = Modules::new(&config)?;
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
@@ -33,6 +34,8 @@ pub struct GameLoop<G> {
     /// The events waiting for the next step.
     events: Vec<WindowEvent>,
     is_minimized: bool,
+    /// Whether the last frame reached the window, so the clock leaves its pace to vsync.
+    presented: bool,
 }
 
 impl<G: Game> GameLoop<G> {
@@ -51,6 +54,7 @@ impl<G: Game> GameLoop<G> {
             quit: Cell::new(false),
             events: vec![WindowEvent::Resized(size)],
             is_minimized: false,
+            presented: false,
         })
     }
 
@@ -84,10 +88,11 @@ impl<G: Game> GameLoop<G> {
             }
         }
 
-        if !self.is_minimized {
-            let mut frame = Frame::new(self.timer.interpolation_factor());
+        self.presented = !self.is_minimized && {
+            let mut frame = Frame::new(self.timer.interpolation_factor(), &mut self.modules);
             trace_span!("draw").in_scope(|| self.game.draw(&mut frame));
-        }
+            frame.present()
+        };
         Ok(true)
     }
 }
@@ -96,7 +101,10 @@ impl<G: Game> Driver for GameLoop<G> {
     type Seed = Modules;
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    fn start(modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
+    #[cfg_attr(not(feature = "graphics"), expect(unused_mut))]
+    fn start(mut modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
+        #[cfg(feature = "graphics")]
+        modules.graphics.attach(window)?;
         Self::new(window, size, modules)
     }
 
@@ -105,7 +113,7 @@ impl<G: Game> Driver for GameLoop<G> {
     }
 
     fn frame(&mut self, window: &mut Window) -> Result<bool> {
-        let frame_time = self.clock.next_frame();
+        let frame_time = self.clock.next_frame(self.presented);
         self.run_frame(frame_time, window)
     }
 }

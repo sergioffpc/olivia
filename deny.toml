@@ -9,6 +9,7 @@ allow = [
     "ISC",
     "MIT",
     "Unicode-3.0",
+    "Zlib",
 ]
 # A dependency of directories, which olivia-filesystem is built on.
 exceptions = [{ crate = "option-ext", allow = ["MPL-2.0"] }]

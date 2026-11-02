@@ -6,6 +6,8 @@ mod window;
 #[doc(hidden)]
 pub use driver::{Attributes, Driver, run};
 pub use window::{Window, WindowEvent};
+#[doc(hidden)]
+pub use winit::window::Window as RawWindow;
 
 /// A failure of this module.
 #[non_exhaustive]
