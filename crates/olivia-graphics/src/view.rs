@@ -3,9 +3,11 @@ use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use olivia_math::{Color, Vec2};
+use tracing::field::Empty;
+use tracing::trace_span;
 
 use crate::camera::Camera;
-use crate::draw::Draw;
+use crate::draw::{Blend, Draw, Filter};
 use crate::texture::{Image, Texture};
 
 /// One corner of a triangle.
@@ -21,18 +23,83 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
-/// What a frame has drawn so far, in order.
+/// What a frame has drawn so far, in call order.
 #[derive(Debug, Default)]
-pub(crate) struct Mesh {
-    pub(crate) vertices: Vec<Vertex>,
-    pub(crate) batches: Vec<Batch>,
+pub(crate) struct DrawCalls {
+    vertices: Vec<Vertex>,
+    calls: Vec<Call>,
+    /// How many views the frame has started; the last one is the one drawing.
+    views: usize,
 }
 
-/// A run of vertices that sample one image.
+/// One draw call.
 #[derive(Debug)]
-pub(crate) struct Batch {
+struct Call {
+    view: usize,
+    depth: f32,
+    image: Arc<Image>,
+    filter: Filter,
+    blend: Blend,
+    vertices: Range<usize>,
+}
+
+impl DrawCalls {
+    /// Sorts the calls by view, then by depth, and batches the result. The sort is stable, so ties
+    /// keep call order.
+    pub(crate) fn mesh(&self) -> Mesh {
+        let span = trace_span!("batching", batches = Empty).entered();
+        let mut calls: Vec<&Call> = self.calls.iter().collect();
+        calls.sort_by(|a, b| {
+            let view = a.view.cmp(&b.view);
+            view.then(a.depth.total_cmp(&b.depth))
+        });
+        let mut mesh = Mesh {
+            vertices: Vec::with_capacity(self.vertices.len()),
+            batches: Vec::new(),
+        };
+        for call in calls {
+            mesh.push(call, &self.vertices[call.vertices.clone()]);
+        }
+        span.record("batches", mesh.batches.len());
+        mesh
+    }
+
+    /// Adds `vertices` as one call through the last view.
+    fn push(&mut self, image: &Arc<Image>, draw: Draw, vertices: [Vertex; 6]) {
+        let start = self.vertices.len();
+        self.vertices.extend(vertices);
+        self.calls.push(Call {
+            view: self.views,
+            depth: draw.depth,
+            image: Arc::clone(image),
+            filter: draw.filter,
+            blend: draw.blend,
+            vertices: start..self.vertices.len(),
+        });
+    }
+}
+
+/// A frame ready to submit: its triangles in drawing order, and the batches that cover them.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct Mesh {
+    /// Every vertex, in drawing order.
+    pub vertices: Vec<Vertex>,
+    /// One entry for each run of calls that share their GPU state.
+    pub batches: Vec<Batch>,
+}
+
+/// A run of vertices that draw with the same image, filter and blend.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct Batch {
     pub(crate) image: Arc<Image>,
-    pub(crate) vertices: Range<u32>,
+    /// How the image is sampled.
+    pub filter: Filter,
+    /// How the vertices combine with what is under them.
+    pub blend: Blend,
+    /// The vertices of the [`Mesh`] in this batch.
+    pub vertices: Range<u32>,
 }
 
 impl Mesh {
@@ -49,20 +116,28 @@ impl Mesh {
         vertices.collect()
     }
 
-    /// Adds `vertices`, sampling `image`.
-    fn push(&mut self, image: &Arc<Image>, vertices: [Vertex; 6]) {
-        self.vertices.extend(vertices);
+    /// Adds `vertices`, joining the last batch if `call` shares its state.
+    fn push(&mut self, call: &Call, vertices: &[Vertex]) {
+        self.vertices.extend_from_slice(vertices);
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a frame's vertices stay far below 2^32"
         )]
         let end = self.vertices.len() as u32;
         match self.batches.last_mut() {
-            Some(batch) if Arc::ptr_eq(&batch.image, image) => batch.vertices.end = end,
+            Some(batch)
+                if Arc::ptr_eq(&batch.image, &call.image)
+                    && batch.filter == call.filter
+                    && batch.blend == call.blend =>
+            {
+                batch.vertices.end = end;
+            }
             last => {
                 let start = last.map_or(0, |batch| batch.vertices.end);
                 self.batches.push(Batch {
-                    image: Arc::clone(image),
+                    image: Arc::clone(&call.image),
+                    filter: call.filter,
+                    blend: call.blend,
                     vertices: start..end,
                 });
             }
@@ -73,17 +148,19 @@ impl Mesh {
 /// What a frame draws through one [`Camera`], and the only thing that draws.
 ///
 /// It borrows the frame, so views are created one after another, and they draw in that order.
+/// [`depth`](Draw::depth) orders the calls within one view.
 #[derive(Debug)]
 pub struct View<'a> {
-    mesh: &'a mut Mesh,
+    calls: &'a mut DrawCalls,
     camera: Camera,
     viewport: Vec2,
 }
 
 impl<'a> View<'a> {
-    pub(crate) fn new(mesh: &'a mut Mesh, camera: Camera, viewport: Vec2) -> Self {
+    pub(crate) fn new(calls: &'a mut DrawCalls, camera: Camera, viewport: Vec2) -> Self {
+        calls.views += 1;
         Self {
-            mesh,
+            calls,
             camera,
             viewport,
         }
@@ -105,8 +182,9 @@ impl<'a> View<'a> {
         };
         let [top_left, top_right] = [vertex(Vec2::ZERO), vertex(Vec2::X)];
         let [bottom_left, bottom_right] = [vertex(Vec2::Y), vertex(Vec2::ONE)];
-        self.mesh.push(
+        self.calls.push(
             &texture.image,
+            draw,
             [
                 top_left,
                 top_right,

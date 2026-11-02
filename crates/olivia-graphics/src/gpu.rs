@@ -153,7 +153,7 @@ impl Gpu {
             }
         };
 
-        let _span = trace_span!("submit").entered();
+        let _span = trace_span!("submit", batches = mesh.batches.len()).entered();
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
         let (attachment, resolve_target) = match &self.multisampled {
             Some(multisampled) => (multisampled, Some(&view)),
@@ -188,10 +188,11 @@ impl Gpu {
             ..RenderPassDescriptor::default()
         });
         if let Some(vertices) = &vertices {
-            pass.set_pipeline(&self.pipeline.raw);
             pass.set_vertex_buffer(0, vertices.slice(..));
             for batch in &mesh.batches {
+                pass.set_pipeline(self.pipeline.raw(batch.blend));
                 pass.set_bind_group(0, batch.image.bind_group.as_ref(), &[]);
+                pass.set_bind_group(1, self.pipeline.sampler(batch.filter), &[]);
                 pass.draw(batch.vertices.clone(), 0..1);
             }
         }

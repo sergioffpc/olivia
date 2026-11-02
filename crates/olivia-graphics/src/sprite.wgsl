@@ -11,7 +11,7 @@ struct Fragment {
 }
 
 @group(0) @binding(0) var image: texture_2d<f32>;
-@group(0) @binding(1) var linear: sampler;
+@group(1) @binding(0) var sampling: sampler;
 
 @vertex
 fn vertex(vertex: Vertex) -> Fragment {
@@ -20,5 +20,5 @@ fn vertex(vertex: Vertex) -> Fragment {
 
 @fragment
 fn fragment(fragment: Fragment) -> @location(0) vec4f {
-    return textureSample(image, linear, fragment.uv) * fragment.color;
+    return textureSample(image, sampling, fragment.uv) * fragment.color;
 }

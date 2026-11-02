@@ -9,16 +9,16 @@ mod texture;
 mod view;
 
 pub use camera::Camera;
-pub use draw::Draw;
+pub use draw::{Blend, Draw, Filter};
 #[doc(hidden)]
 pub use gpu::sample_count;
 pub use graphics::Graphics;
 #[doc(hidden)]
 pub use graphics::{Config, Target};
 pub use texture::Texture;
-#[doc(hidden)]
-pub use view::Vertex;
 pub use view::View;
+#[doc(hidden)]
+pub use view::{Batch, Mesh, Vertex};
 
 /// A failure of this module.
 #[non_exhaustive]

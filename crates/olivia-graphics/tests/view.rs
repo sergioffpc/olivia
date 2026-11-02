@@ -2,7 +2,7 @@
 
 use std::f32::consts::FRAC_PI_2;
 
-use olivia_graphics::{Camera, Config, Draw, Graphics, Target, Texture, Vertex};
+use olivia_graphics::{Blend, Camera, Config, Draw, Filter, Graphics, Target, Texture, Vertex};
 use olivia_math::{Color, Rect, Vec2};
 
 /// Shows the game's coordinates as they are.
@@ -26,7 +26,8 @@ fn texture(graphics: &mut Graphics) -> Texture {
 
 /// The top-left, top-right, bottom-left and bottom-right corners of the sprite at `index`.
 fn corners(target: &Target<'_>, index: usize) -> [Vertex; 4] {
-    let sprite = &target.vertices()[index * 6..(index + 1) * 6];
+    let mesh = target.mesh();
+    let sprite = &mesh.vertices[index * 6..(index + 1) * 6];
     [sprite[0], sprite[1], sprite[2], sprite[5]]
 }
 
@@ -54,7 +55,9 @@ fn assert_close(actual: [Vec2; 4], expected: [(f32, f32); 4]) {
 
 #[test]
 fn a_frame_with_no_view_draws_nothing() {
-    assert_eq!(graphics().target().vertices(), []);
+    let mesh = graphics().target().mesh();
+    assert_eq!(mesh.vertices, []);
+    assert!(mesh.batches.is_empty());
 }
 
 #[test]
@@ -72,7 +75,7 @@ fn every_corner_is_in_two_triangles_with_no_gaps() {
     let texture = texture(&mut graphics);
     let mut target = graphics.target();
     target.view(WORLD).sprite(&texture, Vec2::ZERO, Draw::new());
-    let vertices = target.vertices();
+    let vertices = target.mesh().vertices;
     assert_eq!(vertices.len(), 6);
     // Both triangles share the diagonal from top-right to bottom-left.
     assert_eq!(vertices[1], vertices[4]);
@@ -158,7 +161,7 @@ fn a_sprite_is_white_by_default_so_its_texture_shows_unchanged() {
     let texture = texture(&mut graphics);
     let mut target = graphics.target();
     target.view(WORLD).sprite(&texture, Vec2::ZERO, Draw::new());
-    for vertex in target.vertices() {
+    for vertex in target.mesh().vertices {
         assert_eq!(vertex.color, [1.0; 4]);
     }
 }
@@ -170,7 +173,7 @@ fn color_reaches_every_corner_premultiplied() {
     let draw = Draw::new().color(Color::new(1.0, 0.5, 0.0, 0.5));
     let mut target = graphics.target();
     target.view(WORLD).sprite(&texture, Vec2::ZERO, draw);
-    for vertex in target.vertices() {
+    for vertex in target.mesh().vertices {
         assert_eq!(vertex.color, [0.5, 0.25, 0.0, 0.5]);
     }
 }
@@ -189,4 +192,152 @@ fn views_draw_in_creation_order() {
 
     let order = [0, 1, 2].map(|index| corners(&target, index)[0].position.x);
     assert_eq!(order, [1.0, 2.0, 3.0]);
+}
+
+/// The sprites of one view, each at an X equal to its call order, in drawing order.
+fn drawn_order(depths: &[f32]) -> Vec<f32> {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let mut target = graphics.target();
+    let mut view = target.view(WORLD);
+    for (order, &depth) in (0..).zip(depths) {
+        let pos = Vec2::new(f32::from(u8::try_from(order).unwrap()), 0.0);
+        view.sprite(&texture, pos, Draw::new().depth(depth));
+    }
+    let vertices = target.mesh().vertices;
+    let sprites = vertices.chunks(6);
+    sprites.map(|sprite| sprite[0].position.x).collect()
+}
+
+#[test]
+fn larger_depth_draws_on_top() {
+    assert_eq!(drawn_order(&[2.0, -1.0, 0.5]), [1.0, 2.0, 0.0]);
+}
+
+#[test]
+fn equal_depths_keep_call_order() {
+    assert_eq!(drawn_order(&[1.0, 0.0, 1.0, 0.0]), [1.0, 3.0, 0.0, 2.0]);
+}
+
+#[test]
+fn depth_has_no_fixed_range_and_nan_does_not_break_the_sort() {
+    let depths = [f32::NAN, f32::INFINITY, 0.0, f32::NEG_INFINITY, 1e30];
+    assert_eq!(drawn_order(&depths), [3.0, 2.0, 4.0, 1.0, 0.0]);
+}
+
+#[test]
+fn depth_orders_only_within_a_view() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let mut target = graphics.target();
+    let mut first = target.view(WORLD);
+    first.sprite(&texture, Vec2::new(1.0, 0.0), Draw::new().depth(9.0));
+    let mut second = target.view(WORLD);
+    second.sprite(&texture, Vec2::new(2.0, 0.0), Draw::new().depth(-9.0));
+
+    let order = [0, 1].map(|index| corners(&target, index)[0].position.x);
+    assert_eq!(order, [1.0, 2.0]);
+}
+
+/// The vertices of each batch of `sprites`, all of the texture given and drawn through one view.
+fn batches(sprites: &[(&Texture, Draw)], graphics: &mut Graphics) -> Vec<(u32, u32)> {
+    let mut target = graphics.target();
+    let mut view = target.view(WORLD);
+    for (texture, draw) in sprites {
+        view.sprite(texture, Vec2::ZERO, *draw);
+    }
+    let batches = target.mesh().batches;
+    let ranges = batches.iter().map(|batch| &batch.vertices);
+    ranges.map(|range| (range.start, range.end)).collect()
+}
+
+#[test]
+fn calls_with_the_same_state_share_a_batch() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let sprites = [(&texture, Draw::new()), (&texture, Draw::new())];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 12)]);
+}
+
+#[test]
+fn colour_and_transform_do_not_break_a_batch() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let changed = Draw::new()
+        .color(Color::BLACK)
+        .scale(Vec2::splat(2.0))
+        .rotation(1.0);
+    let sprites = [(&texture, Draw::new()), (&texture, changed)];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 12)]);
+}
+
+#[test]
+fn regions_of_one_texture_share_a_batch() {
+    let mut graphics = graphics();
+    let atlas = texture(&mut graphics);
+    let left = atlas.region(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let right = atlas.region(Rect::new(10.0, 0.0, 10.0, 10.0));
+    let sprites = [(&left, Draw::new()), (&right, Draw::new())];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 12)]);
+}
+
+#[test]
+fn another_texture_breaks_a_batch() {
+    let mut graphics = graphics();
+    let first = texture(&mut graphics);
+    let second = texture(&mut graphics);
+    let sprites = [(&first, Draw::new()), (&second, Draw::new())];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 6), (6, 12)]);
+}
+
+#[test]
+fn another_filter_breaks_a_batch() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let nearest = Draw::new().filter(Filter::Nearest);
+    let sprites = [(&texture, Draw::new()), (&texture, nearest)];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 6), (6, 12)]);
+}
+
+#[test]
+fn another_blend_breaks_a_batch() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let add = Draw::new().blend(Blend::Add);
+    let sprites = [(&texture, Draw::new()), (&texture, add)];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 6), (6, 12)]);
+}
+
+#[test]
+fn batches_follow_the_sort_not_the_calls() {
+    let mut graphics = graphics();
+    let first = texture(&mut graphics);
+    let second = texture(&mut graphics);
+    let sprites = [
+        (&first, Draw::new().depth(0.0)),
+        (&second, Draw::new().depth(1.0)),
+        (&first, Draw::new().depth(0.0)),
+    ];
+    assert_eq!(batches(&sprites, &mut graphics), [(0, 12), (12, 18)]);
+}
+
+#[test]
+fn a_batch_carries_its_filter_and_blend() {
+    let mut graphics = graphics();
+    let texture = texture(&mut graphics);
+    let draw = Draw::new().filter(Filter::Nearest).blend(Blend::Add);
+    let mut target = graphics.target();
+    target.view(WORLD).sprite(&texture, Vec2::ZERO, draw);
+    let mesh = target.mesh();
+    assert_eq!(mesh.batches[0].filter, Filter::Nearest);
+    assert_eq!(mesh.batches[0].blend, Blend::Add);
+}
+
+#[test]
+fn draw_defaults_to_depth_zero_linear_and_alpha() {
+    let explicit = Draw::new()
+        .depth(0.0)
+        .filter(Filter::Linear)
+        .blend(Blend::Alpha);
+    assert_eq!(Draw::default(), explicit);
 }
