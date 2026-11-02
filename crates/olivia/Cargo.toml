@@ -5,11 +5,13 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["filesystem"]
+default = ["filesystem", "graphics"]
 filesystem = ["dep:olivia-filesystem"]
+graphics = ["dep:olivia-graphics"]
 
 [dependencies]
 olivia-filesystem = { workspace = true, optional = true }
+olivia-graphics = { workspace = true, optional = true }
 olivia-math.workspace = true
 olivia-window.workspace = true
 tracing.workspace = true
@@ -17,6 +19,10 @@ tracing.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 tracing-subscriber.workspace = true
+
+[[example]]
+name = "clear"
+required-features = ["graphics"]
 
 [[example]]
 name = "filesystem"

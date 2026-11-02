@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use olivia_math::Vec2;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::window::Fullscreen;
@@ -20,7 +22,7 @@ pub enum WindowEvent {
 #[derive(Debug)]
 pub struct Window {
     /// The OS window; a headless window has none.
-    raw: Option<winit::window::Window>,
+    raw: Option<Arc<winit::window::Window>>,
     /// A size applied at once, for which the platform sends no resize event.
     pub(crate) applied_size: Option<Vec2>,
 }
@@ -28,7 +30,7 @@ pub struct Window {
 impl Window {
     pub(crate) fn new(raw: winit::window::Window) -> Self {
         Self {
-            raw: Some(raw),
+            raw: Some(Arc::new(raw)),
             applied_size: None,
         }
     }
@@ -71,7 +73,7 @@ impl Window {
     ///
     /// Panics on a headless window.
     #[must_use]
-    pub fn raw(&self) -> &winit::window::Window {
+    pub fn raw(&self) -> &Arc<winit::window::Window> {
         self.raw
             .as_ref()
             .expect("a headless window has no OS window")

@@ -9,6 +9,8 @@ mod timer;
 
 #[cfg(feature = "filesystem")]
 pub use olivia_filesystem as filesystem;
+#[cfg(feature = "graphics")]
+pub use olivia_graphics as graphics;
 pub use olivia_math as math;
 pub use olivia_window as window;
 

@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::{Error, Filesystem};
+#[cfg(feature = "graphics")]
+use olivia_graphics::{self as graphics, Graphics};
 use olivia_math::Vec2;
 use olivia_window::Attributes;
 
@@ -95,6 +97,15 @@ impl Config {
             resizable: self.resizable,
             fullscreen: self.fullscreen,
         }
+    }
+
+    /// The graphics of the game this configures.
+    #[cfg(feature = "graphics")]
+    pub(crate) fn graphics(&self) -> Graphics {
+        Graphics::new(graphics::Config {
+            vsync: self.vsync,
+            msaa: self.msaa,
+        })
     }
 
     /// The filesystem of the game this configures.
