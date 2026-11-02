@@ -12,6 +12,7 @@ olivia-filesystem = { path = "crates/olivia-filesystem" }
 olivia-graphics = { path = "crates/olivia-graphics" }
 olivia-input = { path = "crates/olivia-input" }
 olivia-math = { path = "crates/olivia-math" }
+olivia-physics = { path = "crates/olivia-physics" }
 olivia-window = { path = "crates/olivia-window" }
 bytemuck = { version = "1", features = ["derive"] }
 # No fontconfig: a font comes only from the bytes a game hands over.
@@ -22,6 +23,7 @@ glam = { version = "0.33", features = ["bytemuck"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 lyon = "1"
 pollster = "1"
+rapier2d = { version = "0.36", features = ["debug-render"] }
 tempfile = "3"
 thiserror = "2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }

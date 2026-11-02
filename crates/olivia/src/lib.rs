@@ -14,6 +14,8 @@ pub use olivia_graphics as graphics;
 #[cfg(feature = "input")]
 pub use olivia_input as input;
 pub use olivia_math as math;
+#[cfg(feature = "physics")]
+pub use olivia_physics as physics;
 pub use olivia_window as window;
 
 pub use config::Config;
