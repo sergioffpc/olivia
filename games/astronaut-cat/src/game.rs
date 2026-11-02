@@ -363,8 +363,8 @@ impl Platformer {
     /// What the game fixes before it starts.
     #[must_use]
     pub fn config() -> Config {
-        Config::new("gato-astronauta")
-            .title("O gato astronauta")
+        Config::new("astronaut-cat")
+            .title("The astronaut cat")
             .size(WINDOW.x, WINDOW.y)
             .resizable(false)
             .gravity(0.0, GRAVITY)

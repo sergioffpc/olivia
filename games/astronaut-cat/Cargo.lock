@@ -136,6 +136,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronaut-cat"
+version = "0.1.0"
+dependencies = [
+ "olivia",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "atomic-arena"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -729,14 +737,6 @@ dependencies = [
  "futures-task",
  "pin-project-lite",
  "slab",
-]
-
-[[package]]
-name = "gato-astronauta"
-version = "0.1.0"
-dependencies = [
- "olivia",
- "tracing-subscriber",
 ]
 
 [[package]]

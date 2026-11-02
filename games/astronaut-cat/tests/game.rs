@@ -3,8 +3,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use gato_astronauta::level::{CHECKPOINTS, GROUND, PLATFORMS, ROOT_HEIGHT};
-use gato_astronauta::{Enemy, Hero, Phase, Platformer, Status};
+use astronaut_cat::level::{CHECKPOINTS, GROUND, PLATFORMS, ROOT_HEIGHT};
+use astronaut_cat::{Enemy, Hero, Phase, Platformer, Status};
 use olivia::ecs::Transform;
 use olivia::math::Vec2;
 use olivia::window::Window;

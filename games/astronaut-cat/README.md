@@ -1,4 +1,4 @@
-# O gato astronauta
+# The astronaut cat
 
 A Super Mario style platformer built on Olivia from what a class makes: one story, drawings on the template sheets, and the sound and movement cards. The rules are fixed; the class changes only the art and the sounds.
 
@@ -7,7 +7,7 @@ Here the class is played by Claude, as a rehearsal of the whole path: [docs/stor
 ## Play
 
 ```sh
-cd games/gato-astronauta
+cd games/astronaut-cat
 cargo run --release
 ```
 
