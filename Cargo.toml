@@ -20,7 +20,15 @@ tempfile = "3"
 thiserror = "2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = "0.3"
-wgpu = "30"
+# Vulkan, Metal and DX12 only: no GLES backend, so EGL is never loaded.
+wgpu = { version = "30", default-features = false, features = [
+    "dx12",
+    "metal",
+    "parking_lot",
+    "std",
+    "vulkan",
+    "wgsl",
+] }
 # The notitle decorations avoid ab_glyph, whose ttf-parser is unmaintained.
 winit = { version = "0.30", default-features = false, features = [
     "rwh_06",
