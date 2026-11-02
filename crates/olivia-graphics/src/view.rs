@@ -2,6 +2,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
+use lyon::path::Path;
 use olivia_math::{Color, Rect, Vec2};
 use tracing::field::Empty;
 use tracing::trace_span;
@@ -9,6 +10,7 @@ use tracing::trace_span;
 use crate::camera::Camera;
 use crate::draw::{Blend, Draw, Filter};
 use crate::font::{Font, Glyph, Layout};
+use crate::shape;
 use crate::texture::{Image, Texture};
 
 /// One corner of a triangle.
@@ -25,8 +27,10 @@ pub struct Vertex {
 }
 
 /// What a frame has drawn so far, in call order.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct DrawCalls {
+    /// What shapes sample, so that they share the sprites' pipeline.
+    white: Arc<Image>,
     vertices: Vec<Vertex>,
     calls: Vec<Call>,
     /// How many views the frame has started; the last one is the one drawing.
@@ -45,6 +49,15 @@ struct Call {
 }
 
 impl DrawCalls {
+    pub(crate) fn new(white: Arc<Image>) -> Self {
+        Self {
+            white,
+            vertices: Vec::new(),
+            calls: Vec::new(),
+            views: 0,
+        }
+    }
+
     /// Sorts the calls by view, then by depth, and batches the result. The sort is stable, so ties
     /// keep call order.
     pub(crate) fn mesh(&self) -> Mesh {
@@ -66,13 +79,13 @@ impl DrawCalls {
     }
 
     /// Adds `vertices` as one call through the last view.
-    fn push(&mut self, image: &Arc<Image>, draw: Draw, vertices: impl IntoIterator<Item = Vertex>) {
+    fn push(&mut self, image: Arc<Image>, draw: Draw, vertices: impl IntoIterator<Item = Vertex>) {
         let start = self.vertices.len();
         self.vertices.extend(vertices);
         self.calls.push(Call {
             view: self.views,
             depth: draw.depth,
-            image: Arc::clone(image),
+            image,
             filter: draw.filter,
             blend: draw.blend,
             vertices: start..self.vertices.len(),
@@ -150,6 +163,9 @@ impl Mesh {
 ///
 /// It borrows the frame, so views are created one after another, and they draw in that order.
 /// [`depth`](Draw::depth) orders the calls within one view.
+///
+/// A shape draws nothing if an argument is not finite, or if its radius is negative or its line
+/// width is not positive.
 #[derive(Debug)]
 pub struct View<'a> {
     calls: &'a mut DrawCalls,
@@ -176,7 +192,7 @@ impl<'a> View<'a> {
             size,
         };
         let vertices = quad(&to_screen, rect, texture.uv(), premultiplied(draw.color));
-        self.calls.push(&texture.image, draw, vertices);
+        self.calls.push(Arc::clone(&texture.image), draw, vertices);
     }
 
     /// Draws `text` at `size` with its pivot at `pos`, starting a line at each line break.
@@ -215,7 +231,8 @@ impl<'a> View<'a> {
             let vertices = run
                 .iter()
                 .flat_map(|glyph| quad(&to_screen, glyph.rect, glyph.slot.uv, color));
-            self.calls.push(&run[0].slot.image, draw, vertices);
+            let image = Arc::clone(&run[0].slot.image);
+            self.calls.push(image, draw, vertices);
         }
     }
 
@@ -224,11 +241,86 @@ impl<'a> View<'a> {
     fn to_screen(&self, pos: Vec2, size: Vec2, draw: Draw) -> impl Fn(Vec2) -> Vec2 + use<> {
         let (camera, viewport) = (self.camera, self.viewport);
         let turn = Vec2::from_angle(draw.rotation);
-        let pivot = draw.origin * size;
+        let pivot = draw.origin.unwrap_or(Vec2::ZERO) * size;
         move |point| {
             camera.world_to_screen(pos + turn.rotate((point - pivot) * draw.scale), viewport)
         }
     }
+
+    /// Fills `rect`, which hangs from its top-left corner.
+    pub fn rect(&mut self, rect: Rect, draw: Draw) {
+        self.fill(rect.pos, shape::rectangle(rect.size), draw);
+    }
+
+    /// Outlines `rect` with a line `width` wide, in world units, centred on its edge.
+    pub fn rect_outline(&mut self, rect: Rect, width: f32, draw: Draw) {
+        self.stroke(rect.pos, shape::rectangle(rect.size), width, draw);
+    }
+
+    /// Fills the circle of `radius` around `pos`, which is its default pivot.
+    pub fn circle(&mut self, pos: Vec2, radius: f32, draw: Draw) {
+        self.fill(pos, shape::circle(radius), draw);
+    }
+
+    /// Outlines the circle of `radius` around `pos`, which is its default pivot, with a line
+    /// `width` wide, in world units, centred on its edge.
+    pub fn circle_outline(&mut self, pos: Vec2, radius: f32, width: f32, draw: Draw) {
+        self.stroke(pos, shape::circle(radius), width, draw);
+    }
+
+    /// Fills the polygon through `points`, which may be concave. They are relative to `pos`, which
+    /// is its default pivot.
+    pub fn polygon(&mut self, pos: Vec2, points: &[Vec2], draw: Draw) {
+        self.fill(pos, shape::polygon(points, true), draw);
+    }
+
+    /// Outlines the polygon through `points`, relative to `pos`, which is its default pivot, with
+    /// a line `width` wide, in world units, centred on its edge.
+    pub fn polygon_outline(&mut self, pos: Vec2, points: &[Vec2], width: f32, draw: Draw) {
+        self.stroke(pos, shape::polygon(points, true), width, draw);
+    }
+
+    /// Draws a line `width` wide, in world units, from `a`, which is its default pivot, to `b`.
+    pub fn line(&mut self, a: Vec2, b: Vec2, width: f32, draw: Draw) {
+        self.stroke(a, shape::polygon(&[Vec2::ZERO, b - a], false), width, draw);
+    }
+
+    /// Fills `path`, whose `(0, 0)` is the default pivot, with the pivot at `pos`.
+    fn fill(&mut self, pos: Vec2, path: Path, draw: Draw) {
+        let path = shape::placed(path, draw.origin, draw.scale);
+        let triangles = shape::fill(&path, shape::tolerance(self.camera.zoom));
+        self.shape(pos, &triangles, draw);
+    }
+
+    /// Traces `path`, whose `(0, 0)` is the default pivot, with the pivot at `pos`.
+    fn stroke(&mut self, pos: Vec2, path: Path, width: f32, draw: Draw) {
+        let path = shape::placed(path, draw.origin, draw.scale);
+        let triangles = shape::stroke(&path, width, shape::tolerance(self.camera.zoom));
+        self.shape(pos, &triangles, draw);
+    }
+
+    /// Adds `triangles`, already scaled around their pivot at `(0, 0)`, with the pivot at `pos`.
+    fn shape(&mut self, pos: Vec2, triangles: &[Vec2], draw: Draw) {
+        if triangles.is_empty() {
+            return;
+        }
+        let turn = Vec2::from_angle(draw.rotation);
+        let color = premultiplied(draw.color);
+        let (camera, viewport) = (self.camera, self.viewport);
+        let vertices = triangles.iter().map(|&corner| Vertex {
+            position: camera.world_to_screen(pos + turn.rotate(corner), viewport),
+            uv: Vec2::ZERO,
+            color,
+        });
+        let white = Arc::clone(&self.calls.white);
+        // White looks the same through either filter, so the choice must not break a batch.
+        self.calls
+            .push(white, draw.filter(Filter::default()), vertices);
+    }
+}
+
+fn premultiplied(Color { r, g, b, a }: Color) -> [f32; 4] {
+    [r * a, g * a, b * a, a]
 }
 
 /// The two triangles of `rect`, sampling from the first to the second corner of `uv`.
@@ -253,8 +345,4 @@ fn quad(
         top_right,
         bottom_right,
     ]
-}
-
-fn premultiplied(Color { r, g, b, a }: Color) -> [f32; 4] {
-    [r * a, g * a, b * a, a]
 }

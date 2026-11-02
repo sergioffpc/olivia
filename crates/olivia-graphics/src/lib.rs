@@ -2,11 +2,13 @@
 
 mod atlas;
 mod camera;
+pub mod depth;
 mod draw;
 mod font;
 mod gpu;
 mod graphics;
 mod pipeline;
+mod shape;
 mod texture;
 mod view;
 

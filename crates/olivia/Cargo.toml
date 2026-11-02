@@ -33,6 +33,10 @@ name = "draw_options"
 required-features = ["graphics"]
 
 [[example]]
+name = "shapes"
+required-features = ["graphics"]
+
+[[example]]
 name = "sprite"
 required-features = ["filesystem", "graphics"]
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use olivia_math::{Color, Vec2};
 use olivia_window::Window;
 
@@ -7,6 +9,8 @@ use crate::font::Font;
 use crate::gpu::Gpu;
 use crate::texture::Texture;
 use crate::view::{DrawCalls, Mesh, View};
+
+const WHITE: [u8; 4] = [255; 4];
 
 /// How drawing runs, fixed before the window opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +28,8 @@ pub struct Graphics {
     /// The GPU drawing to the window; none until [`attach`](Self::attach), so never in a headless
     /// game, whose frames draw nothing.
     gpu: Option<Gpu>,
+    /// A white pixel, which shapes sample.
+    white: Texture,
 }
 
 impl Graphics {
@@ -31,7 +37,11 @@ impl Graphics {
     #[doc(hidden)]
     #[must_use]
     pub fn new(config: Config) -> Self {
-        Self { config, gpu: None }
+        Self {
+            config,
+            gpu: None,
+            white: Texture::new(1, 1, WHITE.to_vec(), None),
+        }
     }
 
     /// Starts drawing to `window`.
@@ -46,6 +56,7 @@ impl Graphics {
     #[doc(hidden)]
     pub fn attach(&mut self, window: &Window) -> Result<(), Error> {
         self.gpu = Some(Gpu::new(window.raw(), self.config)?);
+        self.white = self.upload(1, 1, WHITE.to_vec());
         Ok(())
     }
 
@@ -56,7 +67,7 @@ impl Graphics {
             viewport: self.gpu.as_ref().map_or(Vec2::ZERO, Gpu::viewport),
             gpu: self.gpu.as_mut(),
             clear_color: Color::BLACK,
-            calls: DrawCalls::default(),
+            calls: DrawCalls::new(Arc::clone(&self.white.image)),
         }
     }
 

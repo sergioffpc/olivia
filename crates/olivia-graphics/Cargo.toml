@@ -8,6 +8,7 @@ license.workspace = true
 bytemuck.workspace = true
 cosmic-text.workspace = true
 image.workspace = true
+lyon.workspace = true
 olivia-math.workspace = true
 olivia-window.workspace = true
 pollster.workspace = true
