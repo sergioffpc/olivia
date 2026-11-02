@@ -17,6 +17,7 @@ sudo apt-get install -y --no-install-recommends \
     libasound2-dev \
     libasound2-plugins \
     libegl1 \
+    libgles2 \
     libvulkan1 \
     libwayland-client0 \
     libwayland-cursor0 \
@@ -33,6 +34,12 @@ printf 'pcm.!default pulse\nctl.!default pulse\n' >"$HOME/.asoundrc"
 
 git config core.hooksPath .githooks
 rustup toolchain install
+
+# For tools/mocap, which installs MediaPipe and its model on its first run.
+mkdir -p "$HOME/.local/bin"
+curl --fail --location --silent --show-error \
+    "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-$(uname -m)-unknown-linux-gnu.tar.gz" |
+    tar --extract --gzip --strip-components=1 --directory "$HOME/.local/bin"
 
 # The devcontainer feature can leave out the native package claude runs from.
 claude --version >/dev/null 2>&1 ||
