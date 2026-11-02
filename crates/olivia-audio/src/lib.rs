@@ -3,6 +3,8 @@
 
 mod audio;
 mod cue;
+mod emitter;
+mod mock;
 mod play;
 mod sound;
 
@@ -10,6 +12,7 @@ pub use audio::Audio;
 pub use cue::Cue;
 #[doc(hidden)]
 pub use cue::decibels;
+pub use emitter::Emitter;
 pub use play::Play;
 pub use sound::Sound;
 

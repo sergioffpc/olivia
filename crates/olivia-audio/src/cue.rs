@@ -78,7 +78,10 @@ impl Cue {
         on_playing!(self, handle => handle.set_volume(decibels(volume), TRANSITION));
     }
 
-    /// Sets the pan, from `-1.0` (left) to `1.0` (right).
+    /// Sets the pan, from `-1.0` (left) to `1.0` (right). A sound from an [`Emitter`] takes its pan
+    /// from its position, so leave its cue at the centre.
+    ///
+    /// [`Emitter`]: crate::Emitter
     pub fn set_pan(&mut self, pan: f32) {
         on_playing!(self, handle => handle.set_panning(panning(pan), TRANSITION));
     }

@@ -1,39 +1,100 @@
 use std::fmt;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use kira::backend::mock::{MockBackend, MockBackendSettings};
-use kira::track::MainTrackBuilder;
+use kira::backend::Backend;
+use kira::listener::ListenerHandle;
+use kira::track::{MainTrackBuilder, SpatialTrackHandle};
 use kira::{AudioManager, AudioManagerSettings, Decibels};
+use olivia_math::Vec2;
 use tracing::warn;
 
 use crate::cue::{TRANSITION, decibels};
-use crate::{Cue, Error, Play, Sound};
+use crate::mock::Mock;
+use crate::{Cue, Emitter, Error, Play, Sound, emitter};
 
 /// The shortest time between two warnings about sounds that could not start.
 const WARNING_INTERVAL: Duration = Duration::from_secs(1);
 
-/// The sample rate of the mock output.
-const MOCK_SAMPLE_RATE: u32 = 48_000;
-
-/// How many frames the mock output renders at once, which is `kira`'s default.
-const MOCK_FRAMES: u32 = 128;
+/// `x`, `y`, `z` and `s` of a listener with no orientation.
+const NO_ORIENTATION: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 /// The game's audio. With no audio device it stays silent, and everything still works.
 pub struct Audio {
     output: Option<Output>,
-    last_warning: Option<Instant>,
+    shared: Arc<Mutex<Shared>>,
 }
 
-enum Output {
+struct Output {
+    manager: Manager,
+    listener: ListenerHandle,
+}
+
+enum Manager {
     Device(Box<AudioManager>),
-    Mock(Box<AudioManager<MockBackend>>),
+    Mock(Box<AudioManager<Mock>>),
+}
+
+/// Runs `$call` on the `kira` manager in `$manager`, whichever kind it is.
+macro_rules! on_manager {
+    ($manager:expr, $handle:ident => $call:expr) => {
+        match $manager {
+            Manager::Device($handle) => $call,
+            Manager::Mock($handle) => $call,
+        }
+    };
+}
+
+/// What `Audio` shares with its emitters.
+#[derive(Debug, Default)]
+pub(crate) struct Shared {
+    last_warning: Option<Instant>,
+    /// The tracks of dropped emitters with sounds left. `kira` can remove a track, whatever it was
+    /// told to persist for, before the sounds just played on it arrive, so these stay held instead.
+    retired: Vec<SpatialTrackHandle>,
+}
+
+fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
+    shared.lock().expect("nothing panics holding this")
+}
+
+/// Holds the track of a dropped emitter until its sounds are over.
+pub(crate) fn retire(shared: &Mutex<Shared>, track: SpatialTrackHandle) {
+    lock(shared).retired.push(track);
+}
+
+/// Emits a `warn` about something `kira` refused, at most once per [`WARNING_INTERVAL`].
+pub(crate) fn warn_about_refusal(shared: &Mutex<Shared>, error: &dyn fmt::Display) {
+    let now = Instant::now();
+    let mut shared = lock(shared);
+    let is_due = shared
+        .last_warning
+        .is_none_or(|last| now - last >= WARNING_INTERVAL);
+    if is_due {
+        shared.last_warning = Some(now);
+        drop(shared);
+        warn!(%error, "audio is over its limits, this stays silent");
+    }
+}
+
+/// Adds the one listener, at `(0, 0)`.
+fn listener<B: Backend>(manager: &mut AudioManager<B>) -> ListenerHandle {
+    manager
+        .add_listener([0.0, 0.0, 0.0], NO_ORIENTATION)
+        .expect("a new manager has room for a listener")
 }
 
 impl Default for Audio {
     /// Opens the default audio device, or stays silent and emits one `warn` if there is none.
     fn default() -> Self {
         match AudioManager::new(AudioManagerSettings::default()) {
-            Ok(manager) => Self::with_output(Some(Output::Device(Box::new(manager)))),
+            Ok(mut manager) => {
+                let listener = listener(&mut manager);
+                Self::with_output(Some(Output {
+                    manager: Manager::Device(Box::new(manager)),
+                    listener,
+                }))
+            }
             Err(error) => Self::silent(error),
         }
     }
@@ -49,7 +110,7 @@ impl Audio {
     fn with_output(output: Option<Output>) -> Self {
         Self {
             output,
-            last_warning: None,
+            shared: Arc::default(),
         }
     }
 
@@ -71,27 +132,27 @@ impl Audio {
     #[doc(hidden)]
     #[must_use]
     pub fn mock(sound_capacity: usize) -> Self {
-        let manager = AudioManager::new(AudioManagerSettings {
+        let mut manager = AudioManager::<Mock>::new(AudioManagerSettings {
             main_track_builder: MainTrackBuilder::new().sound_capacity(sound_capacity),
-            backend_settings: MockBackendSettings {
-                sample_rate: MOCK_SAMPLE_RATE,
-            },
             ..AudioManagerSettings::default()
         })
         .expect("the mock output always starts");
-        Self::with_output(Some(Output::Mock(Box::new(manager))))
+        let listener = listener(&mut manager);
+        Self::with_output(Some(Output {
+            manager: Manager::Mock(Box::new(manager)),
+            listener,
+        }))
     }
 
-    /// Moves the mock output on by about `time`.
+    /// Moves the mock output on by about `time` and returns the loudest left and right samples.
     #[doc(hidden)]
-    pub fn advance(&mut self, time: Duration) {
-        if let Some(Output::Mock(manager)) = &mut self.output {
-            let blocks =
-                time.as_millis() * u128::from(MOCK_SAMPLE_RATE) / (1000 * u128::from(MOCK_FRAMES));
-            for _ in 0..=blocks {
-                manager.backend_mut().on_start_processing();
-                manager.backend_mut().process();
-            }
+    pub fn advance(&mut self, time: Duration) -> (f32, f32) {
+        match &mut self.output {
+            Some(Output {
+                manager: Manager::Mock(manager),
+                ..
+            }) => manager.backend_mut().render(time),
+            _ => (0.0, 0.0),
         }
     }
 
@@ -120,35 +181,65 @@ impl Audio {
 
     /// Plays `sound` as `play` says. With no device, or above `kira`'s limits, the cue is inert.
     pub fn play_with(&mut self, sound: &Sound, play: Play) -> Cue {
-        let started = match &mut self.output {
-            Some(Output::Device(manager)) => sound.start(manager, play),
-            Some(Output::Mock(manager)) => sound.start(manager, play),
-            None => return Cue::inert(),
+        let Some(output) = &mut self.output else {
+            return Cue::inert();
         };
+        let started =
+            on_manager!(&mut output.manager, manager => sound.start(manager.main_track(), play));
         started.unwrap_or_else(|error| {
-            self.warn_about_refusal(&*error);
+            warn_about_refusal(&self.shared, &error);
             Cue::inert()
         })
+    }
+
+    /// Creates an [`Emitter`] at `pos`, whose sounds are at full volume up to `near` from the
+    /// listener and silent from `far`, in the game's own unit. With no device, or above `kira`'s
+    /// limits, the emitter is inert.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `near >= far`.
+    pub fn emitter(&mut self, pos: Vec2, near: f32, far: f32) -> Emitter {
+        assert!(near < far, "an emitter's near must be below its far");
+        let Some(output) = &mut self.output else {
+            return Emitter::inert();
+        };
+        lock(&self.shared)
+            .retired
+            .retain(|track| track.num_sounds() > 0);
+        let position = emitter::position(pos, near);
+        let builder = emitter::track_builder(near, far);
+        let listener = &output.listener;
+        let added = on_manager!(
+            &mut output.manager,
+            manager => manager.add_spatial_sub_track(listener, position, builder)
+        );
+        match added {
+            Ok(track) => Emitter::new(track, near, Arc::clone(&self.shared)),
+            Err(error) => {
+                warn_about_refusal(&self.shared, &error);
+                Emitter::inert()
+            }
+        }
+    }
+
+    /// Moves the one listener, which has no orientation and starts at `(0, 0)`, to `pos`.
+    pub fn set_listener(&mut self, pos: Vec2) {
+        if let Some(output) = &mut self.output {
+            output
+                .listener
+                .set_position([pos.x, pos.y, 0.0], TRANSITION);
+        }
     }
 
     /// Sets the volume of everything: linear from `0.0` to `1.0`, and above `1.0` amplifies.
     pub fn set_master_volume(&mut self, volume: f32) {
         let volume = Decibels(decibels(volume));
-        match &mut self.output {
-            Some(Output::Device(manager)) => manager.main_track().set_volume(volume, TRANSITION),
-            Some(Output::Mock(manager)) => manager.main_track().set_volume(volume, TRANSITION),
-            None => {}
-        }
-    }
-
-    fn warn_about_refusal(&mut self, error: &dyn std::error::Error) {
-        let now = Instant::now();
-        if self
-            .last_warning
-            .is_none_or(|last| now - last >= WARNING_INTERVAL)
-        {
-            self.last_warning = Some(now);
-            warn!(%error, "a sound could not start");
+        if let Some(output) = &mut self.output {
+            on_manager!(
+                &mut output.manager,
+                manager => manager.main_track().set_volume(volume, TRANSITION)
+            );
         }
     }
 }

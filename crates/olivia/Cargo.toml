@@ -61,6 +61,10 @@ name = "shapes"
 required-features = ["graphics"]
 
 [[example]]
+name = "spatial"
+required-features = ["audio", "filesystem", "input"]
+
+[[example]]
 name = "sprite"
 required-features = ["filesystem", "graphics"]
 
