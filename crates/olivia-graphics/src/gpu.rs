@@ -1,18 +1,22 @@
 use std::sync::Arc;
 
-use olivia_math::Color;
+use bytemuck::cast_slice;
+use olivia_math::{Color, Vec2};
 use olivia_window::RawWindow;
 use tracing::{debug, info, trace, trace_span, warn};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    Color as ClearColor, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor,
-    Extent3d, Features, Instance, InstanceDescriptor, LoadOp, Operations, PresentMode, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor,
+    BindGroup, BufferUsages, Color as ClearColor, CommandEncoderDescriptor, CurrentSurfaceTexture,
+    Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, LoadOp, Operations,
+    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
+    StoreOp, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use crate::Error;
 use crate::graphics::Config;
+use crate::pipeline::Pipeline;
+use crate::view::Mesh;
 
 /// The largest of `supported` that does not exceed `requested`, or 1, which disables MSAA.
 #[doc(hidden)]
@@ -33,6 +37,7 @@ pub(crate) struct Gpu {
     surface: Surface<'static>,
     config: SurfaceConfiguration,
     sample_count: u32,
+    pipeline: Pipeline,
     /// What a frame renders to before resolving to the surface; none without MSAA.
     multisampled: Option<TextureView>,
     /// Read for its size each frame, so a resize needs no event.
@@ -97,12 +102,14 @@ impl Gpu {
             );
         }
 
+        let pipeline = Pipeline::new(&device, surface_config.format, sample_count);
         let mut gpu = Self {
             device,
             queue,
             surface,
             config: surface_config,
             sample_count,
+            pipeline,
             multisampled: None,
             window: Arc::clone(window),
         };
@@ -110,8 +117,17 @@ impl Gpu {
         Ok(gpu)
     }
 
-    /// Clears the window to `color` and shows it, returning whether it was shown.
-    pub(crate) fn present(&mut self, color: Color) -> bool {
+    /// The window's logical size.
+    pub(crate) fn viewport(&self) -> Vec2 {
+        let size = self.window.inner_size();
+        let scale_factor = self.window.scale_factor();
+        let size = size.to_logical::<f32>(scale_factor);
+        Vec2::new(size.width, size.height)
+    }
+
+    /// Clears the window to `color`, draws `mesh`, whose vertices are in a window of logical size
+    /// `viewport`, and shows it, returning whether it was shown.
+    pub(crate) fn present(&mut self, color: Color, mesh: &Mesh, viewport: Vec2) -> bool {
         let size = self.window.inner_size();
         if size.width == 0 || size.height == 0 {
             return false;
@@ -143,10 +159,18 @@ impl Gpu {
             Some(multisampled) => (multisampled, Some(&view)),
             None => (&view, None),
         };
+        // A buffer cannot be empty, and a frame with no view only clears.
+        let vertices = (!mesh.vertices.is_empty()).then(|| {
+            self.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("frame vertices"),
+                contents: cast_slice(&mesh.clip_vertices(viewport)),
+                usage: BufferUsages::VERTEX,
+            })
+        });
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
-        encoder.begin_render_pass(&RenderPassDescriptor {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: attachment,
                 depth_slice: None,
@@ -163,10 +187,25 @@ impl Gpu {
             })],
             ..RenderPassDescriptor::default()
         });
+        if let Some(vertices) = &vertices {
+            pass.set_pipeline(&self.pipeline.raw);
+            pass.set_vertex_buffer(0, vertices.slice(..));
+            for batch in &mesh.batches {
+                pass.set_bind_group(0, batch.image.bind_group.as_ref(), &[]);
+                pass.draw(batch.vertices.clone(), 0..1);
+            }
+        }
+        drop(pass);
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
         self.queue.present(frame);
         true
+    }
+
+    /// Copies `rgba` to the GPU and returns what binds it to a draw.
+    pub(crate) fn upload(&self, width: u32, height: u32, rgba: &[u8]) -> BindGroup {
+        self.pipeline
+            .upload(&self.device, &self.queue, width, height, rgba)
     }
 
     /// A multisampled texture the size of the surface.

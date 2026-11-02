@@ -28,5 +28,9 @@ required-features = ["graphics"]
 name = "filesystem"
 required-features = ["filesystem"]
 
+[[example]]
+name = "sprite"
+required-features = ["filesystem", "graphics"]
+
 [lints]
 workspace = true
