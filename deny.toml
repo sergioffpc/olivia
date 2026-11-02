@@ -10,6 +10,8 @@ allow = [
     "MIT",
     "Unicode-3.0",
 ]
+# A dependency of directories, which olivia-filesystem is built on.
+exceptions = [{ crate = "option-ext", allow = ["MPL-2.0"] }]
 
 [bans]
 # winit's platform crates pull in duplicates that cannot be resolved here.

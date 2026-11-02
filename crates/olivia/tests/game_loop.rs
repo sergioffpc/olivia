@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use olivia::math::Vec2;
 use olivia::window::Window;
-use olivia::{Frame, Game, GameLoop, Result, Setup, Update};
+use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::Layer;
@@ -56,7 +56,8 @@ impl<const QUIT_AT: u32> Game for Traced<QUIT_AT> {
 /// Runs `G` on frames that take `deltas`, repeating the last one until it stops.
 fn run_frames<G: Game>(deltas: &[Duration]) -> Result<()> {
     let mut window = Window::headless();
-    let mut game_loop = GameLoop::<G>::new(&mut window, Vec2::ZERO)?;
+    let mut game_loop =
+        GameLoop::<G>::new(&mut window, Vec2::ZERO, Modules::new(&Config::new("test"))?)?;
     let last = deltas.last().copied().unwrap_or_default();
     let mut frame_times = deltas.iter().copied().chain(iter::repeat(last));
     while game_loop.run_frame(frame_times.next().unwrap_or_default(), &mut window)? {}

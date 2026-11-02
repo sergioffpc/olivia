@@ -28,6 +28,14 @@ _Avoid_: Init, context
 A reference to one Olivia module that a phase hands to the game for the duration of that call.
 _Avoid_: Context, service
 
+**Source**:
+The read-only area a game's assets come from.
+_Avoid_: Assets folder, resources
+
+**Save area**:
+The writable area of a game's files, in the user's data directory. A file here shadows the source file with the same path.
+_Avoid_: Save folder, user data
+
 **Fixed step**:
 The constant interval at which update runs, independent of the display's refresh rate.
 _Avoid_: Tick, frame (a frame is one draw)

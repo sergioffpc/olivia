@@ -6,7 +6,7 @@ use olivia_window::{Driver, Window, WindowEvent};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
-use crate::{Config, Frame, Game, Result, Setup, Timer, Update};
+use crate::{Config, Frame, Game, Modules, Result, Setup, Timer, Update};
 
 /// Opens a window and runs `G` on it until it quits or a phase fails.
 ///
@@ -14,16 +14,19 @@ use crate::{Config, Frame, Game, Result, Setup, Timer, Update};
 ///
 /// # Errors
 ///
-/// Returns [`window::Error`](crate::window::Error) if the window cannot be created, or the first
-/// `Err` from [`Game::load`] or [`Game::update`]. The window is closed by then.
+/// Returns an error if the identity is invalid, before any window opens;
+/// [`window::Error`](crate::window::Error) if the window cannot be created; or the first `Err` from
+/// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
-    olivia_window::run::<GameLoop<G>>(config.window_attributes())
+    let modules = Modules::new(&config)?;
+    olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
 }
 
 /// A game in the middle of being run, one frame at a time.
 #[derive(Debug)]
 pub struct GameLoop<G> {
     game: G,
+    modules: Modules,
     clock: SystemClock,
     timer: Timer,
     quit: Cell<bool>,
@@ -38,10 +41,11 @@ impl<G: Game> GameLoop<G> {
     /// # Errors
     ///
     /// Returns the `Err` from [`Game::load`].
-    pub fn new(window: &mut Window, size: Vec2) -> Result<Self> {
-        let game = info_span!("load").in_scope(|| G::load(Setup::new(window)))?;
+    pub fn new(window: &mut Window, size: Vec2, mut modules: Modules) -> Result<Self> {
+        let game = info_span!("load").in_scope(|| G::load(Setup::new(window, &mut modules)))?;
         Ok(Self {
             game,
+            modules,
             clock: SystemClock::default(),
             timer: Timer::new(),
             quit: Cell::new(false),
@@ -65,7 +69,13 @@ impl<G: Game> GameLoop<G> {
     /// Returns the first `Err` from [`Game::update`].
     pub fn run_frame(&mut self, frame_time: Duration, window: &mut Window) -> Result<bool> {
         for _ in 0..self.timer.steps_for_frame(frame_time) {
-            let update = Update::new(window, &self.events, &self.timer, &self.quit);
+            let update = Update::new(
+                window,
+                &mut self.modules,
+                &self.events,
+                &self.timer,
+                &self.quit,
+            );
             trace_span!("update").in_scope(|| self.game.update(update))?;
             self.events.clear();
             self.timer.finish_step();
@@ -83,10 +93,11 @@ impl<G: Game> GameLoop<G> {
 }
 
 impl<G: Game> Driver for GameLoop<G> {
+    type Seed = Modules;
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    fn start(window: &mut Window, size: Vec2) -> Result<Self> {
-        Self::new(window, size)
+    fn start(modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
+        Self::new(window, size, modules)
     }
 
     fn event(&mut self, event: WindowEvent) {
