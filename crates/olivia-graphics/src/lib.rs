@@ -6,6 +6,7 @@ mod draw;
 mod gpu;
 mod graphics;
 mod pipeline;
+mod shape;
 mod texture;
 mod view;
 

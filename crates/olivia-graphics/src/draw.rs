@@ -24,7 +24,8 @@ pub enum Blend {
 /// How to draw something, built with chained setters.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Draw {
-    pub(crate) origin: Vec2,
+    /// The pivot, or none for the default pivot of what is drawn.
+    pub(crate) origin: Option<Vec2>,
     pub(crate) rotation: f32,
     pub(crate) scale: Vec2,
     pub(crate) color: Color,
@@ -36,7 +37,7 @@ pub struct Draw {
 impl Default for Draw {
     fn default() -> Self {
         Self {
-            origin: Vec2::ZERO,
+            origin: None,
             rotation: 0.0,
             scale: Vec2::ONE,
             color: Color::WHITE,
@@ -55,10 +56,12 @@ impl Draw {
     }
 
     /// Sets the pivot, normalised to the object's box, where `(0, 0)` is its top-left corner and
-    /// `(1, 1)` its bottom-right one. The default is the top-left corner.
+    /// `(1, 1)` its bottom-right one, and which lands on the object's position. By default it is
+    /// the top-left corner of sprites and rectangles, the centre of circles, `pos` for polygons
+    /// and `a` for lines. A line's width does not count towards the box.
     #[must_use]
     pub fn origin(mut self, origin: Vec2) -> Self {
-        self.origin = origin;
+        self.origin = Some(origin);
         self
     }
 
@@ -92,7 +95,8 @@ impl Draw {
         self
     }
 
-    /// Sets how the texture is sampled. The default is [`Filter::Linear`].
+    /// Sets how the texture is sampled, with no effect on shapes. The default is
+    /// [`Filter::Linear`].
     #[must_use]
     pub fn filter(mut self, filter: Filter) -> Self {
         self.filter = filter;
