@@ -3,12 +3,14 @@ use std::fmt;
 
 use olivia_math::Vec2;
 use rapier2d::prelude::{
-    BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters, IslandManager,
-    MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, SoftBodySet,
+    BroadPhaseBvh, CCDSolver, ColliderSet, DebugRenderMode, DebugRenderPipeline, DebugRenderStyle,
+    ImpulseJointSet, IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase,
+    PhysicsPipeline, QueryFilter, QueryPipeline, Ray, RigidBodySet, SoftBodySet,
 };
 
+use crate::debug::Lines;
 use crate::event::Collector;
-use crate::{Collider, ColliderHandle, Event, Pose, RigidBody, RigidBodyHandle};
+use crate::{Collider, ColliderHandle, Event, Pose, RigidBody, RigidBodyHandle, Shape};
 
 /// The seconds one [`World::step`] simulates, at 60 Hz.
 const FIXED_STEP: f32 = 1.0 / 60.0;
@@ -224,6 +226,73 @@ impl World {
             .get(&handle)
             .unwrap_or(current)
             .lerp(current, factor)
+    }
+
+    /// The nearest collider along a ray from `origin` and how many metres away it is, within
+    /// `max_distance`. `direction` needs no particular length. A ray starting inside a collider
+    /// hits it at 0.
+    ///
+    /// A collider inserted or moved since the last step can be missed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `direction` is zero.
+    #[must_use]
+    pub fn ray_cast(
+        &self,
+        origin: Vec2,
+        direction: Vec2,
+        max_distance: f32,
+    ) -> Option<(ColliderHandle, f32)> {
+        let direction = direction.try_normalize().expect("zero ray direction");
+        self.queries()
+            .cast_ray(&Ray::new(origin, direction), max_distance, true)
+    }
+
+    /// The colliders containing `point`, in no particular order.
+    ///
+    /// A collider inserted or moved since the last step can be missed.
+    #[must_use]
+    pub fn overlap_point(&self, point: Vec2) -> Vec<ColliderHandle> {
+        self.queries()
+            .intersect_point(point)
+            .map(|(handle, _)| handle)
+            .collect()
+    }
+
+    /// The colliders touching `shape` placed at `pose`, in no particular order.
+    ///
+    /// A collider inserted or moved since the last step can be missed.
+    #[must_use]
+    pub fn overlap_shape(&self, shape: &dyn Shape, pose: Pose) -> Vec<ColliderHandle> {
+        self.queries()
+            .intersect_shape(pose, shape)
+            .map(|(handle, _)| handle)
+            .collect()
+    }
+
+    /// The segments outlining every collider and its bounding box, in metres, to draw however the
+    /// game likes. Bodies show the poses of the last step, not interpolated ones.
+    ///
+    /// Each call builds its render from scratch, so only a game that draws them pays for them.
+    #[must_use]
+    pub fn debug_lines(&self) -> Vec<[Vec2; 2]> {
+        let mut lines = Lines::default();
+        DebugRenderPipeline::new(
+            DebugRenderStyle::default(),
+            DebugRenderMode::COLLIDER_SHAPES | DebugRenderMode::COLLIDER_AABBS,
+        )
+        .render_colliders(&mut lines, &self.bodies, &self.colliders);
+        lines.0
+    }
+
+    fn queries(&self) -> QueryPipeline<'_> {
+        self.broad_phase.as_query_pipeline(
+            self.narrow_phase.query_dispatcher(),
+            &self.bodies,
+            &self.colliders,
+            QueryFilter::default(),
+        )
     }
 }
 

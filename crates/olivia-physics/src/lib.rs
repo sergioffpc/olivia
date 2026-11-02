@@ -1,5 +1,6 @@
 //! The physics simulation, a thin wrapper over `rapier2d` in metres.
 
+mod debug;
 mod event;
 mod world;
 
