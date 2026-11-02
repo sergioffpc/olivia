@@ -89,7 +89,7 @@ pub(crate) struct Slot {
     pub(crate) uv: (Vec2, Vec2),
 }
 
-/// The glyphs of one font, on pages that fill up row by row and last as long as the font. Pages
+/// The glyphs of one font, on pages that fill up row by row and last as long as the GPU. Pages
 /// keep no CPU copy, as their glyphs can always be rasterised again.
 #[derive(Debug)]
 pub(crate) struct Atlas {

@@ -16,8 +16,8 @@ use crate::{Config, Frame, Game, Modules, Result, Setup, Timer, Update};
 ///
 /// Returns an error if the identity is invalid, before any window opens;
 /// [`window::Error`](crate::window::Error) if the window cannot be created; a `graphics::Error` if
-/// no GPU can draw to it; or the first `Err` from [`Game::load`] or [`Game::update`]. The window is
-/// closed by then.
+/// no GPU can draw to it, at the start or after the GPU is lost; or the first `Err` from
+/// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
     let modules = Modules::new(&config)?;
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
@@ -70,7 +70,8 @@ impl<G: Game> GameLoop<G> {
     ///
     /// # Errors
     ///
-    /// Returns the first `Err` from [`Game::update`].
+    /// Returns the first `Err` from [`Game::update`], or a `graphics::Error` if the GPU is lost and
+    /// cannot be brought back.
     pub fn run_frame(&mut self, frame_time: Duration, window: &mut Window) -> Result<bool> {
         for _ in 0..self.timer.steps_for_frame(frame_time) {
             let update = Update::new(
@@ -89,6 +90,8 @@ impl<G: Game> GameLoop<G> {
         }
 
         self.presented = !self.is_minimized && {
+            #[cfg(feature = "graphics")]
+            self.modules.graphics.recover()?;
             let mut frame = Frame::new(self.timer.interpolation_factor(), &mut self.modules);
             trace_span!("draw").in_scope(|| self.game.draw(&mut frame));
             frame.present()
