@@ -5,7 +5,7 @@ use crate::Error;
 use crate::camera::Camera;
 use crate::gpu::Gpu;
 use crate::texture::Texture;
-use crate::view::{Mesh, Vertex, View};
+use crate::view::{DrawCalls, Mesh, View};
 
 /// How drawing runs, fixed before the window opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,7 +55,7 @@ impl Graphics {
             viewport: self.gpu.as_ref().map_or(Vec2::ZERO, Gpu::viewport),
             gpu: self.gpu.as_mut(),
             clear_color: Color::BLACK,
-            mesh: Mesh::default(),
+            calls: DrawCalls::default(),
         }
     }
 
@@ -129,7 +129,7 @@ pub struct Target<'a> {
     clear_color: Color,
     /// The window's logical size when the frame started; zero with no GPU.
     viewport: Vec2,
-    mesh: Mesh,
+    calls: DrawCalls,
 }
 
 impl Target<'_> {
@@ -146,19 +146,19 @@ impl Target<'_> {
 
     /// Starts drawing through `camera`, after anything drawn so far.
     pub fn view(&mut self, camera: Camera) -> View<'_> {
-        View::new(&mut self.mesh, camera, self.viewport)
+        View::new(&mut self.calls, camera, self.viewport)
     }
 
-    /// What the frame has drawn so far, in order.
+    /// What the frame has drawn so far, sorted and batched.
     #[must_use]
-    pub fn vertices(&self) -> &[Vertex] {
-        &self.mesh.vertices
+    pub fn mesh(&self) -> Mesh {
+        self.calls.mesh()
     }
 
     /// Shows the frame and returns whether it reached the window.
     #[must_use]
     pub fn present(self) -> bool {
         self.gpu
-            .is_some_and(|gpu| gpu.present(self.clear_color, &self.mesh, self.viewport))
+            .is_some_and(|gpu| gpu.present(self.clear_color, &self.calls.mesh(), self.viewport))
     }
 }
