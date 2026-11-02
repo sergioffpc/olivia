@@ -130,6 +130,25 @@ fn a_joint_turns_its_part_clockwise_around_it() {
 }
 
 #[test]
+fn a_bent_part_stays_on_its_joint_when_the_scale_stretches_one_axis() {
+    let mut hero = character().draw(Draw::new().scale(Vec2::new(2.0, 1.0)));
+    hero.play(&shoulder([FRAC_PI_2]), Play::new()).unwrap();
+    let mesh = mesh(&hero, 1.0);
+    // The arm's x stretches along its own width, so its 30 pixels of length stay 30 once turned.
+    assert_close(top_left(&mesh, ARM), 12.0, -25.0);
+    assert_close(top_left(&mesh, FOREARM), -18.0, -25.0);
+}
+
+#[test]
+fn a_bent_part_stays_on_its_joint_when_a_stretched_character_is_mirrored() {
+    let mut hero = character().draw(Draw::new().scale(Vec2::new(-2.0, 1.0)));
+    hero.play(&shoulder([FRAC_PI_2]), Play::new()).unwrap();
+    let mesh = mesh(&hero, 1.0);
+    assert_close(top_left(&mesh, ARM), -12.0, -25.0);
+    assert_close(top_left(&mesh, FOREARM), 18.0, -25.0);
+}
+
+#[test]
 fn a_part_hangs_from_where_the_turned_parent_puts_it() {
     let mut hero = character();
     hero.play(&shoulder([FRAC_PI_2]), Play::new()).unwrap();

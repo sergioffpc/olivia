@@ -102,6 +102,17 @@ fn a_mirrored_character_gives_a_mirrored_offset_and_the_negative_angle() {
 }
 
 #[test]
+fn a_bent_joint_is_where_a_scale_stretching_one_axis_draws_it() {
+    let mut hero = character().draw(Draw::new().scale(Vec2::new(2.0, 1.0)));
+    hero.play(&animation("shoulder", [FRAC_PI_2]), Play::new())
+        .unwrap();
+    assert_pose(hero.joint("elbow").unwrap(), -18.0, -15.0, FRAC_PI_2);
+
+    hero.draw = Draw::new().scale(Vec2::new(-2.0, 1.0));
+    assert_pose(hero.joint("elbow").unwrap(), 18.0, -15.0, -FRAC_PI_2);
+}
+
+#[test]
 fn the_pose_counts_overlays_and_is_at_the_fixed_step() {
     let mut hero = character();
     hero.overlay(&animation("shoulder", [0.0, 1.0]), Play::new())

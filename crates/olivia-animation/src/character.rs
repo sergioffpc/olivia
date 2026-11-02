@@ -278,49 +278,50 @@ impl Character {
         angles
     }
 
-    /// Where `angles` put the joint of each part from the root joint, in pixels, and the angle each
-    /// part adds up to.
-    fn placed(&self, angles: &[f32]) -> Vec<(Vec2, f32)> {
-        let mut placed = vec![(Vec2::ZERO, 0.0); self.parts.len()];
-        for &index in self.walk.iter() {
-            let part = &self.parts[index];
-            let (joint, angle) = part
-                .parent
-                .map_or((Vec2::ZERO, 0.0), |parent| placed[parent]);
-            let joint = joint + Vec2::from_angle(angle).rotate(part.offset);
-            placed[index] = (joint, angle + angles[index]);
-        }
-        placed
-    }
-
     /// How the scale shows angles: -1 if it mirrors the character, or else 1.
     fn mirror(&self) -> f32 {
         let scale = self.draw.scale_value();
         if scale.x * scale.y < 0.0 { -1.0 } else { 1.0 }
     }
 
+    /// The pose `angles` give each joint. Offsets scale in the frame of the part they lie on, then
+    /// turn with it, as a sprite does, so that joints stay attached under any scale.
+    fn poses(&self, angles: &[f32]) -> Vec<JointPose> {
+        let scale = self.draw.scale_value();
+        let mirror = self.mirror();
+        let root = JointPose {
+            offset: Vec2::ZERO,
+            rotation: 0.0,
+        };
+        let mut poses = vec![root; self.parts.len()];
+        for &index in self.walk.iter() {
+            let part = &self.parts[index];
+            let parent = part.parent.map_or(root, |parent| poses[parent]);
+            let turn = Vec2::from_angle(parent.rotation);
+            poses[index] = JointPose {
+                offset: parent.offset + turn.rotate(part.offset * scale),
+                rotation: parent.rotation + mirror * angles[index],
+            };
+        }
+        poses
+    }
+
     /// The pose of the joint called `name` at the last fixed step, if there is one.
     #[must_use]
     pub fn joint(&self, name: &str) -> Option<JointPose> {
         let index = self.parts.iter().position(|part| part.name == name)?;
-        let (joint, angle) = self.placed(&self.angles(0.0))[index];
-        Some(JointPose {
-            offset: joint * self.draw.scale_value(),
-            rotation: self.mirror() * angle,
-        })
+        Some(self.poses(&self.angles(0.0))[index])
     }
 
     /// Draws the character with its root joint at `position`, turned by `rotation`, and its pose
     /// `factor` of the way between the last two fixed steps, as `interpolated_position` has it.
     #[doc(hidden)]
     pub fn render(&self, view: &mut View<'_>, position: Vec2, rotation: f32, factor: f32) {
-        let scale = self.draw.scale_value();
-        let mirror = self.mirror();
         let turn = Vec2::from_angle(rotation);
-        let placed = self.placed(&self.angles((1.0 - factor) * self.step));
-        for (part, (joint, angle)) in self.parts.iter().zip(placed) {
-            let draw = self.draw.rotation(rotation + mirror * angle);
-            let joint = position + turn.rotate(joint * scale);
+        let poses = self.poses(&self.angles((1.0 - factor) * self.step));
+        for (part, pose) in self.parts.iter().zip(poses) {
+            let draw = self.draw.rotation(rotation + pose.rotation);
+            let joint = position + turn.rotate(pose.offset);
             view.sprite(&part.texture, joint, draw.origin(part.origin));
         }
     }
