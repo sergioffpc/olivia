@@ -21,8 +21,9 @@ pub enum Error {
     /// The identity cannot name a directory.
     #[error("invalid identity {0:?}")]
     InvalidIdentity(String),
-    /// The file is in neither area, or for a removal, not in the save area.
-    #[error("file not found: {0}")]
+    /// The file or directory is in neither area, or for a removal, the file is not in the save
+    /// area.
+    #[error("not found: {0}")]
     NotFound(String),
     /// The file is already in the save area.
     #[error("file already exists: {0}")]

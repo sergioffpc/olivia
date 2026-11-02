@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Write};
@@ -88,6 +89,47 @@ impl Filesystem {
     /// Returns [`Error::InvalidPath`], or [`Error::Io`] if an area cannot be examined.
     pub fn exists(&self, path: &str) -> Result<bool, Error> {
         Ok(self.locate(path)?.is_some())
+    }
+
+    /// Lists the files directly inside a directory, in either area, as sorted paths that
+    /// [`read`](Self::read) accepts. A file in both areas appears once, and a name no path can
+    /// reach is left out.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] if the directory is in neither area, [`Error::Io`] if it cannot
+    /// be listed, or [`Error::InvalidPath`].
+    pub fn list(&self, path: &str) -> Result<Vec<String>, Error> {
+        validate(path)?;
+        let mut found = false;
+        let mut files = BTreeSet::new();
+        for area in [&self.save, &self.source] {
+            let dir = area.join(path);
+            let io_error = |source| Error::Io {
+                path: dir.clone(),
+                source,
+            };
+            let entries = match fs::read_dir(&dir) {
+                Ok(entries) => entries,
+                Err(source) if is_missing(&source) => continue,
+                Err(source) => return Err(io_error(source)),
+            };
+            found = true;
+            for entry in entries {
+                let entry = entry.map_err(io_error)?;
+                let name = entry.file_name();
+                let Some(name) = name.to_str().filter(|name| is_valid_segment(name)) else {
+                    continue;
+                };
+                if is_file(&entry.path())? {
+                    files.insert(format!("{path}/{name}"));
+                }
+            }
+        }
+        if !found {
+            return Err(Error::NotFound(path.to_owned()));
+        }
+        Ok(files.into_iter().collect())
     }
 
     /// Deletes a file from the save area.

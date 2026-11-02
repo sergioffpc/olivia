@@ -142,6 +142,114 @@ fn remove_never_touches_the_source() {
 }
 
 #[test]
+fn list_merges_both_areas_in_order_with_a_shadowed_file_once() {
+    let a = areas();
+    put(a.source.path(), "sounds/jump/b.ogg", b"source");
+    put(a.source.path(), "sounds/jump/c.ogg", b"source");
+    put(a.save.path(), "sounds/jump/a.ogg", b"save");
+    put(a.save.path(), "sounds/jump/c.ogg", b"save");
+    let files = a.fs.list("sounds/jump").unwrap();
+    assert_eq!(
+        files,
+        [
+            "sounds/jump/a.ogg",
+            "sounds/jump/b.ogg",
+            "sounds/jump/c.ogg"
+        ]
+    );
+    assert_eq!(a.fs.read(&files[2]).unwrap(), b"save");
+}
+
+#[test]
+fn list_of_a_directory_in_one_area_lists_what_is_there() {
+    let a = areas();
+    put(a.source.path(), "maps/one.txt", b"source");
+    put(a.save.path(), "saves/two.txt", b"save");
+    assert_eq!(a.fs.list("maps").unwrap(), ["maps/one.txt"]);
+    assert_eq!(a.fs.list("saves").unwrap(), ["saves/two.txt"]);
+}
+
+#[test]
+fn list_works_before_the_save_area_exists() {
+    let source = TempDir::new().unwrap();
+    let root = TempDir::new().unwrap();
+    put(source.path(), "maps/one.txt", b"source");
+    let fs = Filesystem::with_areas(source.path().to_owned(), root.path().join("game"));
+    assert_eq!(fs.list("maps").unwrap(), ["maps/one.txt"]);
+}
+
+#[test]
+fn list_of_a_directory_in_neither_area_is_not_found() {
+    let a = areas();
+    assert!(matches!(a.fs.list("maps"), Err(Error::NotFound(_))));
+}
+
+#[test]
+fn list_of_a_file_is_not_found() {
+    let a = areas();
+    put(a.source.path(), "one.txt", b"source");
+    assert!(matches!(a.fs.list("one.txt"), Err(Error::NotFound(_))));
+}
+
+#[test]
+fn list_of_an_empty_directory_is_empty() {
+    let a = areas();
+    fs::create_dir(a.source.path().join("maps")).unwrap();
+    assert_eq!(a.fs.list("maps").unwrap(), Vec::<String>::new());
+}
+
+#[test]
+fn a_save_file_named_like_the_directory_hides_nothing() {
+    let a = areas();
+    put(a.save.path(), "maps", b"save");
+    put(a.source.path(), "maps/one.txt", b"source");
+    assert_eq!(a.fs.list("maps").unwrap(), ["maps/one.txt"]);
+}
+
+#[test]
+fn list_leaves_out_subdirectories_and_their_files() {
+    let a = areas();
+    put(a.source.path(), "maps/one.txt", b"source");
+    put(a.source.path(), "maps/old/two.txt", b"source");
+    assert_eq!(a.fs.list("maps").unwrap(), ["maps/one.txt"]);
+}
+
+#[test]
+fn a_save_subdirectory_does_not_hide_a_source_file() {
+    let a = areas();
+    put(a.source.path(), "maps/one", b"source");
+    put(a.save.path(), "maps/one/two.txt", b"save");
+    let files = a.fs.list("maps").unwrap();
+    assert_eq!(files, ["maps/one"]);
+    assert_eq!(a.fs.read(&files[0]).unwrap(), b"source");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn list_skips_names_a_path_cannot_reach() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let a = areas();
+    put(a.source.path(), "maps/one.txt", b"source");
+    put(a.source.path(), "maps/a:b.txt", b"source");
+    put(a.source.path(), "maps/a\\b.txt", b"source");
+    let maps = a.source.path().join("maps");
+    fs::write(maps.join(OsStr::from_bytes(b"\xff.txt")), b"source").unwrap();
+    assert_eq!(a.fs.list("maps").unwrap(), ["maps/one.txt"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_listing_reports_the_os_error() {
+    use std::os::unix::fs::symlink;
+
+    let a = areas();
+    symlink("maps", a.source.path().join("maps")).unwrap();
+    assert!(matches!(a.fs.list("maps"), Err(Error::Io { .. })));
+}
+
+#[test]
 fn every_operation_rejects_an_invalid_path() {
     let mut a = areas();
     let invalid = [
@@ -164,6 +272,10 @@ fn every_operation_rejects_an_invalid_path() {
         );
         assert!(
             matches!(a.fs.exists(path), Err(Error::InvalidPath(_))),
+            "{path}"
+        );
+        assert!(
+            matches!(a.fs.list(path), Err(Error::InvalidPath(_))),
             "{path}"
         );
         assert!(
