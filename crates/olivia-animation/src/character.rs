@@ -24,8 +24,22 @@ pub struct Character {
     walk: Arc<[usize]>,
     /// The animation playing, once one has been asked for.
     base: Option<Layer>,
+    /// The overlays over it, the last added on top.
+    overlays: Vec<Layer>,
     /// The length of the last fixed step, in seconds.
     step: f32,
+}
+
+/// Where a joint is and how its part is turned, read with [`Character::joint`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JointPose {
+    /// Where the joint is from the root joint, in game units, with the character's scale and
+    /// mirror applied. It is relative to the entity: add its `Transform`, and account for the
+    /// entity's rotation if it has any.
+    pub offset: Vec2,
+    /// The angle the part adds up to, in radians, where zero is as drawn. It is the angle shown on
+    /// screen, so a mirrored character gives its negative.
+    pub rotation: f32,
 }
 
 /// One image, and how it hangs.
@@ -55,6 +69,8 @@ struct Layer {
     crossfade: f32,
     /// Seconds since it started, at the last fixed step.
     age: f64,
+    /// Whether this overlay is on its way out, moving from `from` to what is below it.
+    leaving: bool,
 }
 
 impl Layer {
@@ -68,6 +84,21 @@ impl Layer {
             shortest(*from, to, fade)
         };
         self.columns.iter().zip(&self.from).map(angle).collect()
+    }
+
+    /// Puts this overlay over `angles`, on the joints it covers.
+    fn over(&self, angles: &mut [f32], behind: f32) {
+        let own = self.angles(behind);
+        let fade = self.fade(self.age - f64::from(behind));
+        for (index, column) in self.columns.iter().enumerate() {
+            if column.is_some() {
+                angles[index] = if self.leaving {
+                    shortest(self.from[index], angles[index], fade)
+                } else {
+                    own[index]
+                };
+            }
+        }
     }
 
     /// How far the crossfade has gone at `age`, from 0 to 1. Before it began it has not moved.
@@ -125,6 +156,7 @@ impl Character {
             parts: parts.collect::<Result<_, Error>>()?,
             walk: skeleton.walk.into(),
             base: None,
+            overlays: Vec::new(),
             step: 0.0,
         })
     }
@@ -147,12 +179,44 @@ impl Character {
         if base.is_some_and(|layer| layer.animation.is(animation)) {
             return Ok(());
         }
-        self.base = Some(self.layer(animation, play)?);
+        self.base = Some(self.layer(animation, play, self.base_angles(0.0))?);
         Ok(())
     }
 
-    /// A layer starting now.
-    fn layer(&self, animation: &Animation, play: Play) -> Result<Layer, Error> {
+    /// Plays `animation` over the base, on only the joints it covers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MissingJoint`] if the animation names a joint the skeleton lacks.
+    pub fn overlay(&mut self, animation: &Animation, play: Play) -> Result<(), Error> {
+        if self.active(animation).is_none() {
+            let layer = self.layer(animation, play, self.angles(0.0))?;
+            self.overlays.push(layer);
+        }
+        Ok(())
+    }
+
+    /// The index of `animation` among the overlays, if it is active.
+    fn active(&self, animation: &Animation) -> Option<usize> {
+        let same = |layer: &Layer| !layer.leaving && layer.animation.is(animation);
+        self.overlays.iter().position(same)
+    }
+
+    /// Takes `animation` off, moving its joints to what is below it over `crossfade` seconds.
+    /// Removing one that isn't active does nothing.
+    pub fn remove_overlay(&mut self, animation: &Animation, crossfade: f32) {
+        if let Some(index) = self.active(animation) {
+            let from = self.angles(0.0);
+            let layer = &mut self.overlays[index];
+            layer.from = from;
+            layer.crossfade = crossfade;
+            layer.age = 0.0;
+            layer.leaving = true;
+        }
+    }
+
+    /// A layer starting now, from the angles `from`.
+    fn layer(&self, animation: &Animation, play: Play, from: Vec<f32>) -> Result<Layer, Error> {
         let joints = animation.joints();
         let lacking = |joint: &&String| !self.parts.iter().any(|part| part.name == **joint);
         if let Some(joint) = joints.iter().find(lacking) {
@@ -163,37 +227,55 @@ impl Character {
             animation: animation.clone(),
             looping: play.looping,
             columns: self.parts.iter().map(column).collect(),
-            from: self.angles(0.0),
+            from,
             crossfade: play.crossfade,
             age: 0.0,
+            leaving: false,
         })
     }
 
-    /// Whether `animation` is active, doesn't loop and has reached its last row. It has not once
-    /// another has taken over, even during the crossfade.
+    /// Whether `animation` is active, as base or overlay, doesn't loop and has reached its last
+    /// row. It has not once another has taken over, even during the crossfade.
     #[must_use]
     pub fn finished(&self, animation: &Animation) -> bool {
         let done = |layer: &Layer| {
-            layer.animation.is(animation) && !layer.looping && animation.ended(layer.age)
+            layer.animation.is(animation)
+                && !layer.leaving
+                && !layer.looping
+                && animation.ended(layer.age)
         };
-        self.base.as_ref().is_some_and(done)
+        let mut layers = self.base.iter().chain(&self.overlays);
+        layers.any(done)
     }
 
     /// Moves what is playing on by a fixed step of `dt` seconds.
     #[doc(hidden)]
     pub fn advance(&mut self, dt: f32) {
         self.step = dt;
-        if let Some(layer) = &mut self.base {
+        for layer in self.base.iter_mut().chain(&mut self.overlays) {
             layer.age += f64::from(dt);
+        }
+        // Kept until the whole of the last step is past its crossfade, for what `render` looks back at.
+        let dt = f64::from(dt);
+        self.overlays
+            .retain(|layer| !layer.leaving || layer.age - dt < f64::from(layer.crossfade));
+    }
+
+    /// The angle the base gives each part `behind` seconds before the last fixed step.
+    fn base_angles(&self, behind: f32) -> Vec<f32> {
+        match &self.base {
+            Some(layer) => layer.angles(behind),
+            None => vec![0.0; self.parts.len()],
         }
     }
 
     /// The angle of each part `behind` seconds before the last fixed step.
     fn angles(&self, behind: f32) -> Vec<f32> {
-        match &self.base {
-            Some(layer) => layer.angles(behind),
-            None => vec![0.0; self.parts.len()],
+        let mut angles = self.base_angles(behind);
+        for layer in &self.overlays {
+            layer.over(&mut angles, behind);
         }
+        angles
     }
 
     /// Where `angles` put the pivot of each part from the root joint, in pixels, and the angle each
@@ -211,12 +293,29 @@ impl Character {
         placed
     }
 
+    /// How the scale shows angles: -1 if it mirrors the character, or else 1.
+    fn mirror(&self) -> f32 {
+        let scale = self.draw.scale_value();
+        if scale.x * scale.y < 0.0 { -1.0 } else { 1.0 }
+    }
+
+    /// The pose of the joint called `name` at the last fixed step, if there is one.
+    #[must_use]
+    pub fn joint(&self, name: &str) -> Option<JointPose> {
+        let index = self.parts.iter().position(|part| part.name == name)?;
+        let (pivot, angle) = self.placed(&self.angles(0.0))[index];
+        Some(JointPose {
+            offset: pivot * self.draw.scale_value(),
+            rotation: self.mirror() * angle,
+        })
+    }
+
     /// Draws the character with its root joint at `position`, turned by `rotation`, and its pose
     /// `factor` of the way between the last two fixed steps, as `interpolated_position` has it.
     #[doc(hidden)]
     pub fn render(&self, view: &mut View<'_>, position: Vec2, rotation: f32, factor: f32) {
         let scale = self.draw.scale_value();
-        let mirror = if scale.x * scale.y < 0.0 { -1.0 } else { 1.0 };
+        let mirror = self.mirror();
         let turn = Vec2::from_angle(rotation);
         let placed = self.placed(&self.angles((1.0 - factor) * self.step));
         for (part, (pivot, angle)) in self.parts.iter().zip(placed) {
