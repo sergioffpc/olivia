@@ -55,6 +55,13 @@ fn assert_close(actual: [Vec2; 4], expected: [(f32, f32); 4]) {
 }
 
 #[test]
+fn draw_gives_back_its_scale() {
+    assert_eq!(Draw::new().scale_value(), Vec2::ONE);
+    let scale = Vec2::new(-2.0, 3.0);
+    assert_eq!(Draw::new().scale(scale).scale_value(), scale);
+}
+
+#[test]
 fn a_frame_with_no_view_draws_nothing() {
     let mesh = graphics().target().mesh();
     assert_eq!(mesh.vertices, []);

@@ -12,6 +12,8 @@ mod renderer;
 mod simulation;
 mod timer;
 
+#[cfg(feature = "animation")]
+pub use olivia_animation as animation;
 #[cfg(feature = "audio")]
 pub use olivia_audio as audio;
 #[cfg(feature = "filesystem")]

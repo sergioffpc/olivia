@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["audio", "filesystem", "graphics", "input", "physics"]
+default = ["animation", "audio", "filesystem", "graphics", "input", "physics"]
+animation = ["dep:olivia-animation", "filesystem", "graphics"]
 audio = ["dep:olivia-audio"]
 filesystem = ["dep:olivia-filesystem"]
 graphics = ["dep:olivia-graphics"]
@@ -15,6 +16,7 @@ enhanced-determinism = ["olivia-physics?/enhanced-determinism"]
 
 [dependencies]
 hecs.workspace = true
+olivia-animation = { workspace = true, optional = true }
 olivia-audio = { workspace = true, optional = true }
 olivia-filesystem = { workspace = true, optional = true }
 olivia-graphics = { workspace = true, optional = true }

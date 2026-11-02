@@ -79,6 +79,13 @@ impl Draw {
         self
     }
 
+    /// The scale, for whatever places several sprites as one.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn scale_value(&self) -> Vec2 {
+        self.scale
+    }
+
     /// Sets the colour multiplied into the object. The default is white, which leaves it unchanged.
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {

@@ -1,3 +1,5 @@
+#[cfg(feature = "animation")]
+use olivia_animation::Character;
 use olivia_graphics::{Camera, Target, View};
 use olivia_math::{Rect, Vec2};
 #[cfg(feature = "physics")]
@@ -12,7 +14,7 @@ use crate::ecs::{Body, ColliderLines};
 pub(crate) struct Poses<'a> {
     #[cfg(feature = "physics")]
     pub(crate) physics: &'a World,
-    #[cfg(feature = "physics")]
+    #[cfg(any(feature = "animation", feature = "physics"))]
     pub(crate) factor: f32,
     #[cfg(not(feature = "physics"))]
     pub(crate) world: std::marker::PhantomData<&'a ()>,
@@ -87,6 +89,17 @@ fn draw_entities(world: &ecs::World, poses: Poses<'_>, view: &mut View<'_>, hud:
         if marker.is_some() == hud {
             let pose = poses.of(world, entity, *transform);
             draw_shape(view, shape, pose);
+        }
+    }
+
+    #[cfg(feature = "animation")]
+    {
+        let mut characters = world.query::<(Entity, &Transform, &Character, Option<&Hud>)>();
+        for (entity, transform, character, marker) in &mut characters {
+            if marker.is_some() == hud {
+                let pose = poses.of(world, entity, *transform);
+                character.render(view, pose.position, pose.rotation, poses.factor);
+            }
         }
     }
 }
