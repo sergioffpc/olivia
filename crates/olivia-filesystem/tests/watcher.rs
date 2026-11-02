@@ -21,8 +21,7 @@ fn folder() -> (Filesystem, Watcher, TempDir) {
     let filesystem = Filesystem::with_areas(source, dir.path().join("save"));
     let mut watcher = filesystem.watch().unwrap();
     // Some platforms report what happened just before the watch began.
-    thread::sleep(SETTLE);
-    watcher.changed();
+    changes_within(&mut watcher, SETTLE);
     (filesystem, watcher, dir)
 }
 
