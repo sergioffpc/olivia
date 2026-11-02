@@ -6,6 +6,8 @@ use std::marker::PhantomData;
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
 use olivia_graphics::{Camera, Graphics, Target, View};
+#[cfg(feature = "input")]
+use olivia_input::Input;
 #[cfg(feature = "graphics")]
 use olivia_math::Color;
 use olivia_window::{Window, WindowEvent};
@@ -56,6 +58,9 @@ pub struct Update<'a> {
     pub graphics: &'a mut Graphics,
     /// What happened to the window since the last update. Only the first step of a frame has any.
     pub events: &'a [WindowEvent],
+    /// The keyboard and mouse.
+    #[cfg(feature = "input")]
+    pub input: &'a Input,
     /// The fixed step, elapsed time and frame rate.
     pub timer: &'a Timer,
     quit: &'a Cell<bool>,
@@ -63,7 +68,7 @@ pub struct Update<'a> {
 
 impl<'a> Update<'a> {
     #[cfg_attr(
-        not(any(feature = "filesystem", feature = "graphics")),
+        not(any(feature = "filesystem", feature = "graphics", feature = "input")),
         expect(unused_variables)
     )]
     pub(crate) fn new(
@@ -80,6 +85,8 @@ impl<'a> Update<'a> {
             #[cfg(feature = "graphics")]
             graphics: &mut modules.graphics,
             events,
+            #[cfg(feature = "input")]
+            input: &modules.input,
             timer,
             quit,
         }

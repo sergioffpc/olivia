@@ -5,13 +5,15 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["filesystem", "graphics"]
+default = ["filesystem", "graphics", "input"]
 filesystem = ["dep:olivia-filesystem"]
 graphics = ["dep:olivia-graphics"]
+input = ["dep:olivia-input"]
 
 [dependencies]
 olivia-filesystem = { workspace = true, optional = true }
 olivia-graphics = { workspace = true, optional = true }
+olivia-input = { workspace = true, optional = true }
 olivia-math.workspace = true
 olivia-window.workspace = true
 tracing.workspace = true
@@ -35,6 +37,10 @@ required-features = ["filesystem", "graphics"]
 [[example]]
 name = "draw_options"
 required-features = ["graphics"]
+
+[[example]]
+name = "input"
+required-features = ["input"]
 
 [[example]]
 name = "shapes"

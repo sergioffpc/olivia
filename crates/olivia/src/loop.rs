@@ -1,8 +1,10 @@
 use std::cell::Cell;
 use std::time::Duration;
 
+#[cfg(feature = "input")]
+use olivia_input::Input;
 use olivia_math::Vec2;
-use olivia_window::{Driver, Window, WindowEvent};
+use olivia_window::{Driver, RawEvent, Window, WindowEvent};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
@@ -66,6 +68,12 @@ impl<G: Game> GameLoop<G> {
         self.events.push(event);
     }
 
+    /// The input waiting for the next step.
+    #[cfg(feature = "input")]
+    pub fn input(&mut self) -> &mut Input {
+        &mut self.modules.input
+    }
+
     /// Runs a frame that took `frame_time` and returns whether to keep going.
     ///
     /// # Errors
@@ -83,6 +91,8 @@ impl<G: Game> GameLoop<G> {
             );
             trace_span!("update").in_scope(|| self.game.update(update))?;
             self.events.clear();
+            #[cfg(feature = "input")]
+            self.modules.input.on_step();
             self.timer.finish_step();
             if self.quit.get() {
                 return Ok(false);
@@ -113,6 +123,12 @@ impl<G: Game> Driver for GameLoop<G> {
 
     fn event(&mut self, event: WindowEvent) {
         self.push(event);
+    }
+
+    #[cfg_attr(not(feature = "input"), expect(unused_variables))]
+    fn raw_event(&mut self, event: &RawEvent, scale_factor: f64) {
+        #[cfg(feature = "input")]
+        self.modules.input.on_event(event, scale_factor);
     }
 
     fn frame(&mut self, window: &mut Window) -> Result<bool> {

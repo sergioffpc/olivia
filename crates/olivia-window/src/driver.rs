@@ -22,6 +22,9 @@ pub struct Attributes {
     pub fullscreen: bool,
 }
 
+/// An event as the platform reports it.
+pub type RawEvent = WinitEvent;
+
 /// What [`run`] drives once the window exists.
 pub trait Driver: Sized {
     /// What [`start`](Self::start) receives from [`run`].
@@ -39,6 +42,9 @@ pub trait Driver: Sized {
 
     /// Receives an event from the window.
     fn event(&mut self, event: WindowEvent);
+
+    /// Receives every event as the platform reports it, on a window of this `scale_factor`.
+    fn raw_event(&mut self, event: &RawEvent, scale_factor: f64);
 
     /// Runs one frame and returns whether to keep going.
     ///
@@ -137,13 +143,12 @@ impl<D: Driver> ApplicationHandler for Host<D> {
         let Some(running) = &mut self.running else {
             return;
         };
+        let scale_factor = running.window.raw().scale_factor();
+        running.driver.raw_event(&event, scale_factor);
         let event = match event {
             // Windows reports a minimised window as empty, which is not a size for the game.
             WinitEvent::Resized(size) if size.width == 0 || size.height == 0 => return,
-            WinitEvent::Resized(size) => {
-                let scale_factor = running.window.raw().scale_factor();
-                WindowEvent::Resized(logical_size(size, scale_factor))
-            }
+            WinitEvent::Resized(size) => WindowEvent::Resized(logical_size(size, scale_factor)),
             WinitEvent::Focused(focused) => WindowEvent::Focus(focused),
             WinitEvent::CloseRequested => WindowEvent::CloseRequested,
             _ => return,

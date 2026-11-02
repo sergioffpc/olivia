@@ -10,6 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 olivia-filesystem = { path = "crates/olivia-filesystem" }
 olivia-graphics = { path = "crates/olivia-graphics" }
+olivia-input = { path = "crates/olivia-input" }
 olivia-math = { path = "crates/olivia-math" }
 olivia-window = { path = "crates/olivia-window" }
 bytemuck = { version = "1", features = ["derive"] }

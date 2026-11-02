@@ -2,6 +2,8 @@
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
 use olivia_graphics::Graphics;
+#[cfg(feature = "input")]
+use olivia_input::Input;
 
 use crate::{Config, Result};
 
@@ -12,6 +14,8 @@ pub struct Modules {
     pub(crate) filesystem: Filesystem,
     #[cfg(feature = "graphics")]
     pub(crate) graphics: Graphics,
+    #[cfg(feature = "input")]
+    pub(crate) input: Input,
 }
 
 impl Modules {
@@ -30,6 +34,8 @@ impl Modules {
             filesystem: config.filesystem()?,
             #[cfg(feature = "graphics")]
             graphics: config.graphics(),
+            #[cfg(feature = "input")]
+            input: Input::default(),
         })
     }
 }
