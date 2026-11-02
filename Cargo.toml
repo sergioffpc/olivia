@@ -17,6 +17,7 @@ directories = "6"
 # Must stay at the version rapier2d uses (ADR 0001).
 glam = { version = "0.33", features = ["bytemuck"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+lyon = "1"
 pollster = "1"
 tempfile = "3"
 thiserror = "2"
