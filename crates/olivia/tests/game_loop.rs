@@ -134,7 +134,8 @@ fn load_is_an_info_span_and_update_and_draw_are_trace_spans() {
     );
 }
 
-/// Records each span and event as a level and a name, `event` for events.
+/// Records each span and event of the loop as a level and a name, `event` for events. Leaves out
+/// `olivia_audio`, which warns at start on a machine with no audio device.
 struct Recorder(Arc<Mutex<Vec<(Level, &'static str)>>>);
 
 impl<S: Subscriber> Layer<S> for Recorder {
@@ -144,8 +145,11 @@ impl<S: Subscriber> Layer<S> for Recorder {
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let level = *event.metadata().level();
-        self.0.lock().unwrap().push((level, "event"));
+        let meta = event.metadata();
+        if meta.target().starts_with("olivia_audio") {
+            return;
+        }
+        self.0.lock().unwrap().push((*meta.level(), "event"));
     }
 }
 
