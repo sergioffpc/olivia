@@ -18,8 +18,23 @@ allow = [
     "Unicode-3.0",
     "Zlib",
 ]
-# A dependency of directories, which olivia-filesystem is built on.
-exceptions = [{ crate = "option-ext", allow = ["MPL-2.0"] }]
+exceptions = [
+    # A dependency of directories, which olivia-filesystem is built on.
+    { crate = "option-ext", allow = ["MPL-2.0"] },
+    # The decoders and audio thread of kira, which olivia-audio is built on.
+    { crate = "audio_thread_priority", allow = ["MPL-2.0"] },
+    { crate = "symphonia", allow = ["MPL-2.0"] },
+    { crate = "symphonia-bundle-flac", allow = ["MPL-2.0"] },
+    { crate = "symphonia-bundle-mp3", allow = ["MPL-2.0"] },
+    { crate = "symphonia-codec-pcm", allow = ["MPL-2.0"] },
+    { crate = "symphonia-codec-vorbis", allow = ["MPL-2.0"] },
+    { crate = "symphonia-common", allow = ["MPL-2.0"] },
+    { crate = "symphonia-core", allow = ["MPL-2.0"] },
+    { crate = "symphonia-format-ogg", allow = ["MPL-2.0"] },
+    { crate = "symphonia-format-riff", allow = ["MPL-2.0"] },
+    { crate = "symphonia-metadata", allow = ["MPL-2.0"] },
+    { crate = "triple_buffer", allow = ["MPL-2.0"] },
+]
 
 [bans]
 # winit's platform crates pull in duplicates that cannot be resolved here.
