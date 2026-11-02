@@ -4,7 +4,7 @@ use std::time::Duration;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 use olivia_math::Vec2;
-use olivia_window::{Driver, RawEvent, Window, WindowEvent};
+use olivia_window::{Driver, Window, WindowEvent, raw};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
@@ -126,7 +126,7 @@ impl<G: Game> Driver for GameLoop<G> {
     }
 
     #[cfg_attr(not(feature = "input"), expect(unused_variables))]
-    fn raw_event(&mut self, event: &RawEvent, scale_factor: f64) {
+    fn raw_event(&mut self, event: &raw::Event, scale_factor: f64) {
         #[cfg(feature = "input")]
         self.modules.input.on_event(event, scale_factor);
     }

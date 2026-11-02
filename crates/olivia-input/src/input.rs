@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use olivia_math::Vec2;
-use olivia_window::winit::dpi::{LogicalPosition, PhysicalPosition};
-use olivia_window::winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
-use olivia_window::winit::keyboard::PhysicalKey;
+use olivia_window::raw::{
+    ElementState, Event, MouseButton, MouseScrollDelta, PhysicalKey, PhysicalPosition,
+};
 
 use crate::control::Button;
 use crate::{Control, Key, Mouse};
@@ -44,7 +44,8 @@ impl Input {
         self.released.contains(&control.button())
     }
 
-    /// What was typed since the last update, dead keys included and control characters left out.
+    /// What was typed since the last update, as the platform resolves it. Dead keys are included,
+    /// and so are the control characters of keys like Backspace, which repeat while held.
     ///
     /// IME composition is not supported, which limits Chinese, Japanese and Korean input.
     #[must_use]
@@ -67,29 +68,47 @@ impl Input {
 
     /// Receives an event from the window, at its `scale_factor`.
     #[doc(hidden)]
-    pub fn on_event(&mut self, event: &WindowEvent, scale_factor: f64) {
+    pub fn on_event(&mut self, event: &Event, scale_factor: f64) {
         match event {
-            WindowEvent::KeyboardInput { event, .. } => {
-                self.on_key(event.physical_key, event.state, event.text.as_deref());
+            Event::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => {
+                // A key held as the window gains focus arrives as a press nobody typed.
+                let text = event.text.as_deref().filter(|_| !is_synthetic);
+                let already_held = event.repeat || *is_synthetic;
+                self.on_key(event.physical_key, event.state, already_held, text);
             }
-            WindowEvent::MouseInput { button, state, .. } => self.on_mouse_button(*button, *state),
-            WindowEvent::CursorMoved { position, .. } => self.on_cursor(*position, scale_factor),
-            WindowEvent::MouseWheel { delta, .. } => self.on_scroll(*delta, scale_factor),
-            WindowEvent::Focused(focused) => self.on_focus(*focused),
+            Event::MouseInput { button, state, .. } => self.on_mouse_button(*button, *state),
+            Event::CursorMoved { position, .. } => self.on_cursor(*position, scale_factor),
+            Event::MouseWheel { delta, .. } => self.on_scroll(*delta, scale_factor),
+            Event::Focused(focused) => self.on_focus(*focused),
             _ => {}
         }
     }
 
-    /// Receives a key from the window.
+    /// Receives a key from the window. `already_held` says it went down before this event.
     #[doc(hidden)]
-    pub fn on_key(&mut self, key: PhysicalKey, state: ElementState, text: Option<&str>) {
+    pub fn on_key(
+        &mut self,
+        key: PhysicalKey,
+        state: ElementState,
+        already_held: bool,
+        text: Option<&str>,
+    ) {
         if let PhysicalKey::Code(code) = key
             && let Some(key) = Key::from_code(code)
         {
-            self.set(Button::Key(key), state);
+            let button = Button::Key(key);
+            if already_held && state == ElementState::Pressed {
+                self.down.insert(button);
+            } else {
+                self.set(button, state);
+            }
         }
         if let (ElementState::Pressed, Some(text)) = (state, text) {
-            self.text.extend(text.chars().filter(|c| !c.is_control()));
+            self.text.push_str(text);
         }
     }
 
@@ -148,6 +167,6 @@ impl Input {
 }
 
 fn logical(position: PhysicalPosition<f64>, scale_factor: f64) -> Vec2 {
-    let position: LogicalPosition<f32> = position.to_logical(scale_factor);
+    let position = position.to_logical::<f32>(scale_factor);
     Vec2::new(position.x, position.y)
 }

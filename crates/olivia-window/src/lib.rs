@@ -4,10 +4,16 @@ mod driver;
 mod window;
 
 #[doc(hidden)]
-pub use driver::{Attributes, Driver, RawEvent, run};
+pub use driver::{Attributes, Driver, run};
 pub use window::{Window, WindowEvent};
+
+/// What `olivia-input` reads from the platform. Unstable: it changes with `winit`.
 #[doc(hidden)]
-pub use winit;
+pub mod raw {
+    pub use winit::dpi::PhysicalPosition;
+    pub use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent as Event};
+    pub use winit::keyboard::{KeyCode, NativeKeyCode, PhysicalKey};
+}
 #[doc(hidden)]
 pub use winit::window::Window as RawWindow;
 

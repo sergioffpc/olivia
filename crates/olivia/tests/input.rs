@@ -7,8 +7,8 @@ use std::time::Duration;
 use olivia::input::Key;
 use olivia::math::Vec2;
 use olivia::window::Window;
-use olivia::window::winit::event::ElementState::{Pressed, Released};
-use olivia::window::winit::keyboard::{KeyCode, PhysicalKey};
+use olivia::window::raw::ElementState::{Pressed, Released};
+use olivia::window::raw::{KeyCode, PhysicalKey};
 use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
 
 const STEP: Duration = Duration::from_nanos(16_666_666);
@@ -53,8 +53,8 @@ fn start() -> (GameLoop<Recorder>, Window) {
 #[test]
 fn a_tap_between_two_steps_reaches_the_next_one() {
     let (mut game_loop, mut window) = start();
-    game_loop.input().on_key(W, Pressed, Some("w"));
-    game_loop.input().on_key(W, Released, None);
+    game_loop.input().on_key(W, Pressed, false, Some("w"));
+    game_loop.input().on_key(W, Released, false, None);
     game_loop.run_frame(STEP, &mut window).unwrap();
     assert_eq!(STEPS.take(), [(true, true, false, "w".to_owned())]);
 }
@@ -62,7 +62,7 @@ fn a_tap_between_two_steps_reaches_the_next_one() {
 #[test]
 fn a_frame_with_no_step_keeps_the_input_for_the_next_frame() {
     let (mut game_loop, mut window) = start();
-    game_loop.input().on_key(W, Pressed, Some("w"));
+    game_loop.input().on_key(W, Pressed, false, Some("w"));
     game_loop.run_frame(STEP / 4, &mut window).unwrap();
     assert_eq!(STEPS.take(), []);
 
@@ -73,7 +73,7 @@ fn a_frame_with_no_step_keeps_the_input_for_the_next_frame() {
 #[test]
 fn the_first_step_of_a_frame_consumes_the_input() {
     let (mut game_loop, mut window) = start();
-    game_loop.input().on_key(W, Pressed, Some("w"));
+    game_loop.input().on_key(W, Pressed, false, Some("w"));
     game_loop.run_frame(STEP * 2, &mut window).unwrap();
     assert_eq!(
         STEPS.take(),

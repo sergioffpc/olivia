@@ -22,9 +22,6 @@ pub struct Attributes {
     pub fullscreen: bool,
 }
 
-/// An event as the platform reports it.
-pub type RawEvent = WinitEvent;
-
 /// What [`run`] drives once the window exists.
 pub trait Driver: Sized {
     /// What [`start`](Self::start) receives from [`run`].
@@ -44,7 +41,7 @@ pub trait Driver: Sized {
     fn event(&mut self, event: WindowEvent);
 
     /// Receives every event as the platform reports it, on a window of this `scale_factor`.
-    fn raw_event(&mut self, event: &RawEvent, scale_factor: f64);
+    fn raw_event(&mut self, event: &WinitEvent, scale_factor: f64);
 
     /// Runs one frame and returns whether to keep going.
     ///

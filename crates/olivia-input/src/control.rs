@@ -1,5 +1,4 @@
-use olivia_window::winit::event::MouseButton;
-use olivia_window::winit::keyboard::KeyCode;
+use olivia_window::raw::{KeyCode, MouseButton};
 
 mod sealed {
     use super::{Button, Key, Mouse};
@@ -80,10 +79,11 @@ keys! {
     ShiftLeft = ShiftLeft, ShiftRight = ShiftRight, ControlLeft = ControlLeft,
     ControlRight = ControlRight, AltLeft = AltLeft, AltRight = AltRight, SuperLeft = SuperLeft,
     SuperRight = SuperRight,
-    CapsLock = CapsLock, ContextMenu = ContextMenu,
+    CapsLock = CapsLock, NumLock = NumLock, ScrollLock = ScrollLock, ContextMenu = ContextMenu,
+    PrintScreen = PrintScreen, Pause = Pause,
     Backquote = Backquote, Minus = Minus, Equal = Equal, BracketLeft = BracketLeft,
     BracketRight = BracketRight, Backslash = Backslash, Semicolon = Semicolon, Quote = Quote,
-    Comma = Comma, Period = Period, Slash = Slash,
+    Comma = Comma, Period = Period, Slash = Slash, IntlBackslash = IntlBackslash,
 }
 
 /// A mouse button.
