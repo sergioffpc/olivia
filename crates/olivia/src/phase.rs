@@ -1,24 +1,22 @@
 use std::cell::Cell;
-#[cfg(not(feature = "graphics"))]
-use std::marker::PhantomData;
+use std::fmt;
 
 #[cfg(feature = "audio")]
 use olivia_audio::Audio;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
-use olivia_graphics::{Camera, Graphics, Target, View};
+use olivia_graphics::Graphics;
 #[cfg(feature = "input")]
 use olivia_input::Input;
-#[cfg(feature = "graphics")]
-use olivia_math::Color;
+#[cfg(feature = "physics")]
+use olivia_physics::World;
 use olivia_window::{Window, WindowEvent};
 
-use crate::{Modules, Timer};
+use crate::{Modules, Timer, ecs};
 
 /// The handles available to [`Game::load`](crate::Game::load).
 #[non_exhaustive]
-#[derive(Debug)]
 pub struct Setup<'a> {
     /// The game's window.
     pub window: &'a mut Window,
@@ -31,13 +29,11 @@ pub struct Setup<'a> {
     /// The game's graphics.
     #[cfg(feature = "graphics")]
     pub graphics: &'a mut Graphics,
+    /// The game's entities.
+    pub world: &'a mut ecs::World,
 }
 
 impl<'a> Setup<'a> {
-    #[cfg_attr(
-        not(any(feature = "audio", feature = "filesystem", feature = "graphics")),
-        expect(unused_variables)
-    )]
     pub(crate) fn new(window: &'a mut Window, modules: &'a mut Modules) -> Self {
         Self {
             window,
@@ -47,13 +43,13 @@ impl<'a> Setup<'a> {
             filesystem: &mut modules.filesystem,
             #[cfg(feature = "graphics")]
             graphics: &mut modules.graphics,
+            world: &mut modules.world,
         }
     }
 }
 
 /// The handles available to [`Game::update`](crate::Game::update).
 #[non_exhaustive]
-#[derive(Debug)]
 pub struct Update<'a> {
     /// The game's window.
     pub window: &'a mut Window,
@@ -66,6 +62,11 @@ pub struct Update<'a> {
     /// The game's graphics.
     #[cfg(feature = "graphics")]
     pub graphics: &'a mut Graphics,
+    /// The game's entities. Olivia steps physics right after this update.
+    pub world: &'a mut ecs::World,
+    /// The physics simulation, for queries, forces and the events of the last step.
+    #[cfg(feature = "physics")]
+    pub physics: &'a mut World,
     /// What happened to the window since the last update. Only the first step of a frame has any.
     pub events: &'a [WindowEvent],
     /// The keyboard and mouse.
@@ -77,15 +78,6 @@ pub struct Update<'a> {
 }
 
 impl<'a> Update<'a> {
-    #[cfg_attr(
-        not(any(
-            feature = "audio",
-            feature = "filesystem",
-            feature = "graphics",
-            feature = "input"
-        )),
-        expect(unused_variables)
-    )]
     pub(crate) fn new(
         window: &'a mut Window,
         modules: &'a mut Modules,
@@ -101,6 +93,9 @@ impl<'a> Update<'a> {
             filesystem: &mut modules.filesystem,
             #[cfg(feature = "graphics")]
             graphics: &mut modules.graphics,
+            world: &mut modules.world,
+            #[cfg(feature = "physics")]
+            physics: &mut modules.simulation.physics,
             events,
             #[cfg(feature = "input")]
             input: &modules.input,
@@ -115,56 +110,16 @@ impl<'a> Update<'a> {
     }
 }
 
-/// The handle [`Game::draw`](crate::Game::draw) receives to produce one frame.
-#[derive(Debug)]
-pub struct Frame<'a> {
-    interpolation_factor: f32,
-    #[cfg(feature = "graphics")]
-    target: Target<'a>,
-    #[cfg(not(feature = "graphics"))]
-    target: PhantomData<&'a mut ()>,
+impl fmt::Debug for Setup<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Setup").finish_non_exhaustive()
+    }
 }
 
-impl<'a> Frame<'a> {
-    #[cfg_attr(not(feature = "graphics"), expect(unused_variables))]
-    pub(crate) fn new(interpolation_factor: f32, modules: &'a mut Modules) -> Self {
-        Self {
-            interpolation_factor,
-            #[cfg(feature = "graphics")]
-            target: modules.graphics.target(),
-            #[cfg(not(feature = "graphics"))]
-            target: PhantomData,
-        }
-    }
-
-    /// Shows the frame and returns whether it reached the window.
-    #[cfg(feature = "graphics")]
-    pub(crate) fn present(self) -> bool {
-        self.target.present()
-    }
-
-    /// Shows the frame and returns whether it reached the window, which it never does here.
-    #[cfg(not(feature = "graphics"))]
-    #[expect(clippy::unused_self, reason = "matches the graphics version")]
-    pub(crate) fn present(self) -> bool {
-        false
-    }
-
-    /// How far the time since the last update has advanced into the next fixed step, from 0 to 1.
-    #[must_use]
-    pub fn interpolation_factor(&self) -> f32 {
-        self.interpolation_factor
-    }
-
-    /// Sets the colour the frame clears to. A frame with no call clears to black.
-    #[cfg(feature = "graphics")]
-    pub fn clear(&mut self, color: Color) {
-        self.target.clear(color);
-    }
-
-    /// Starts drawing through `camera`. Only a [`View`] draws, and views draw in creation order.
-    #[cfg(feature = "graphics")]
-    pub fn view(&mut self, camera: Camera) -> View<'_> {
-        self.target.view(camera)
+impl fmt::Debug for Update<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Update")
+            .field("events", &self.events)
+            .finish_non_exhaustive()
     }
 }

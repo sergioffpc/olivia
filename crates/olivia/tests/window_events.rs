@@ -5,18 +5,16 @@ use std::time::Duration;
 
 use olivia::math::Vec2;
 use olivia::window::{Window, WindowEvent};
-use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
+use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 
 const STEP: Duration = Duration::from_nanos(16_666_666);
 const SIZE: Vec2 = Vec2::new(800.0, 600.0);
 
 thread_local! {
     static STEPS: RefCell<Vec<Vec<WindowEvent>>> = const { RefCell::new(Vec::new()) };
-    static TRACE: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-/// Records the events of each step, traces phases as `U` and `D`, and quits on `CloseRequested`
-/// if `QUITS`.
+/// Records the events of each step, and quits on `CloseRequested` if `QUITS`.
 struct Recorder<const QUITS: bool>;
 
 impl<const QUITS: bool> Game for Recorder<QUITS> {
@@ -27,23 +25,17 @@ impl<const QUITS: bool> Game for Recorder<QUITS> {
 
     fn update(&mut self, u: Update<'_>) -> Result<()> {
         u.window.set_size(SIZE);
-        TRACE.with_borrow_mut(|trace| trace.push('U'));
         STEPS.with_borrow_mut(|steps| steps.push(u.events.to_vec()));
         if QUITS && u.events.contains(&WindowEvent::CloseRequested) {
             u.quit();
         }
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {
-        TRACE.with_borrow_mut(|trace| trace.push('D'));
-    }
 }
 
 /// A loaded game with its window and nothing recorded yet.
 fn start<G: Game>() -> (GameLoop<G>, Window) {
     STEPS.take();
-    TRACE.take();
     let mut window = Window::headless();
     let modules = Modules::new(&Config::new("test")).unwrap();
     let game_loop = GameLoop::new(&mut window, SIZE, modules).unwrap();
@@ -101,20 +93,4 @@ fn the_game_quits_by_calling_quit_on_close_requested() {
     let (mut game_loop, mut window) = start::<Recorder<true>>();
     game_loop.push(WindowEvent::CloseRequested);
     assert!(!game_loop.run_frame(STEP, &mut window).unwrap());
-}
-
-#[test]
-fn while_minimised_draw_is_skipped_and_update_keeps_running() {
-    let (mut game_loop, mut window) = start::<Recorder<false>>();
-    game_loop.run_frame(Duration::ZERO, &mut window).unwrap();
-    TRACE.take();
-
-    game_loop.push(WindowEvent::Minimized(true));
-    game_loop.run_frame(STEP, &mut window).unwrap();
-    game_loop.run_frame(STEP, &mut window).unwrap();
-    assert_eq!(TRACE.take(), "UU");
-
-    game_loop.push(WindowEvent::Minimized(false));
-    game_loop.run_frame(STEP, &mut window).unwrap();
-    assert_eq!(TRACE.take(), "UD");
 }

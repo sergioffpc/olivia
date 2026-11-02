@@ -2,9 +2,14 @@
 
 mod clock;
 mod config;
+pub mod ecs;
 mod r#loop;
 mod modules;
 mod phase;
+#[cfg(feature = "graphics")]
+mod renderer;
+#[cfg(feature = "physics")]
+mod simulation;
 mod timer;
 
 #[cfg(feature = "audio")]
@@ -26,13 +31,13 @@ pub use r#loop::GameLoop;
 pub use r#loop::run;
 #[doc(hidden)]
 pub use modules::Modules;
-pub use phase::{Frame, Setup, Update};
+pub use phase::{Setup, Update};
 pub use timer::Timer;
 
 /// The result of a phase and of [`run`], boxing any error by default.
 pub type Result<T = (), E = Box<dyn std::error::Error + Send + Sync>> = std::result::Result<T, E>;
 
-/// A game: the state it owns and the phases Olivia drives.
+/// A game: the phases Olivia drives around the [world](ecs) it simulates and draws.
 pub trait Game: Sized {
     /// Builds the game. Runs once, after the window exists and before anything else.
     ///
@@ -47,7 +52,4 @@ pub trait Game: Sized {
     ///
     /// An `Err` stops the loop and returns from [`run`].
     fn update(&mut self, u: Update<'_>) -> Result<()>;
-
-    /// Draws the current state. One or more updates always run before the first draw.
-    fn draw(&self, f: &mut Frame<'_>);
 }

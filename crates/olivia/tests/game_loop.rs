@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use olivia::math::Vec2;
-use olivia::window::Window;
-use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
+use olivia::window::{Window, WindowEvent};
+use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::Layer;
@@ -16,40 +16,27 @@ use tracing_subscriber::layer::{Context, SubscriberExt};
 const STEP: Duration = Duration::from_nanos(16_666_666);
 
 thread_local! {
-    static TRACE: RefCell<String> = const { RefCell::new(String::new()) };
-    static FACTORS: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
     static ELAPSED: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static LAST_DT: Cell<f32> = const { Cell::new(0.0) };
     static LAST_FRAME_RATE: Cell<f32> = const { Cell::new(0.0) };
 }
 
-fn trace(phase: char) {
-    TRACE.with_borrow_mut(|t| t.push(phase));
-}
-
-/// Traces each phase as `L`, `U` or `D`, and quits on update number `QUIT_AT`.
+/// Quits on update number `QUIT_AT`.
 struct Traced<const QUIT_AT: u32> {
     updates: u32,
 }
 
 impl<const QUIT_AT: u32> Game for Traced<QUIT_AT> {
     fn load(_s: Setup<'_>) -> Result<Self> {
-        trace('L');
         Ok(Self { updates: 0 })
     }
 
     fn update(&mut self, u: Update<'_>) -> Result<()> {
-        trace('U');
         self.updates += 1;
         if self.updates == QUIT_AT {
             u.quit();
         }
         Ok(())
-    }
-
-    fn draw(&self, f: &mut Frame<'_>) {
-        trace('D');
-        FACTORS.with_borrow_mut(|factors| factors.push(f.interpolation_factor()));
     }
 }
 
@@ -64,11 +51,21 @@ fn run_frames<G: Game>(deltas: &[Duration]) -> Result<()> {
     Ok(())
 }
 
+/// The phases in `records`, as `L`, `U` or `D`.
+fn phases(records: &[(Level, &'static str)]) -> String {
+    let phase = |(_, name): &(Level, &str)| match *name {
+        "load" => Some('L'),
+        "update" => Some('U'),
+        "draw" => Some('D'),
+        _ => None,
+    };
+    records.iter().filter_map(phase).collect()
+}
+
 /// Runs `G` and returns the phases it went through.
 fn drive<G: Game>(deltas: &[Duration]) -> (Result<()>, String) {
-    TRACE.take();
-    let result = run_frames::<G>(deltas);
-    (result, TRACE.take())
+    let (records, result) = recorded(|| run_frames::<G>(deltas));
+    (result, phases(&records))
 }
 
 #[test]
@@ -95,34 +92,34 @@ fn a_frame_with_no_step_due_draws_without_updating() {
 
 #[test]
 fn the_interpolation_factor_is_the_fraction_of_a_step_left_over() {
-    FACTORS.take();
-    let deltas = [Duration::ZERO, STEP / 4, STEP / 2, STEP / 2, STEP];
-    let _ = drive::<Traced<3>>(&deltas);
-    let expected = [0.0, 0.25, 0.75, 0.25];
-    let factors = FACTORS.take();
-    assert_eq!(factors.len(), expected.len());
-    for (factor, expected) in factors.iter().zip(expected) {
-        assert!((factor - expected).abs() < 1e-3, "{factors:?}");
+    let mut window = Window::headless();
+    let modules = Modules::new(&Config::new("test")).unwrap();
+    let mut game_loop = GameLoop::<Traced<3>>::new(&mut window, Vec2::ZERO, modules).unwrap();
+    let deltas = [Duration::ZERO, STEP / 4, STEP / 2, STEP / 2];
+    for (delta, expected) in deltas.into_iter().zip([0.0, 0.25, 0.75, 0.25]) {
+        game_loop.run_frame(delta, &mut window).unwrap();
+        let factor = game_loop.interpolation_factor();
+        assert!((factor - expected).abs() < 1e-3, "{factor}");
     }
 }
 
 #[test]
 fn a_frame_too_far_behind_drops_steps_and_warns() {
     let deltas = [Duration::ZERO, STEP * 100, STEP];
-    let (records, (_, phases)) = recorded(|| drive::<Traced<10>>(&deltas));
-    assert_eq!(phases, "LUDUUUUUUUUDU");
+    let (records, _) = recorded(|| run_frames::<Traced<10>>(&deltas));
+    assert_eq!(phases(&records), "LUDUUUUUUUUDU");
     assert!(records.contains(&(Level::WARN, "event")));
 }
 
 #[test]
 fn a_frame_that_keeps_up_does_not_warn() {
-    let (records, _) = recorded(|| drive::<Traced<9>>(&[Duration::ZERO, STEP * 8]));
+    let (records, _) = recorded(|| run_frames::<Traced<9>>(&[Duration::ZERO, STEP * 8]));
     assert!(!records.iter().any(|(level, _)| *level == Level::WARN));
 }
 
 #[test]
 fn load_is_an_info_span_and_update_and_draw_are_trace_spans() {
-    let (records, _) = recorded(|| drive::<Traced<2>>(&[Duration::ZERO, STEP]));
+    let (records, _) = recorded(|| run_frames::<Traced<2>>(&[Duration::ZERO, STEP]));
     assert_eq!(
         records,
         [
@@ -134,13 +131,38 @@ fn load_is_an_info_span_and_update_and_draw_are_trace_spans() {
     );
 }
 
+#[test]
+fn while_minimised_nothing_is_drawn_and_updates_keep_running() {
+    let mut window = Window::headless();
+    let modules = Modules::new(&Config::new("test")).unwrap();
+    let mut game_loop = GameLoop::<Traced<0>>::new(&mut window, Vec2::ZERO, modules).unwrap();
+    game_loop.run_frame(Duration::ZERO, &mut window).unwrap();
+
+    game_loop.push(WindowEvent::Minimized(true));
+    let (records, ()) = recorded(|| {
+        game_loop.run_frame(STEP, &mut window).unwrap();
+        game_loop.run_frame(STEP, &mut window).unwrap();
+    });
+    assert_eq!(phases(&records), "UU");
+
+    game_loop.push(WindowEvent::Minimized(false));
+    let (records, ()) = recorded(|| {
+        game_loop.run_frame(STEP, &mut window).unwrap();
+    });
+    assert_eq!(phases(&records), "UD");
+}
+
 /// Records each span and event of the loop as a level and a name, `event` for events. Leaves out
-/// `olivia_audio`, which warns at start on a machine with no audio device.
+/// the `physics` span, which only exists with that feature, and `olivia_audio`, which warns at start
+/// on a machine with no audio device.
 struct Recorder(Arc<Mutex<Vec<(Level, &'static str)>>>);
 
 impl<S: Subscriber> Layer<S> for Recorder {
     fn on_new_span(&self, attrs: &Attributes<'_>, _id: &Id, _ctx: Context<'_, S>) {
         let meta = attrs.metadata();
+        if meta.name() == "physics" {
+            return;
+        }
         self.0.lock().unwrap().push((*meta.level(), meta.name()));
     }
 
@@ -168,12 +190,7 @@ impl Game for FailsToLoad {
     }
 
     fn update(&mut self, _u: Update<'_>) -> Result<()> {
-        trace('U');
         Ok(())
-    }
-
-    fn draw(&self, _f: &mut Frame<'_>) {
-        trace('D');
     }
 }
 
@@ -188,16 +205,11 @@ impl Game for FailsToUpdate {
     }
 
     fn update(&mut self, _u: Update<'_>) -> Result<()> {
-        trace('U');
         self.updates += 1;
         if self.updates == 2 {
             return Err("no update".into());
         }
         Ok(())
-    }
-
-    fn draw(&self, _f: &mut Frame<'_>) {
-        trace('D');
     }
 }
 
@@ -205,14 +217,14 @@ impl Game for FailsToUpdate {
 fn an_err_from_load_returns_before_any_other_phase() {
     let (result, phases) = drive::<FailsToLoad>(&[STEP]);
     assert_eq!(result.unwrap_err().to_string(), "no load");
-    assert_eq!(phases, "");
+    assert_eq!(phases, "L");
 }
 
 #[test]
 fn an_err_from_update_stops_the_loop_at_once() {
     let (result, phases) = drive::<FailsToUpdate>(&[Duration::ZERO, STEP * 3]);
     assert_eq!(result.unwrap_err().to_string(), "no update");
-    assert_eq!(phases, "UDU");
+    assert_eq!(phases, "LUDU");
 }
 
 #[test]
@@ -241,8 +253,6 @@ impl<const QUIT_AT: u32> Game for Timed<QUIT_AT> {
         }
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 #[test]
@@ -284,7 +294,7 @@ fn staying_behind_warns_once_until_the_loop_catches_up() {
         far_behind,
         STEP,
     ];
-    let (records, _) = recorded(|| drive::<Traced<27>>(&deltas));
+    let (records, _) = recorded(|| run_frames::<Traced<27>>(&deltas));
     let warnings = records.iter().filter(|(level, _)| *level == Level::WARN);
     assert_eq!(warnings.count(), 2);
 }

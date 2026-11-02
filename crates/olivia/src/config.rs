@@ -20,6 +20,7 @@ pub struct Config {
     fullscreen: bool,
     msaa: u32,
     assets: Option<PathBuf>,
+    gravity: Vec2,
 }
 
 impl Config {
@@ -36,7 +37,20 @@ impl Config {
             fullscreen: false,
             msaa: 4,
             assets: None,
+            gravity: Vec2::new(0.0, 9.81),
         }
+    }
+
+    /// Sets the physics gravity in metres per second squared. The default is 9.81 down.
+    #[must_use]
+    pub fn gravity(mut self, x: f32, y: f32) -> Self {
+        self.gravity = Vec2::new(x, y);
+        self
+    }
+
+    #[cfg(feature = "physics")]
+    pub(crate) fn gravity_value(&self) -> Vec2 {
+        self.gravity
     }
 
     /// Sets the window title.

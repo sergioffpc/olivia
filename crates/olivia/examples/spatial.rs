@@ -7,7 +7,7 @@ use olivia::audio::{Emitter, Play, Sound};
 use olivia::input::Key;
 use olivia::math::Vec2;
 use olivia::window::WindowEvent;
-use olivia::{Config, Frame, Game, Result, Setup, Update};
+use olivia::{Config, Game, Result, Setup, Update};
 
 const NEAR: f32 = 50.0;
 const FAR: f32 = 500.0;
@@ -48,8 +48,6 @@ impl Game for Demo {
         }
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 fn main() -> Result<()> {

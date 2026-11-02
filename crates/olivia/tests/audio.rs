@@ -6,7 +6,7 @@ use std::time::Duration;
 use olivia::audio::Sound;
 use olivia::math::Vec2;
 use olivia::window::Window;
-use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
+use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 
 const TONE: &[u8] = include_bytes!("../../olivia-audio/tests/fixtures/tone.wav");
 
@@ -28,8 +28,6 @@ impl Game for Player {
         u.quit();
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 #[test]

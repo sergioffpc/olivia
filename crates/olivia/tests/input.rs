@@ -9,7 +9,7 @@ use olivia::math::Vec2;
 use olivia::window::Window;
 use olivia::window::raw::ElementState::{Pressed, Released};
 use olivia::window::raw::{KeyCode, PhysicalKey};
-use olivia::{Config, Frame, Game, GameLoop, Modules, Result, Setup, Update};
+use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 
 const STEP: Duration = Duration::from_nanos(16_666_666);
 const W: PhysicalKey = PhysicalKey::Code(KeyCode::KeyW);
@@ -36,8 +36,6 @@ impl Game for Recorder {
         STEPS.with_borrow_mut(|steps| steps.push(step));
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 /// A game past its first frame, with nothing recorded yet.

@@ -1,16 +1,23 @@
+use std::fmt;
+
 #[cfg(feature = "audio")]
 use olivia_audio::Audio;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Filesystem;
 #[cfg(feature = "graphics")]
 use olivia_graphics::Graphics;
+#[cfg(feature = "graphics")]
+use olivia_graphics::Target;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 
-use crate::{Config, Result};
+#[cfg(feature = "graphics")]
+use crate::renderer::{self, Poses};
+#[cfg(feature = "physics")]
+use crate::simulation::Simulation;
+use crate::{Config, Result, ecs};
 
 /// The modules a game's phases borrow, built from its [`Config`] before the window opens.
-#[derive(Debug)]
 pub struct Modules {
     #[cfg(feature = "audio")]
     pub(crate) audio: Audio,
@@ -20,6 +27,9 @@ pub struct Modules {
     pub(crate) graphics: Graphics,
     #[cfg(feature = "input")]
     pub(crate) input: Input,
+    #[cfg(feature = "physics")]
+    pub(crate) simulation: Simulation,
+    pub(crate) world: ecs::World,
 }
 
 impl Modules {
@@ -29,7 +39,7 @@ impl Modules {
     ///
     /// Returns the failure of a module that cannot start.
     #[cfg_attr(
-        not(any(feature = "filesystem", feature = "graphics")),
+        not(any(feature = "filesystem", feature = "graphics", feature = "physics")),
         expect(unused_variables)
     )]
     pub fn new(config: &Config) -> Result<Self> {
@@ -42,6 +52,32 @@ impl Modules {
             graphics: config.graphics(),
             #[cfg(feature = "input")]
             input: Input::default(),
+            #[cfg(feature = "physics")]
+            simulation: Simulation::new(config.gravity_value()),
+            world: ecs::World::new(),
         })
+    }
+
+    /// Draws the world `factor` of the way into the next fixed step.
+    #[cfg(feature = "graphics")]
+    #[cfg_attr(not(feature = "physics"), expect(unused_variables))]
+    pub(crate) fn render(&mut self, factor: f32) -> Target<'_> {
+        let poses = Poses {
+            #[cfg(feature = "physics")]
+            physics: &self.simulation.physics,
+            #[cfg(feature = "physics")]
+            factor,
+            #[cfg(not(feature = "physics"))]
+            world: std::marker::PhantomData,
+        };
+        let mut target = self.graphics.target();
+        renderer::render(&self.world, poses, &mut target);
+        target
+    }
+}
+
+impl fmt::Debug for Modules {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Modules").finish_non_exhaustive()
     }
 }

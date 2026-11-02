@@ -2,7 +2,7 @@
 //!
 //! Run it with `cargo run --example filesystem`, twice to see the count grow.
 
-use olivia::{Config, Frame, Game, Result, Setup, Update};
+use olivia::{Config, Game, Result, Setup, Update};
 
 const RUNS: &str = "progress/runs.txt";
 
@@ -29,8 +29,6 @@ impl Game for Demo {
         u.quit();
         Ok(())
     }
-
-    fn draw(&self, _f: &mut Frame<'_>) {}
 }
 
 fn main() -> Result<()> {

@@ -8,7 +8,7 @@ use olivia_window::{Driver, Window, WindowEvent, raw};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
-use crate::{Config, Frame, Game, Modules, Result, Setup, Timer, Update};
+use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
 
 /// Opens a window and runs `G` on it until it quits or a phase fails.
 ///
@@ -48,6 +48,8 @@ impl<G: Game> GameLoop<G> {
     /// Returns the `Err` from [`Game::load`].
     pub fn new(window: &mut Window, size: Vec2, mut modules: Modules) -> Result<Self> {
         let game = info_span!("load").in_scope(|| G::load(Setup::new(window, &mut modules)))?;
+        #[cfg(feature = "physics")]
+        modules.simulation.sync(&mut modules.world);
         Ok(Self {
             game,
             modules,
@@ -90,6 +92,9 @@ impl<G: Game> GameLoop<G> {
                 &self.quit,
             );
             trace_span!("update").in_scope(|| self.game.update(update))?;
+            #[cfg(feature = "physics")]
+            trace_span!("physics")
+                .in_scope(|| self.modules.simulation.step(&mut self.modules.world));
             self.events.clear();
             #[cfg(feature = "input")]
             self.modules.input.on_step();
@@ -99,14 +104,42 @@ impl<G: Game> GameLoop<G> {
             }
         }
 
-        self.presented = !self.is_minimized && {
-            #[cfg(feature = "graphics")]
-            self.modules.graphics.recover()?;
-            let mut frame = Frame::new(self.timer.interpolation_factor(), &mut self.modules);
-            trace_span!("draw").in_scope(|| self.game.draw(&mut frame));
-            frame.present()
-        };
+        self.presented = !self.is_minimized && self.present()?;
         Ok(true)
+    }
+
+    /// Draws the world and returns whether the frame reached the window.
+    #[cfg(feature = "graphics")]
+    fn present(&mut self) -> Result<bool> {
+        self.modules.graphics.recover()?;
+        let factor = self.timer.interpolation_factor();
+        let target = trace_span!("draw").in_scope(|| self.modules.render(factor));
+        Ok(target.present())
+    }
+
+    /// With no graphics a frame never reaches the window.
+    #[cfg(not(feature = "graphics"))]
+    #[expect(clippy::unused_self, reason = "matches the graphics version")]
+    fn present(&mut self) -> Result<bool> {
+        trace_span!("draw").in_scope(|| Ok(false))
+    }
+
+    /// How far the frame just run reached into the next fixed step, from 0 to 1.
+    pub fn interpolation_factor(&self) -> f32 {
+        self.timer.interpolation_factor()
+    }
+
+    /// What the world looks like now, as the next frame would draw it.
+    #[cfg(feature = "graphics")]
+    pub fn mesh(&mut self) -> olivia_graphics::Mesh {
+        self.modules
+            .render(self.timer.interpolation_factor())
+            .mesh()
+    }
+
+    /// The entities.
+    pub fn world(&mut self) -> &mut crate::ecs::World {
+        &mut self.modules.world
     }
 }
 

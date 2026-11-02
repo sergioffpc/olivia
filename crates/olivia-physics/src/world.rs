@@ -15,7 +15,7 @@ use crate::{Collider, ColliderHandle, Event, Pose, RigidBody, RigidBodyHandle, S
 /// The seconds one [`World::step`] simulates, at 60 Hz.
 const FIXED_STEP: f32 = 1.0 / 60.0;
 
-/// The physics simulation a game owns, in metres.
+/// The physics simulation, in metres.
 pub struct World {
     gravity: Vec2,
     parameters: IntegrationParameters,
