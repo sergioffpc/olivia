@@ -5,11 +5,13 @@
 //! usually do not.
 
 mod filesystem;
+mod watcher;
 
 use std::io;
 use std::path::PathBuf;
 
 pub use filesystem::Filesystem;
+pub use watcher::Watcher;
 
 /// A failure of this module.
 #[non_exhaustive]

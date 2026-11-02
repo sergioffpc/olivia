@@ -10,7 +10,8 @@ fn the_defaults_match_their_setters() {
         .resizable(true)
         .vsync(true)
         .fullscreen(false)
-        .msaa(4);
+        .msaa(4)
+        .hot_reload(true);
     assert_eq!(explicit, Config::new("demo"));
 }
 
@@ -24,6 +25,7 @@ fn each_setter_changes_the_config() {
     assert_ne!(base.clone().fullscreen(true), base);
     assert_ne!(base.clone().msaa(1), base);
     assert_ne!(base.clone().assets("path/to/assets"), base);
+    assert_ne!(base.clone().hot_reload(false), base);
 }
 
 #[test]

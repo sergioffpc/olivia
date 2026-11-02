@@ -19,6 +19,8 @@ allow = [
     "Zlib",
 ]
 exceptions = [
+    # What olivia-filesystem watches the source with.
+    { crate = "notify", allow = ["CC0-1.0"] },
     # A dependency of directories, which olivia-filesystem is built on.
     { crate = "option-ext", allow = ["MPL-2.0"] },
     # The decoders and audio thread of kira, which olivia-audio is built on.

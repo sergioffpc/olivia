@@ -1,4 +1,6 @@
 use std::fmt;
+#[cfg(feature = "filesystem")]
+use std::mem;
 
 #[cfg(feature = "audio")]
 use olivia_audio::Audio;
@@ -30,6 +32,18 @@ pub struct Modules {
     #[cfg(feature = "physics")]
     pub(crate) simulation: Simulation,
     pub(crate) world: ecs::World,
+    #[cfg(feature = "filesystem")]
+    pub(crate) config: Config,
+}
+
+/// What a game leaves behind in the modules, and a hot reload starts over.
+#[cfg(feature = "filesystem")]
+pub(crate) struct Stage {
+    #[cfg(feature = "audio")]
+    audio: Audio,
+    #[cfg(feature = "physics")]
+    simulation: Simulation,
+    world: ecs::World,
 }
 
 impl Modules {
@@ -55,7 +69,32 @@ impl Modules {
             #[cfg(feature = "physics")]
             simulation: Simulation::new(config.gravity_value()),
             world: ecs::World::new(),
+            #[cfg(feature = "filesystem")]
+            config: config.clone(),
         })
+    }
+
+    /// A stage as it is before a game loads.
+    #[cfg(feature = "filesystem")]
+    #[cfg_attr(not(feature = "physics"), expect(clippy::unused_self))]
+    pub(crate) fn empty_stage(&self) -> Stage {
+        Stage {
+            #[cfg(feature = "audio")]
+            audio: Audio::default(),
+            #[cfg(feature = "physics")]
+            simulation: Simulation::new(self.config.gravity_value()),
+            world: ecs::World::new(),
+        }
+    }
+
+    /// Trades the stage in use for `stage`.
+    #[cfg(feature = "filesystem")]
+    pub(crate) fn swap_stage(&mut self, stage: &mut Stage) {
+        #[cfg(feature = "audio")]
+        mem::swap(&mut self.audio, &mut stage.audio);
+        #[cfg(feature = "physics")]
+        mem::swap(&mut self.simulation, &mut stage.simulation);
+        mem::swap(&mut self.world, &mut stage.world);
     }
 
     /// Draws the world `factor` of the way into the next fixed step.

@@ -41,11 +41,15 @@ pub type Result<T = (), E = Box<dyn std::error::Error + Send + Sync>> = std::res
 
 /// A game: the phases Olivia drives around the [world](ecs) it simulates and draws.
 pub trait Game: Sized {
-    /// Builds the game. Runs once, after the window exists and before anything else.
+    /// Builds the game. Runs after the window exists and before anything else.
+    ///
+    /// With [hot reload](Config::hot_reload) it runs again whenever the source changes, on an empty
+    /// world, empty physics and fresh audio, and what it returns replaces the game.
     ///
     /// # Errors
     ///
-    /// An `Err` stops the loop and returns from [`run`].
+    /// An `Err` stops the loop and returns from [`run`]. On a hot reload it is logged instead, and
+    /// the running game carries on until the next change.
     fn load(s: Setup<'_>) -> Result<Self>;
 
     /// Advances the game by one fixed step.

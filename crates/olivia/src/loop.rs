@@ -3,10 +3,14 @@ use std::time::Duration;
 
 #[cfg(feature = "animation")]
 use olivia_animation::Character;
+#[cfg(feature = "filesystem")]
+use olivia_filesystem::Watcher;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 use olivia_math::Vec2;
 use olivia_window::{Driver, Window, WindowEvent, raw};
+#[cfg(feature = "filesystem")]
+use tracing::{error, info, warn};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
@@ -40,6 +44,20 @@ pub struct GameLoop<G> {
     is_minimized: bool,
     /// Whether the last frame reached the window, so the clock leaves its pace to vsync.
     presented: bool,
+    /// The window's logical size, which a reloaded game has to be told.
+    #[cfg(feature = "filesystem")]
+    size: Vec2,
+    /// Present when hot reload is on.
+    #[cfg(feature = "filesystem")]
+    watcher: Option<Watcher>,
+}
+
+/// Runs [`Game::load`] on `modules`, and gives its entities their bodies.
+fn load<G: Game>(window: &mut Window, modules: &mut Modules) -> Result<G> {
+    let game = info_span!("load").in_scope(|| G::load(Setup::new(window, modules)))?;
+    #[cfg(feature = "physics")]
+    modules.simulation.sync(&mut modules.world);
+    Ok(game)
 }
 
 impl<G: Game> GameLoop<G> {
@@ -49,9 +67,21 @@ impl<G: Game> GameLoop<G> {
     ///
     /// Returns the `Err` from [`Game::load`].
     pub fn new(window: &mut Window, size: Vec2, mut modules: Modules) -> Result<Self> {
-        let game = info_span!("load").in_scope(|| G::load(Setup::new(window, &mut modules)))?;
-        #[cfg(feature = "physics")]
-        modules.simulation.sync(&mut modules.world);
+        // Started before loading, so a change during the load is not missed.
+        #[cfg(feature = "filesystem")]
+        let watcher = modules
+            .config
+            .hot_reload_value()
+            .then(|| modules.filesystem.watch());
+        #[cfg(feature = "filesystem")]
+        let watcher = watcher.and_then(|watcher| {
+            watcher
+                .inspect_err(
+                    |error| warn!(%error, "hot reload is off, the source cannot be watched"),
+                )
+                .ok()
+        });
+        let game = load(window, &mut modules)?;
         Ok(Self {
             game,
             modules,
@@ -61,6 +91,10 @@ impl<G: Game> GameLoop<G> {
             events: vec![WindowEvent::Resized(size)],
             is_minimized: false,
             presented: false,
+            #[cfg(feature = "filesystem")]
+            size,
+            #[cfg(feature = "filesystem")]
+            watcher,
         })
     }
 
@@ -68,6 +102,10 @@ impl<G: Game> GameLoop<G> {
     pub fn push(&mut self, event: WindowEvent) {
         if let WindowEvent::Minimized(is_minimized) = event {
             self.is_minimized = is_minimized;
+        }
+        #[cfg(feature = "filesystem")]
+        if let WindowEvent::Resized(size) = event {
+            self.size = size;
         }
         self.events.push(event);
     }
@@ -85,6 +123,8 @@ impl<G: Game> GameLoop<G> {
     /// Returns the first `Err` from [`Game::update`], or a `graphics::Error` if the GPU is lost and
     /// cannot be brought back.
     pub fn run_frame(&mut self, frame_time: Duration, window: &mut Window) -> Result<bool> {
+        #[cfg(feature = "filesystem")]
+        self.reload_if_changed(window);
         for _ in 0..self.timer.steps_for_frame(frame_time) {
             let update = Update::new(
                 window,
@@ -114,6 +154,27 @@ impl<G: Game> GameLoop<G> {
         Ok(true)
     }
 
+    /// Loads the game again if the source has changed.
+    #[cfg(feature = "filesystem")]
+    fn reload_if_changed(&mut self, window: &mut Window) {
+        if !self.watcher.as_mut().is_some_and(Watcher::changed) {
+            return;
+        }
+        let mut stage = self.modules.empty_stage();
+        self.modules.swap_stage(&mut stage);
+        match load(window, &mut self.modules) {
+            Ok(game) => {
+                self.game = game;
+                self.events.push(WindowEvent::Resized(self.size));
+                info!("reloaded the game");
+            }
+            Err(error) => {
+                self.modules.swap_stage(&mut stage);
+                error!(%error, "the game could not reload, it carries on as it was");
+            }
+        }
+    }
+
     /// Draws the world and returns whether the frame reached the window.
     #[cfg(feature = "graphics")]
     fn present(&mut self) -> Result<bool> {
@@ -141,6 +202,11 @@ impl<G: Game> GameLoop<G> {
         self.modules
             .render(self.timer.interpolation_factor())
             .mesh()
+    }
+
+    /// The game.
+    pub fn game(&self) -> &G {
+        &self.game
     }
 
     /// The entities.
