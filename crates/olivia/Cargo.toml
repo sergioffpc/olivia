@@ -5,16 +5,19 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["filesystem", "graphics", "input"]
+default = ["filesystem", "graphics", "input", "physics"]
 filesystem = ["dep:olivia-filesystem"]
 graphics = ["dep:olivia-graphics"]
 input = ["dep:olivia-input"]
+physics = ["dep:olivia-physics"]
+enhanced-determinism = ["olivia-physics?/enhanced-determinism"]
 
 [dependencies]
 olivia-filesystem = { workspace = true, optional = true }
 olivia-graphics = { workspace = true, optional = true }
 olivia-input = { workspace = true, optional = true }
 olivia-math.workspace = true
+olivia-physics = { workspace = true, optional = true }
 olivia-window.workspace = true
 tracing.workspace = true
 
