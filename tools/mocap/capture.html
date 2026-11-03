@@ -117,7 +117,7 @@ const COUNTDOWN = 3;
 // The movement cards of games/astronaut-cat/docs/cards.md.
 const CARDS = [
   { name: "Standing still", who: "the hero", does: "stands waiting", loops: true, file: "hero/anim_idle.json" },
-  { name: "Walking", who: "the hero", does: "walks on the spot, facing the camera", loops: true, file: "hero/anim_walk.json" },
+  { name: "Walking", who: "the hero", does: "walks on the spot", loops: true, file: "hero/anim_walk.json" },
   { name: "Jumping", who: "the hero", does: "does a jump", loops: false, file: "hero/anim_jump.json" },
   { name: "Extra jump", who: "the hero", does: "does a second jump in the air", loops: false, file: "hero/anim_double_jump.json" },
   { name: "Firing", who: "the hero", does: "fires with the launcher in hand", loops: false, file: "hero/anim_shoot.json" },
@@ -136,8 +136,7 @@ const JOINTS = [
 // The sheet's pose as raw joint angles: upright with every part hanging straight down.
 const REST = { root: -Math.PI / 2, neck: 0, shoulder: Math.PI, elbow: 0, hip: Math.PI, knee: 0 };
 
-// MediaPipe landmarks. With the image mirrored, the body's left is on the left of the screen,
-// where the sheet draws the parts named left.
+// MediaPipe landmarks. Filmed side-on, the near side becomes the parts named right.
 const NOSE = 0, EAR_LEFT = 7, EAR_RIGHT = 8;
 const LEFT = { shoulder: 11, elbow: 13, wrist: 15, hip: 23, knee: 25, ankle: 27 };
 const RIGHT = { shoulder: 12, elbow: 14, wrist: 16, hip: 24, knee: 26, ankle: 28 };
@@ -163,9 +162,24 @@ const fmt = (s) => `${s.toFixed(2)} s`;
 
 // ---------- Angles ----------
 
+const middle = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const mean = (values) => values.reduce((a, b) => a + b, 0) / values.length;
+
+/** Mirrors every pose if the nose is mostly left of the ears, so the body faces right. */
+function faceRight(poses) {
+  const facing = middle(poses.map((p) => p[NOSE][0] - (p[EAR_LEFT][0] + p[EAR_RIGHT][0]) / 2));
+  return facing >= 0 ? poses : poses.map((p) => p.map(([x, y]) => [-x, y]));
+}
+
+/** The body side closer to the camera. Visibility only chooses a side, never rejects points. */
+function nearSide(visibilities) {
+  const seen = (side) => mean(visibilities.flatMap((v) => Object.values(side).map((i) => v[i])));
+  return seen(LEFT) > seen(RIGHT) ? LEFT : RIGHT;
+}
+
 /** Raw joint angles of one pose, one per entry of JOINTS, before the sheet's rest is taken off. */
-function jointAngles(points, swap) {
-  const [left, right] = swap ? [RIGHT, LEFT] : [LEFT, RIGHT];
+function jointAngles(points, near) {
+  const [left, right] = [near === LEFT ? RIGHT : LEFT, near];
   const hips = mid(points[LEFT.hip], points[RIGHT.hip]);
   const shoulders = mid(points[LEFT.shoulder], points[RIGHT.shoulder]);
   const ears = mid(points[EAR_LEFT], points[EAR_RIGHT]);
@@ -215,6 +229,22 @@ function gaussian(column, sigma) {
   });
 }
 
+/** Moves continuous angles by whole turns, to bring their median near `centre`. */
+function withinHalfATurn(column, centre) {
+  const turns = Math.round((middle(column) - centre) / (2 * Math.PI));
+  return column.map((a) => a - 2 * Math.PI * turns);
+}
+
+/**
+ * Facing right, a forearm only folds forwards (anticlockwise) and a shin only backwards. Each column
+ * first moves to the turn around its joint's bend, or a recording starting fully folded would flatten.
+ */
+function bendOneWay(column, joint) {
+  if (joint.startsWith("elbow")) return withinHalfATurn(column, -Math.PI / 2).map((a) => Math.min(a, 0));
+  if (joint.startsWith("knee")) return withinHalfATurn(column, Math.PI / 2).map((a) => Math.max(a, 0));
+  return column;
+}
+
 function interpolate(times, column, t) {
   let i = 0;
   while (i < times.length - 2 && times[i + 1] < t) i++;
@@ -231,10 +261,12 @@ function animate(frames, settings) {
   const posed = frames.filter((f) => f.points && f.t >= settings.start && f.t <= settings.end);
   if (posed.length < 2) return null;
   const times = posed.map((f) => f.t);
-  const raw = posed.map((f) => jointAngles(f.points, settings.swap));
-  const steps = times.slice(1).map((t, i) => t - times[i]).sort((a, b) => a - b);
-  const sigma = settings.smooth / steps[Math.floor(steps.length / 2)];
-  const columns = JOINTS.map((_, j) => gaussian(median(unwrap(raw.map((r) => r[j])), MEDIAN_FRAMES), sigma));
+  let near = nearSide(posed.map((f) => f.visibility));
+  if (settings.swap) near = near === LEFT ? RIGHT : LEFT;
+  const raw = faceRight(posed.map((f) => f.points)).map((points) => jointAngles(points, near));
+  const sigma = settings.smooth / middle(times.slice(1).map((t, i) => t - times[i]));
+  const columns = JOINTS.map((joint, j) =>
+    bendOneWay(gaussian(median(unwrap(raw.map((r) => r[j])), MEDIAN_FRAMES), sigma), joint));
 
   const step = settings.speed / FPS;
   const count = Math.floor((times.at(-1) - times[0]) / step + 1e-9) + 1;
@@ -443,7 +475,10 @@ function detect(now) {
   const marks = landmarker.detectForVideo(video, now).landmarks[0];
   if (!marks) return null;
   const { videoWidth: w, videoHeight: h } = video;
-  return { points: marks.map((m) => [(1 - m.x) * w, m.y * h]), seen: NEEDED.every((i) => marks[i].visibility > 0.5) };
+  const visibility = marks.map((m) => m.visibility);
+  const near = nearSide([visibility]);
+  const seen = [NOSE, ...Object.values(near)].every((i) => visibility[i] > 0.5);
+  return { points: marks.map((m) => [(1 - m.x) * w, m.y * h]), visibility, seen };
 }
 
 function tick(now) {
@@ -457,7 +492,7 @@ function tick(now) {
 
   if (mode === "live") {
     if (!lastPoints) status("liveStatus", "No one in view.", true);
-    else if (!lastPoints.seen) status("liveStatus", "Step back: the whole body, feet included, must be seen.", true);
+    else if (!lastPoints.seen) status("liveStatus", "Stand side-on and step back: the whole body, feet included, must be seen.", true);
     else status("liveStatus", "Ready.");
   } else if (mode === "countdown") {
     const left = Math.ceil((countdownEnd - now) / 1000);
@@ -472,7 +507,7 @@ function tick(now) {
   if (mode === "recording") {
     const t = (now - recordStart) / 1000;
     if (pose !== undefined) {
-      const frame = { t, points: pose?.points ?? null, image: null };
+      const frame = { t, points: pose?.points ?? null, visibility: pose?.visibility, image: null };
       frames.push(frame);
       createImageBitmap(video, { resizeWidth: 480, resizeHeight: Math.round(480 * video.videoHeight / video.videoWidth) })
         .then((image) => (frame.image = image));
