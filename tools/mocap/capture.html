@@ -51,7 +51,15 @@
   <h1>Mocap capture</h1>
 
   <section>
-    <h2>1 · Movement</h2>
+    <h2>1 · Assets folder</h2>
+    <div class="row">
+      <button id="pickFolder" class="primary">Choose folder</button>
+      <span id="folderStatus" class="status">Choose the game's assets folder, such as games/astronaut-cat/assets.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Movement</h2>
     <div class="row">
       <select id="card"></select>
       <span id="cardInfo" class="card"></span>
@@ -59,7 +67,7 @@
   </section>
 
   <section id="live">
-    <h2>2 · Camera</h2>
+    <h2>3 · Camera</h2>
     <canvas id="liveCanvas" width="640" height="480"></canvas>
     <div class="row" style="margin-top:10px">
       <button id="record" class="rec" disabled>Record</button>
@@ -69,7 +77,7 @@
   </section>
 
   <section id="review" hidden>
-    <h2>3 · Review</h2>
+    <h2>4 · Review</h2>
     <div class="views">
       <canvas id="frameCanvas" width="640" height="480"></canvas>
       <canvas id="figureCanvas" width="640" height="480"></canvas>
@@ -95,7 +103,7 @@
   </section>
 
   <section id="save" hidden>
-    <h2>4 · Save</h2>
+    <h2>5 · Save</h2>
     <div class="row">
       <button id="saveButton" class="primary">Save</button>
       <button id="again">Record again</button>
@@ -406,6 +414,10 @@ let lastPoints = null;
 let folder = null;
 
 const card = () => CARDS[$("card").value];
+// The folders under assets that the cards write into.
+const FOLDERS = [...new Set(CARDS.map((c) => c.file.split("/")[0]))];
+// Browsers without folder access, such as Firefox and Safari, download the file instead.
+const canWrite = "showDirectoryPicker" in window;
 
 for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.file})`, i));
 JOINTS.forEach((joint) => {
@@ -456,11 +468,15 @@ async function start() {
       runningMode: "VIDEO",
       numPoses: 1,
     });
-    $("record").disabled = false;
+    updateRecord();
     requestAnimationFrame(tick);
   } catch (error) {
     status("liveStatus", `Cannot start: ${error.message}`, true);
   }
+}
+
+function updateRecord() {
+  $("record").disabled = !landmarker || (canWrite && !folder);
 }
 
 function status(id, text, warn = false) {
@@ -645,32 +661,72 @@ function animationFile() {
   return JSON.stringify({ version: 1, fps: FPS, joints: saved, rows: result.rows.map((row) => columns.map((j) => row[j])) });
 }
 
+// ---------- Folder ----------
+
+if (!canWrite) {
+  $("pickFolder").hidden = true;
+  status("folderStatus", "This browser cannot write to a folder: Save downloads the file instead.");
+} else if (window.top !== window.self) {
+  // Embedded browsers, such as VS Code's Simple Browser, abort the folder picker without showing it.
+  status("folderStatus", "Open this page in Chrome or Edge: a browser embedded in another app cannot show the folder picker.", true);
+}
+
+$("pickFolder").addEventListener("click", async () => {
+  // A second click while the picker is open would fail with "File picker already active".
+  $("pickFolder").disabled = true;
+  try {
+    // Ask for the folder and for writing apart, so a refused write says so instead of aborting the picker.
+    const picked = await window.showDirectoryPicker({ id: "assets" });
+    const missing = [];
+    for (const name of FOLDERS) {
+      await picked.getDirectoryHandle(name).catch(() => missing.push(name));
+    }
+    if (missing.length) {
+      status("folderStatus", `${picked.name} is not the assets folder: it has no ${missing.join("/, ")}/ folder.`, true);
+    } else if ((await picked.requestPermission({ mode: "readwrite" })) !== "granted") {
+      status("folderStatus", `Chrome was not allowed to edit ${picked.name}/: choose it again and allow editing.`, true);
+    } else {
+      folder = picked;
+      $("pickFolder").textContent = "Change folder";
+      $("pickFolder").classList.remove("primary");
+      status("folderStatus", `Saving into ${folder.name}/.`);
+    }
+  } catch (error) {
+    status("folderStatus", `Cannot use the folder: ${error.name}: ${error.message}`, true);
+  } finally {
+    $("pickFolder").disabled = false;
+    updateRecord();
+  }
+});
+
+// ---------- Save ----------
+
 $("saveButton").addEventListener("click", async () => {
   if (savedJoints().size === 0) return status("saveStatus", "Pick at least one joint.", true);
   const path = card().file;
   const text = animationFile();
-  if (!window.showDirectoryPicker) {
+  if (!canWrite) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     link.download = path.split("/").pop();
     link.click();
     return status("saveStatus", `Downloaded ${link.download}: move it to the game's assets/${path}.`);
   }
-  // A second click while the picker is open would fail with "File picker already active".
+  if (!folder) return status("saveStatus", "Choose the assets folder in step 1 first.", true);
   $("saveButton").disabled = true;
-  if (!folder) status("saveStatus", "Choose the game's assets folder…");
   try {
-    folder ??= await window.showDirectoryPicker({ id: "assets", mode: "readwrite" });
-    const [who, name] = path.split("/");
-    const dir = await folder.getDirectoryHandle(who, { create: true });
+    // The permission can lapse, such as after the tab sat in the background.
+    if ((await folder.requestPermission({ mode: "readwrite" })) !== "granted") {
+      return status("saveStatus", "Not saved: Chrome was not allowed to edit the folder.", true);
+    }
+    const [dirName, name] = path.split("/");
+    const dir = await folder.getDirectoryHandle(dirName);
     const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
     await writable.write(text);
     await writable.close();
     status("saveStatus", `Saved ${folder.name}/${path}.`);
   } catch (error) {
-    // Chrome also aborts when the "edit files" prompt after the picker is refused.
-    if (error.name === "AbortError") status("saveStatus", "Not saved: no folder chosen, or Chrome was not allowed to edit it.", true);
-    else status("saveStatus", `Cannot save: ${error.message}`, true);
+    status("saveStatus", `Cannot save: ${error.message}`, true);
   } finally {
     $("saveButton").disabled = false;
   }
