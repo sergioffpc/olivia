@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   Photographs a box of a drawing sheet, cuts it out and saves it as the game's picture.
-  Serve it from localhost, where the browser allows the camera:
-    python3 -m http.server 8002 --directory tools/picture
-  then open http://localhost:8002/capture.html.
+  Open it from the tools page, tools/index.html, which chooses the assets folder:
+    python3 -m http.server 8000 --directory tools
+  then open http://localhost:8000/#picture.
 -->
 <html lang="en">
 <head>
@@ -18,7 +18,6 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
   main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-  h1 { font-size: 18px; margin: 0; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
   h3 { font-size: 12px; color: var(--dim); font-weight: normal; margin: 0 0 4px; }
   h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0; grid-column: 1 / -1; }
@@ -57,18 +56,8 @@
 </head>
 <body>
 <main>
-  <h1>Picture capture</h1>
-
   <section>
-    <h2>1 · Assets folder</h2>
-    <div class="row">
-      <button id="pickFolder" class="primary">Choose folder</button>
-      <span id="folderStatus" class="status">Choose the game's assets folder, such as games/astronaut-cat/assets.</span>
-    </div>
-  </section>
-
-  <section>
-    <h2>2 · Picture</h2>
+    <h2>1 · Picture</h2>
     <div class="row">
       <select id="card"></select>
       <span id="cardInfo" class="card"></span>
@@ -76,7 +65,7 @@
   </section>
 
   <section id="live">
-    <h2>3 · Photo</h2>
+    <h2>2 · Photo</h2>
     <canvas id="liveCanvas" width="960" height="540"></canvas>
     <div class="row" style="margin-top:10px">
       <select id="camera" title="Camera"></select>
@@ -89,7 +78,7 @@
   </section>
 
   <section id="review" hidden>
-    <h2>4 · Review</h2>
+    <h2>3 · Review</h2>
     <div class="views">
       <div>
         <h3>Photo: drag the corners onto the box's corners</h3>
@@ -176,7 +165,7 @@
   </section>
 
   <section id="save" hidden>
-    <h2>5 · Save</h2>
+    <h2>4 · Save</h2>
     <div class="row">
       <button id="saveButton" class="primary">Save</button>
       <button id="again">Take another photo</button>
@@ -940,8 +929,6 @@ let dragging = -1;
 let folder = null;
 
 const card = () => CARDS[$("card").value];
-// The folders under assets that the cards write into.
-const FOLDERS = [...new Set(CARDS.flatMap(files).filter((f) => f.includes("/")).map((f) => f.split("/")[0]))];
 // Browsers without folder access, such as Firefox and Safari, download the files instead.
 const canWrite = "showDirectoryPicker" in window;
 
@@ -1051,7 +1038,7 @@ function tick() {
   // Finding the box every few frames keeps the preview smooth.
   if (frame++ % 3 === 0) liveQuad = findBox(video, 480);
   if (liveQuad) drawQuad(live, liveQuad, canvas.width / vw, "#5ee08a");
-  if (canWrite && !folder) status("liveStatus", "Choose the assets folder in step 1 first.", true);
+  if (canWrite && !folder) status("liveStatus", "Choose the assets folder at the top first.", true);
   else if (liveQuad) status("liveStatus", "Box found: take the photo.");
   else status("liveStatus", "Looking for the box…", true);
 }
@@ -1229,40 +1216,12 @@ $("photoCanvas").addEventListener("pointerup", () => {
 
 // ---------- Folder ----------
 
-if (!canWrite) {
-  $("pickFolder").hidden = true;
-  status("folderStatus", "This browser cannot write to a folder: Save downloads the files instead.");
-} else if (window.top !== window.self) {
-  // Embedded browsers, such as VS Code's Simple Browser, abort the folder picker without showing it.
-  status("folderStatus", "Open this page in Chrome or Edge: a browser embedded in another app cannot show the folder picker.", true);
-}
-
-$("pickFolder").addEventListener("click", async () => {
-  // A second click while the picker is open would fail with "File picker already active".
-  $("pickFolder").disabled = true;
-  try {
-    // Ask for the folder and for writing apart, so a refused write says so instead of aborting the picker.
-    const picked = await window.showDirectoryPicker({ id: "assets" });
-    const missing = [];
-    for (const name of FOLDERS) {
-      await picked.getDirectoryHandle(name).catch(() => missing.push(name));
-    }
-    if (missing.length) {
-      status("folderStatus", `${picked.name} is not the assets folder: it has no ${missing.join("/, ")}/ folder.`, true);
-    } else if ((await picked.requestPermission({ mode: "readwrite" })) !== "granted") {
-      status("folderStatus", `Chrome was not allowed to edit ${picked.name}/: choose it again and allow editing.`, true);
-    } else {
-      folder = picked;
-      $("pickFolder").textContent = "Change folder";
-      $("pickFolder").classList.remove("primary");
-      status("folderStatus", `Saving into ${folder.name}/.`);
-    }
-  } catch (error) {
-    status("folderStatus", `Cannot use the folder: ${error.name}: ${error.message}`, true);
-  } finally {
-    $("pickFolder").disabled = false;
-    updateCapture();
-  }
+// The tools page chooses the assets folder for every page and hands it over.
+if (window.parent === window) location.replace("../#picture");
+addEventListener("message", (event) => {
+  if (event.origin !== location.origin || !("folder" in event.data)) return;
+  folder = event.data.folder;
+  updateCapture();
 });
 
 // ---------- Save ----------
@@ -1297,7 +1256,7 @@ $("saveButton").addEventListener("click", async () => {
     const warning = c.limb ? ` skeleton.json is not updated, so the ${c.limb.joint}s may sit a little off.` : "";
     return status("saveStatus", `Downloaded: move them to the game's ${moved}.${warning}`, !!c.limb);
   }
-  if (!folder) return status("saveStatus", "Choose the assets folder in step 1 first.", true);
+  if (!folder) return status("saveStatus", "Choose the assets folder at the top first.", true);
   $("saveButton").disabled = true;
   try {
     // The permission can lapse, such as after the tab sat in the background.

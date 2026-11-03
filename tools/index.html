@@ -1,0 +1,165 @@
+<!doctype html>
+<!--
+  Opens the pages that make and check the game's files, with one assets folder for all of them.
+  Serve it from localhost, where the browser allows the camera and the microphone:
+    python3 -m http.server 8000 --directory tools
+  then open http://localhost:8000/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools</title>
+<style>
+  :root { --bg: #14161a; --panel: #1d2026; --line: #2c3038; --text: #e8e9ec; --dim: #9096a0; --accent: #ffb547; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 18px; margin: 0; }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--dim); text-decoration: none; padding: 6px 12px; border-radius: 6px; }
+  nav a:hover { color: var(--text); }
+  nav a[aria-current=page] { color: var(--text); background: #262a31; }
+  .folder { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-left: auto; }
+  button {
+    font: inherit; color: var(--text); background: #262a31; border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; cursor: pointer;
+  }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  .status { color: var(--dim); }
+  .status.warn { color: var(--accent); }
+  iframe { flex: 1; width: 100%; border: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tools</h1>
+  <nav>
+    <a href="#mocap">Mocap</a>
+    <a href="#sound">Sound</a>
+    <a href="#picture">Picture</a>
+    <a href="#preview">Preview</a>
+  </nav>
+  <div class="folder">
+    <span id="folderStatus" class="status">Choose the game's assets folder, such as games/astronaut-cat/assets.</span>
+    <button id="pickFolder" class="primary">Choose assets folder</button>
+    <label id="pickFilesLabel" hidden><input id="pickFiles" type="file" webkitdirectory></label>
+  </div>
+</header>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+
+const PAGES = {
+  mocap: "mocap/capture.html",
+  sound: "sound/capture.html",
+  picture: "picture/capture.html",
+  preview: "preview/preview.html",
+};
+// The folders under assets that the pages write into.
+const FOLDERS = ["fx", "hero", "hud", "level", "princess", "sfx"];
+// Browsers without folder access, such as Firefox and Safari, save by downloading, and the preview
+// plays the files chosen with a file picker.
+const canPick = "showDirectoryPicker" in window;
+
+// What every page gets: { folder } with folder access, or { files } without.
+let chosen = null;
+const frames = new Map();
+
+function status(text, warn = false) {
+  $("folderStatus").textContent = text;
+  $("folderStatus").classList.toggle("warn", warn);
+}
+
+function send(frame) {
+  if (chosen) frame.contentWindow.postMessage(chosen, location.origin);
+}
+
+// ---------- Pages ----------
+
+/** Shows a page, loading it the first time; the others keep what was done on them. */
+function show() {
+  const name = location.hash.slice(1) in PAGES ? location.hash.slice(1) : "mocap";
+  if (!frames.has(name)) {
+    const frame = document.createElement("iframe");
+    frame.src = PAGES[name];
+    frame.title = name;
+    frame.allow = "camera; microphone";
+    frame.addEventListener("load", () => send(frame));
+    document.body.append(frame);
+    frames.set(name, frame);
+  }
+  for (const [other, frame] of frames) frame.hidden = other !== name;
+  for (const link of document.querySelectorAll("nav a")) {
+    if (link.hash === `#${name}`) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  // The keys of the preview go to the page shown.
+  frames.get(name).contentWindow.focus();
+}
+addEventListener("hashchange", show);
+show();
+
+// ---------- Folder ----------
+
+function use(value, text) {
+  chosen = value;
+  for (const frame of frames.values()) send(frame);
+  status(text);
+}
+
+if (!canPick) {
+  $("pickFolder").hidden = true;
+  $("pickFilesLabel").hidden = false;
+  status("This browser cannot write to a folder: the pages download the files instead. Choose the assets folder for the preview, again after a change.");
+} else if (window.top !== window.self) {
+  // Embedded browsers, such as VS Code's Simple Browser, abort the folder picker without showing it.
+  status("Open this page in Chrome or Edge: a browser embedded in another app cannot show the folder picker.", true);
+}
+
+$("pickFolder").addEventListener("click", async () => {
+  // A second click while the picker is open would fail with "File picker already active".
+  $("pickFolder").disabled = true;
+  try {
+    // Ask for the folder and for writing apart, so a refused write says so instead of aborting the picker.
+    const picked = await window.showDirectoryPicker({ id: "assets" });
+    const missing = [];
+    for (const name of FOLDERS) {
+      await picked.getDirectoryHandle(name).catch(() => missing.push(name));
+    }
+    if (missing.length) {
+      status(`${picked.name} is not the assets folder: it has no ${missing.join("/, ")}/ folder.`, true);
+    } else if ((await picked.requestPermission({ mode: "readwrite" })) !== "granted") {
+      status(`Chrome was not allowed to edit ${picked.name}/: choose it again and allow editing.`, true);
+    } else {
+      $("pickFolder").textContent = "Change folder";
+      $("pickFolder").classList.remove("primary");
+      use({ folder: picked }, `Saving into ${picked.name}/, which the preview watches.`);
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") status(`Cannot use the folder: ${error.name}: ${error.message}`, true);
+  } finally {
+    $("pickFolder").disabled = false;
+  }
+});
+
+$("pickFiles").addEventListener("change", () => {
+  // Each path starts with the chosen folder's name.
+  const files = [...$("pickFiles").files].map((file) => [file.webkitRelativePath.split("/").slice(1).join("/"), file]);
+  if (!files.some(([path]) => path.endsWith("/skeleton.json"))) {
+    return status("That is not the assets folder: none of its folders has a skeleton.json.", true);
+  }
+  use({ files }, "Playing the chosen folder in the preview. Choose it again to see a change.");
+});
+</script>
+</body>
+</html>

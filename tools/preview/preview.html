@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   Plays a character's pictures with one of its movements and a sound, as the game does.
-  Serve it from localhost:
-    python3 -m http.server 8003 --directory tools/preview
-  then open http://localhost:8003/preview.html.
+  Open it from the tools page, tools/index.html, which chooses the assets folder:
+    python3 -m http.server 8000 --directory tools
+  then open http://localhost:8000/#preview.
 -->
 <html lang="en">
 <head>
@@ -18,7 +18,6 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
   main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-  h1 { font-size: 18px; margin: 0; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -48,19 +47,10 @@
 </head>
 <body>
 <main>
-  <h1>Preview</h1>
-
-  <section>
-    <h2>1 · Assets folder</h2>
-    <div class="row">
-      <button id="pickFolder" class="primary">Choose folder</button>
-      <label id="pickFilesLabel" hidden><input id="pickFiles" type="file" webkitdirectory></label>
-      <span id="folderStatus" class="status">Choose the game's assets folder, such as games/astronaut-cat/assets.</span>
-    </div>
-  </section>
+  <p id="waiting" class="status">Choose the game's assets folder at the top to play what it holds.</p>
 
   <section id="choose" hidden>
-    <h2>2 · Pictures, movement and sound</h2>
+    <h2>1 · Pictures, movement and sound</h2>
     <div class="picks">
       <label><span>Pictures</span><select id="character"></select></label>
       <label><span>Movement</span><select id="animation"></select></label>
@@ -74,7 +64,7 @@
   </section>
 
   <section id="stageSection" hidden>
-    <h2>3 · Play</h2>
+    <h2>2 · Play</h2>
     <canvas id="stage" width="1280" height="720"></canvas>
     <canvas id="timeline" width="1280" height="110"></canvas>
     <div class="row" style="margin-top:10px">
@@ -94,7 +84,7 @@
   </section>
 
   <section id="settingsSection" hidden>
-    <h2>4 · Settings</h2>
+    <h2>3 · Settings</h2>
     <div class="settings">
       <label><span>Speed <b id="speedOut"></b></span><input id="speed" type="range" min="0.1" max="2" step="0.05" value="1"></label>
       <label class="check"><input id="loop" type="checkbox"> Loops</label>
@@ -423,48 +413,22 @@ function fire() {
 
 // ---------- Folder ----------
 
-const canPick = "showDirectoryPicker" in window;
-if (!canPick) {
-  $("pickFolder").hidden = true;
-  $("pickFilesLabel").hidden = false;
-  status("folderStatus", "Choose the game's assets folder. This browser cannot watch it: choose it again after a change.");
-} else if (window.top !== window.self) {
-  status("folderStatus", "Open this page in Chrome or Edge: a browser embedded in another app cannot show the folder picker.", true);
-}
-
-$("pickFolder").addEventListener("click", async () => {
-  audio();
-  $("pickFolder").disabled = true;
-  try {
-    const picked = await window.showDirectoryPicker({ id: "assets", mode: "read" });
-    const found = await list(picked);
-    if (![...found.keys()].some((path) => path.endsWith("/skeleton.json"))) {
-      return status("folderStatus", `${picked.name} is not the assets folder: none of its folders has a skeleton.json.`, true);
-    }
-    root = picked;
-    files = found;
-    loaded.clear();
-    $("pickFolder").textContent = "Change folder";
-    $("pickFolder").classList.remove("primary");
-    status("folderStatus", `Playing from ${picked.name}/. Saving from the other pages shows here straight away.`);
-    await opened();
-  } catch (error) {
-    if (error.name !== "AbortError") status("folderStatus", `Cannot use the folder: ${error.name}: ${error.message}`, true);
-  } finally {
-    $("pickFolder").disabled = false;
+// The tools page chooses the assets folder for every page and hands it over: the folder, which is
+// watched, or without folder access its files, which are chosen again after a change.
+if (window.parent === window) location.replace("../#preview");
+addEventListener("message", async (event) => {
+  if (event.origin !== location.origin) return;
+  if ("folder" in event.data) {
+    root = event.data.folder;
+    files = root ? await list(root) : new Map();
+  } else if ("files" in event.data) {
+    root = null;
+    files = new Map(event.data.files.map(([path, file]) => [path, { file }]));
+  } else {
+    return;
   }
-});
-
-$("pickFiles").addEventListener("change", async () => {
-  audio();
-  // Each path starts with the chosen folder's name.
-  files = new Map([...$("pickFiles").files].map((file) => [file.webkitRelativePath.split("/").slice(1).join("/"), { file }]));
   loaded.clear();
-  if (![...files.keys()].some((path) => path.endsWith("/skeleton.json"))) {
-    return status("folderStatus", "That is not the assets folder: none of its folders has a skeleton.json.", true);
-  }
-  status("folderStatus", "Playing from the chosen folder. Choose it again to see a change.");
-  await opened();
+  if (files.size) await opened();
 });
 
 /** Fills the choices from what the folder holds, keeping the ones made. */
@@ -491,6 +455,7 @@ function fillChoices() {
 async function opened() {
   const first = $("animation").options.length === 0;
   fillChoices();
+  $("waiting").hidden = true;
   $("choose").hidden = false;
   $("stageSection").hidden = false;
   $("settingsSection").hidden = false;

@@ -1,25 +1,32 @@
 # Tools
 
-## Motion capture
+`index.html` opens the pages that make the game's files and check them, with tabs to move between them: **Mocap**, **Sound**, **Picture** and **Preview**. A page keeps what was done on it while another is shown.
 
-`mocap/capture.html` records a movement card from the webcam and saves it as an animation file for the game.
+## Run it
 
-### Run it
-
-Serve the folder from localhost, where the browser allows the camera:
+Serve the folder from localhost, where the browser allows the camera and the microphone:
 
 ```sh
-python3 -m http.server 8000 --directory tools/mocap
+python3 -m http.server 8000 --directory tools
 ```
 
-Open <http://localhost:8000/capture.html> in Chrome or Edge, not in VS Code's Simple Browser, which cannot show the folder picker. In the devcontainer, VS Code forwards the port to the host. The page fetches MediaPipe and its pose model from the network on load.
+Open <http://localhost:8000/> in Chrome or Edge, not in VS Code's Simple Browser, which cannot show the folder picker. In the devcontainer, VS Code forwards the port to the host. Each page also opens on its own address, such as <http://localhost:8000/#sound>.
+
+## Assets folder
+
+First choose the game's `assets` folder, such as `games/astronaut-cat/assets`, at the top: every page uses it. The page checks it holds the folders the pages write into, such as `hero/` and `sfx/`, and keeps it until it is reloaded. Recording, taking a photo and saving wait for it. The preview only reads it, and watches it: whatever the other pages save there shows straight away.
+
+Browsers without folder access, such as Firefox and Safari, skip it for the capture pages, which download the files instead. The preview then takes the folder from a file picker, and needs it chosen again to see a change.
+
+## Motion capture
+
+**Mocap**, `mocap/capture.html`, records a movement card from the webcam and saves it as an animation file for the game. It fetches MediaPipe and its pose model from the network as it opens; the other pages need no network.
 
 ### Record
 
-1. Choose the game's `assets` folder, such as `games/astronaut-cat/assets`. The page checks it holds the folders the cards write into, such as `hero/`, and keeps it until the page is reloaded. **Record** waits for it. Browsers without folder access, such as Firefox and Safari, skip this step.
-2. Pick the movement from the cards of `games/astronaut-cat/docs/cards.md`. The card sets the file and whether it loops.
-3. Stand side-on to the camera, facing either way, far enough back that the whole body, feet included, is in view. The side nearer the camera becomes the parts named right, the far side the parts named left.
-4. Press **Record**, wait for the 3 s countdown, do the movement and press **Stop**. A recording stops on its own after 20 s.
+1. Pick the movement from the cards of `games/astronaut-cat/docs/cards.md`. The card sets the file and whether it loops.
+2. Stand side-on to the camera, facing either way, far enough back that the whole body, feet included, is in view. The side nearer the camera becomes the parts named right, the far side the parts named left.
+3. Press **Record**, wait for the 3 s countdown, do the movement and press **Stop**. A recording stops on its own after 20 s.
 
 ### Review
 
@@ -36,26 +43,17 @@ The left view replays the camera with the detected pose. The right one is a stic
 
 ### Save
 
-**Save** writes the card's file inside the folder chosen in the first step, such as `hero/anim_walk.json`. A running game picks it up through hot reload. Browsers without folder access, such as Firefox and Safari, download the file instead; move it to the same place by hand.
+**Save** writes the card's file inside the assets folder, such as `hero/anim_walk.json`. A running game picks it up through hot reload. Browsers without folder access, such as Firefox and Safari, download the file instead; move it to the same place by hand.
 
 ## Sound capture
 
-`sound/capture.html` records a sound card from the microphone and saves it as a sound file for the game: mono, 16-bit, 22 050 Hz, like the other files of `assets/sfx/`.
-
-### Run it
-
-```sh
-python3 -m http.server 8001 --directory tools/sound
-```
-
-Open <http://localhost:8001/capture.html> in Chrome or Edge, not in VS Code's Simple Browser, which cannot show the folder picker. The page needs no network.
+**Sound**, `sound/capture.html`, records a sound card from the microphone and saves it as a sound file for the game: mono, 16-bit, 22 050 Hz, like the other files of `assets/sfx/`.
 
 ### Record
 
-1. Choose the game's `assets` folder, as for motion capture. The page checks it holds `sfx/`.
-2. Pick the sound from the cards of `games/astronaut-cat/docs/cards.md`. The card sets the file and whether it loops.
-3. Pick the microphone and make the sound once to check the level: the bar turns red when it is too loud and would distort.
-4. Press **Record**, stay quiet for the 3 s countdown, make the sound and press **Stop**. The countdown is how the page learns the room's noise. A recording stops on its own after 30 s.
+1. Pick the sound from the cards of `games/astronaut-cat/docs/cards.md`. The card sets the file and whether it loops.
+2. Pick the microphone and make the sound once to check the level: the bar turns red when it is too loud and would distort.
+3. Press **Record**, stay quiet for the 3 s countdown, make the sound and press **Stop**. The countdown is how the page learns the room's noise. A recording stops on its own after 30 s.
 
 ### Review
 
@@ -73,26 +71,17 @@ The top view is the recording, with the cut parts shaded; the bottom one is the 
 
 ### Save
 
-**Save** writes the card's file inside the folder chosen in the first step, such as `sfx/jump.wav`, over the sound that was there. Browsers without folder access download the file instead.
+**Save** writes the card's file inside the assets folder, such as `sfx/jump.wav`, over the sound that was there. Browsers without folder access download the file instead.
 
 ## Picture capture
 
-`picture/capture.html` photographs a box of a drawing sheet, cuts the drawing out of the paper and saves it as the game's picture, at the size of the file it replaces.
-
-### Run it
-
-```sh
-python3 -m http.server 8002 --directory tools/picture
-```
-
-Open <http://localhost:8002/capture.html> in Chrome or Edge, not in VS Code's Simple Browser, which cannot show the folder picker. The page needs no network.
+**Picture**, `picture/capture.html`, photographs a box of a drawing sheet, cuts the drawing out of the paper and saves it as the game's picture, at the size of the file it replaces.
 
 ### Photograph
 
-1. Choose the game's `assets` folder, as for motion capture. The page checks it holds the folders the sheets write into, such as `hero/` and `level/`.
-2. Pick the drawing from the sheets of `games/astronaut-cat/docs/sheets.md`. An arm or a leg is one drawing that the page cuts into the four parts, left and right.
-3. Hold the sheet flat in front of the camera with only that drawing's box in view, and a little paper around it. The page draws the box in green once it finds its printed border.
-4. Press **Take photo**. A photo taken with a phone works too: **Open a photo**, or drop it on the page.
+1. Pick the drawing from the sheets of `games/astronaut-cat/docs/sheets.md`. An arm or a leg is one drawing that the page cuts into the four parts, left and right.
+2. Hold the sheet flat in front of the camera with only that drawing's box in view, and a little paper around it. The page draws the box in green once it finds its printed border.
+3. Press **Take photo**. A photo taken with a phone works too: **Open a photo**, or drop it on the page.
 
 ### Review
 
@@ -118,25 +107,16 @@ The page saves each drawing at its file's size, so a box should have the same sh
 
 ### Save
 
-**Save** writes the drawing's files inside the folder chosen in the first step, over the ones there. An arm or a leg writes its four parts and moves the elbows or knees in the character's `skeleton.json` to where the drawing was cut; the launcher is shrunk and turned to lie along the forearm, as `tools/make_art.py` does. A running game picks them up through hot reload. Browsers without folder access download the pictures instead, and cannot update `skeleton.json`.
+**Save** writes the drawing's files inside the assets folder, over the ones there. An arm or a leg writes its four parts and moves the elbows or knees in the character's `skeleton.json` to where the drawing was cut; the launcher is shrunk and turned to lie along the forearm, as `tools/make_art.py` does. A running game picks them up through hot reload. Browsers without folder access download the pictures instead, and cannot update `skeleton.json`.
 
 ## Preview
 
-`preview/preview.html` plays a character's pictures with a movement and a sound, as the game shows them, to check that what the other pages saved fits together.
-
-### Run it
-
-```sh
-python3 -m http.server 8003 --directory tools/preview
-```
-
-Open <http://localhost:8003/preview.html> in Chrome or Edge. The page needs no network.
+**Preview**, `preview/preview.html`, plays a character's pictures with a movement and a sound, as the game shows them, to check that what the other pages saved fits together.
 
 ### Choose
 
-1. Choose the game's `assets` folder. The page only reads it, and in Chrome or Edge watches it: whatever the other pages save there shows straight away. Browsers without folder access take the folder from a file picker, and need it chosen again to see a change.
-2. Pick the movement. It brings its character's pictures, the sound its card plays as it starts, and whether it loops; each can be changed, so the princess's pictures can try the hero's walk.
-3. **Over it** is a movement played once on top, on its own key, as the game fires while walking or jumping. It plays only on the joints it has, with its own sound.
+1. Pick the movement. It brings its character's pictures, the sound its card plays as it starts, and whether it loops; each can be changed, so the princess's pictures can try the hero's walk.
+2. **Over it** is a movement played once on top, on its own key, as the game fires while walking or jumping. It plays only on the joints it has, with its own sound.
 
 ### Play
 
