@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronaut_cat::level::{CHECKPOINTS, GROUND, PLATFORMS, ROOT_HEIGHT};
-use astronaut_cat::{Enemy, Hero, Phase, Platformer, Status};
+use astronaut_cat::{Enemy, Hero, Phase, Platformer, Star, Status};
 use olivia::ecs::Transform;
 use olivia::math::Vec2;
 use olivia::window::Window;
@@ -75,6 +75,31 @@ impl Play {
     fn enemies(&mut self) -> usize {
         self.game.world().query_mut::<&Enemy>().into_iter().count()
     }
+}
+
+#[test]
+fn shooting_stars_fall_now_and_then_and_go() {
+    let mut play = Play::new();
+    let mut heights = Vec::new();
+    let mut falls = 0;
+    // Twenty seconds.
+    for _ in 0..1200 {
+        play.run(1);
+        let star = play.game.world().query_mut::<&Transform>().with::<&Star>();
+        let height = star
+            .into_iter()
+            .next()
+            .map(|transform| transform.position.y);
+        if let Some(height) = height {
+            if heights.last().is_none_or(|last| height < *last) {
+                falls += 1;
+            }
+            heights.push(height);
+        } else {
+            heights.clear();
+        }
+    }
+    assert!(falls >= 2, "only {falls} shooting stars in twenty seconds");
 }
 
 #[test]

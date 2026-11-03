@@ -474,6 +474,20 @@ def hud():
     save(lost, "hud/life_lost.png")
 
 
+def shooting_star():
+    image = canvas((512, 256))
+    # Flying right, with its tail behind it.
+    fill(image, [(12, 128), (340, 78), (340, 178)], ORANGE, outline=None)
+    fill(image, [(90, 128), (340, 100), (340, 156)], YELLOW, outline=None)
+    points = []
+    for i in range(10):
+        a = 2 * math.pi * i / 10
+        radius = 50 if i % 2 else 115
+        points.append((370 + radius * math.cos(a), 128 + radius * math.sin(a)))
+    fill(image, points, YELLOW, width=10)
+    save(image, "fx/star.png")
+
+
 if __name__ == "__main__":
     hero()
     princess()
@@ -481,3 +495,5 @@ if __name__ == "__main__":
     enemies()
     level()
     hud()
+    # Last, so that it leaves the seed's other drawings as they were.
+    shooting_star()
