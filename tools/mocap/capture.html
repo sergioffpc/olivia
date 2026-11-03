@@ -656,6 +656,9 @@ $("saveButton").addEventListener("click", async () => {
     link.click();
     return status("saveStatus", `Downloaded ${link.download}: move it to the game's assets/${path}.`);
   }
+  // A second click while the picker is open would fail with "File picker already active".
+  $("saveButton").disabled = true;
+  if (!folder) status("saveStatus", "Choose the game's assets folder…");
   try {
     folder ??= await window.showDirectoryPicker({ id: "assets", mode: "readwrite" });
     const [who, name] = path.split("/");
@@ -665,7 +668,11 @@ $("saveButton").addEventListener("click", async () => {
     await writable.close();
     status("saveStatus", `Saved ${folder.name}/${path}.`);
   } catch (error) {
-    if (error.name !== "AbortError") status("saveStatus", `Cannot save: ${error.message}`, true);
+    // Chrome also aborts when the "edit files" prompt after the picker is refused.
+    if (error.name === "AbortError") status("saveStatus", "Not saved: no folder chosen, or Chrome was not allowed to edit it.", true);
+    else status("saveStatus", `Cannot save: ${error.message}`, true);
+  } finally {
+    $("saveButton").disabled = false;
   }
 });
 
