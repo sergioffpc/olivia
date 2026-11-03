@@ -1,0 +1,738 @@
+<!doctype html>
+<!--
+  Records a movement card from the webcam and saves it as an animation file.
+  Serve it from localhost, where the browser allows the camera:
+    python3 -m http.server 8000 --directory tools/mocap
+  then open http://localhost:8000/capture.html.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mocap capture</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #2c3038; --text: #e8e9ec; --dim: #9096a0;
+    --accent: #ffb547; --rec: #ff4d4d; --left: #4fc3f7; --right: #ff8a65;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  canvas { width: 100%; background: #000; border-radius: 8px; display: block; }
+  select, button, input[type=text] {
+    font: inherit; color: var(--text); background: #262a31; border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px;
+  }
+  button { cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  button.rec { background: var(--rec); border-color: var(--rec); color: #fff; font-weight: 600; }
+  .card { color: var(--dim); }
+  .status { color: var(--dim); min-height: 1.4em; }
+  .status.warn { color: var(--accent); }
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 20px; }
+  .settings label { display: grid; gap: 2px; }
+  .settings label span { color: var(--dim); font-size: 12px; }
+  .settings label.check { display: flex; gap: 8px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .joints { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .joints label { display: flex; gap: 5px; align-items: center; }
+  #scrub { flex: 1; min-width: 160px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Mocap capture</h1>
+
+  <section>
+    <h2>1 · Assets folder</h2>
+    <div class="row">
+      <button id="pickFolder" class="primary">Choose folder</button>
+      <span id="folderStatus" class="status">Choose the game's assets folder, such as games/astronaut-cat/assets.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Movement</h2>
+    <div class="row">
+      <select id="card"></select>
+      <span id="cardInfo" class="card"></span>
+    </div>
+  </section>
+
+  <section id="live">
+    <h2>3 · Camera</h2>
+    <canvas id="liveCanvas" width="640" height="480"></canvas>
+    <div class="row" style="margin-top:10px">
+      <button id="record" class="rec" disabled>Record</button>
+      <button id="stop" hidden>Stop</button>
+      <span id="liveStatus" class="status">Loading the pose model…</span>
+    </div>
+  </section>
+
+  <section id="review" hidden>
+    <h2>4 · Review</h2>
+    <div class="views">
+      <canvas id="frameCanvas" width="640" height="480"></canvas>
+      <canvas id="figureCanvas" width="640" height="480"></canvas>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="play">Pause</button>
+      <input id="scrub" type="range" min="0" max="0" step="1" value="0">
+      <span id="clock" class="status"></span>
+    </div>
+    <p id="summary" class="status"></p>
+
+    <div class="settings">
+      <label><span>Start <b id="trimStartOut"></b></span><input id="trimStart" type="range" step="0.01"></label>
+      <label><span>End <b id="trimEndOut"></b></span><input id="trimEnd" type="range" step="0.01"></label>
+      <label><span>Smoothing <b id="smoothOut"></b></span><input id="smooth" type="range" min="0" max="0.15" step="0.005" value="0.035"></label>
+      <label><span>Speed <b id="speedOut"></b></span><input id="speed" type="range" min="0.5" max="2" step="0.05" value="1"></label>
+      <label class="check"><input id="loop" type="checkbox"> Loops</label>
+      <label><span>Loop seam blend <b id="seamOut"></b></span><input id="seam" type="range" min="0" max="0.5" step="0.01" value="0.2"></label>
+      <label class="check"><input id="swap" type="checkbox"> Swap left and right</label>
+    </div>
+    <h2 style="margin-top:14px">Joints saved</h2>
+    <div id="joints" class="joints"></div>
+  </section>
+
+  <section id="save" hidden>
+    <h2>5 · Save</h2>
+    <div class="row">
+      <button id="saveButton" class="primary">Save</button>
+      <button id="again">Record again</button>
+      <span id="saveStatus" class="status"></span>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+const FPS = 30;
+const MEDIAN_FRAMES = 5;
+const MAX_SECONDS = 20;
+const COUNTDOWN = 3;
+
+// The movement cards of games/astronaut-cat/docs/cards.md.
+const CARDS = [
+  { name: "Standing still", who: "the hero", does: "stands waiting", loops: true, file: "hero/anim_idle.json" },
+  { name: "Walking", who: "the hero", does: "walks on the spot", loops: true, file: "hero/anim_walk.json" },
+  { name: "Jumping", who: "the hero", does: "does a jump", loops: false, file: "hero/anim_jump.json" },
+  { name: "Extra jump", who: "the hero", does: "does a second jump in the air", loops: false, file: "hero/anim_double_jump.json" },
+  { name: "Firing", who: "the hero", does: "fires with the launcher in hand", loops: false, file: "hero/anim_shoot.json" },
+  { name: "Getting hurt", who: "the hero", does: "is touched by a baddie", loops: false, file: "hero/anim_hurt.json" },
+  { name: "Victory", who: "the hero", does: "celebrates having saved them", loops: false, file: "hero/anim_win.json" },
+  { name: "Calling for help", who: "who is held", does: "calls for help while waiting", loops: true, file: "princess/anim_help.json" },
+  { name: "Getting free", who: "who was held", does: "celebrates being saved", loops: false, file: "princess/anim_win.json" },
+];
+
+const JOINTS = [
+  "root", "neck",
+  "shoulder_left", "elbow_left", "shoulder_right", "elbow_right",
+  "hip_left", "knee_left", "hip_right", "knee_right",
+];
+
+// The sheet's pose as raw joint angles: upright with every part hanging straight down.
+const REST = { root: -Math.PI / 2, neck: 0, shoulder: Math.PI, elbow: 0, hip: Math.PI, knee: 0 };
+
+// MediaPipe landmarks. Filmed side-on, the near side becomes the parts named right.
+const NOSE = 0, EAR_LEFT = 7, EAR_RIGHT = 8;
+const LEFT = { shoulder: 11, elbow: 13, wrist: 15, hip: 23, knee: 25, ankle: 27 };
+const RIGHT = { shoulder: 12, elbow: 14, wrist: 16, hip: 24, knee: 26, ankle: 28 };
+const BONES = [[11, 12], [23, 24], [11, 23], [12, 24], [11, 13], [13, 15], [12, 14], [14, 16],
+  [23, 25], [25, 27], [24, 26], [26, 28], [7, 8]];
+const NEEDED = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+
+// The stick figure, measured on the hero's skeleton.json: each part's children from its joint,
+// in pixels of the sheet, as drawn.
+const FIGURE = {
+  root: { neck: [0, -293], shoulder_left: [-198, -231], shoulder_right: [198, -231], hip_left: [-95, 277], hip_right: [95, 277] },
+  shoulder_left: { elbow_left: [0, 301] }, shoulder_right: { elbow_right: [0, 301] },
+  hip_left: { knee_left: [0, 261] }, hip_right: { knee_right: [0, 261] },
+};
+const ENDS = { elbow: [0, 260], knee: [0, 280] };
+
+const $ = (id) => document.getElementById(id);
+const wrap = (a) => a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI));
+const segment = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]);
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+const rotate = ([x, y], a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+const fmt = (s) => `${s.toFixed(2)} s`;
+
+// ---------- Angles ----------
+
+const middle = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const mean = (values) => values.reduce((a, b) => a + b, 0) / values.length;
+
+/** Mirrors every pose if the nose is mostly left of the ears, so the body faces right. */
+function faceRight(poses) {
+  const facing = middle(poses.map((p) => p[NOSE][0] - (p[EAR_LEFT][0] + p[EAR_RIGHT][0]) / 2));
+  return facing >= 0 ? poses : poses.map((p) => p.map(([x, y]) => [-x, y]));
+}
+
+/** The body side closer to the camera. Visibility only chooses a side, never rejects points. */
+function nearSide(visibilities) {
+  const seen = (side) => mean(visibilities.flatMap((v) => Object.values(side).map((i) => v[i])));
+  return seen(LEFT) > seen(RIGHT) ? LEFT : RIGHT;
+}
+
+/** Raw joint angles of one pose, one per entry of JOINTS, before the sheet's rest is taken off. */
+function jointAngles(points, near) {
+  const [left, right] = [near === LEFT ? RIGHT : LEFT, near];
+  const hips = mid(points[LEFT.hip], points[RIGHT.hip]);
+  const shoulders = mid(points[LEFT.shoulder], points[RIGHT.shoulder]);
+  const ears = mid(points[EAR_LEFT], points[EAR_RIGHT]);
+  const torso = segment(hips, shoulders);
+  const angles = { root: torso, neck: wrap(segment(shoulders, ears) - torso) };
+  for (const [name, side] of [["left", left], ["right", right]]) {
+    const upperArm = segment(points[side.shoulder], points[side.elbow]);
+    const lowerArm = segment(points[side.elbow], points[side.wrist]);
+    const upperLeg = segment(points[side.hip], points[side.knee]);
+    const lowerLeg = segment(points[side.knee], points[side.ankle]);
+    angles[`shoulder_${name}`] = wrap(upperArm - torso);
+    angles[`elbow_${name}`] = wrap(lowerArm - upperArm);
+    angles[`hip_${name}`] = wrap(upperLeg - torso);
+    angles[`knee_${name}`] = wrap(lowerLeg - upperLeg);
+  }
+  return JOINTS.map((joint) => angles[joint]);
+}
+
+function unwrap(column) {
+  const out = [column[0]];
+  for (let i = 1; i < column.length; i++) out.push(out[i - 1] + wrap(column[i] - column[i - 1]));
+  return out;
+}
+
+function median(column, size) {
+  const half = Math.floor(size / 2);
+  return column.map((_, i) => {
+    const window = [];
+    for (let k = -half; k <= half; k++) window.push(column[Math.min(column.length - 1, Math.max(0, i + k))]);
+    return window.sort((a, b) => a - b)[half];
+  });
+}
+
+/** A zero-phase Gaussian, holding the edge values beyond each end. */
+function gaussian(column, sigma) {
+  if (sigma < 0.3) return column;
+  const radius = Math.ceil(4 * sigma);
+  const kernel = [];
+  for (let k = -radius; k <= radius; k++) kernel.push(Math.exp(-(k * k) / (2 * sigma * sigma)));
+  const total = kernel.reduce((a, b) => a + b);
+  return column.map((_, i) => {
+    let sum = 0;
+    for (let k = -radius; k <= radius; k++) {
+      sum += kernel[k + radius] * column[Math.min(column.length - 1, Math.max(0, i + k))];
+    }
+    return sum / total;
+  });
+}
+
+/** Moves continuous angles by whole turns, to bring their median near `centre`. */
+function withinHalfATurn(column, centre) {
+  const turns = Math.round((middle(column) - centre) / (2 * Math.PI));
+  return column.map((a) => a - 2 * Math.PI * turns);
+}
+
+/**
+ * Facing right, a forearm only folds forwards (anticlockwise) and a shin only backwards. Each column
+ * first moves to the turn around its joint's bend, or a recording starting fully folded would flatten.
+ */
+function bendOneWay(column, joint) {
+  if (joint.startsWith("elbow")) return withinHalfATurn(column, -Math.PI / 2).map((a) => Math.min(a, 0));
+  if (joint.startsWith("knee")) return withinHalfATurn(column, Math.PI / 2).map((a) => Math.max(a, 0));
+  return column;
+}
+
+function interpolate(times, column, t) {
+  let i = 0;
+  while (i < times.length - 2 && times[i + 1] < t) i++;
+  const span = times[i + 1] - times[i];
+  const amount = span > 0 ? Math.min(1, Math.max(0, (t - times[i]) / span)) : 0;
+  return column[i] + (column[i + 1] - column[i]) * amount;
+}
+
+/**
+ * Turns the recorded poses into rows of radians at FPS, zero being the sheet's pose, with the
+ * source time of each row. Angles stay continuous until the end, so filtering never crosses a wrap.
+ */
+function animate(frames, settings) {
+  const posed = frames.filter((f) => f.points && f.t >= settings.start && f.t <= settings.end);
+  if (posed.length < 2) return null;
+  const times = posed.map((f) => f.t);
+  let near = nearSide(posed.map((f) => f.visibility));
+  if (settings.swap) near = near === LEFT ? RIGHT : LEFT;
+  const raw = faceRight(posed.map((f) => f.points)).map((points) => jointAngles(points, near));
+  const sigma = settings.smooth / middle(times.slice(1).map((t, i) => t - times[i]));
+  const columns = JOINTS.map((joint, j) =>
+    bendOneWay(gaussian(median(unwrap(raw.map((r) => r[j])), MEDIAN_FRAMES), sigma), joint));
+
+  const step = settings.speed / FPS;
+  const count = Math.floor((times.at(-1) - times[0]) / step + 1e-9) + 1;
+  let sources = Array.from({ length: count }, (_, k) => times[0] + k * step);
+  let rows = sources.map((t) => JOINTS.map((joint, j) => interpolate(times, columns[j], t) - REST[joint.split("_")[0]]));
+
+  // A loop drops its first rows and fades its last ones into them, so the last row leads to the first.
+  const blend = Math.min(Math.round(settings.seam * FPS), Math.floor((rows.length - 1) / 2));
+  if (settings.loops && blend > 0) {
+    const n = rows.length;
+    for (let i = 0; i < blend; i++) {
+      const amount = (i + 1) / blend;
+      rows[n - blend + i] = rows[n - blend + i].map((a, j) => a + wrap(rows[i][j] - a) * amount);
+    }
+    rows = rows.slice(blend);
+    sources = sources.slice(blend);
+  }
+  rows = rows.map((row) => row.map((a) => Math.round(wrap(a) * 1e5) / 1e5));
+  return { rows, sources, posed: posed.length };
+}
+
+// ---------- Drawing ----------
+
+function drawPose(ctx, points, scale = 1) {
+  ctx.lineWidth = 3 * scale;
+  for (const [a, b] of BONES) {
+    const left = Object.values(LEFT).includes(a) && Object.values(LEFT).includes(b);
+    const right = Object.values(RIGHT).includes(a) && Object.values(RIGHT).includes(b);
+    ctx.strokeStyle = left ? "#4fc3f7" : right ? "#ff8a65" : "#e8e9ec";
+    ctx.beginPath();
+    ctx.moveTo(...points[a]);
+    ctx.lineTo(...points[b]);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#fff";
+  for (const i of NEEDED) {
+    ctx.beginPath();
+    ctx.arc(...points[i], 4 * scale, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+function drawMirrored(ctx, image) {
+  const { width, height } = ctx.canvas;
+  ctx.save();
+  ctx.translate(width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(image, 0, 0, width, height);
+  ctx.restore();
+}
+
+/** The stick figure for one row, through the skeleton tree, as the game poses it. */
+function drawFigure(ctx, row, saved) {
+  const { width, height } = ctx.canvas;
+  ctx.fillStyle = "#0d0f12";
+  ctx.fillRect(0, 0, width, height);
+  const scale = height / 1900;
+  const angle = Object.fromEntries(JOINTS.map((joint, j) => [joint, saved.has(joint) ? row[j] : 0]));
+  const at = { root: [0, 0] };
+  const turn = { root: angle.root };
+  for (const parent of Object.keys(FIGURE)) {
+    for (const [child, offset] of Object.entries(FIGURE[parent])) {
+      const [dx, dy] = rotate(offset, turn[parent]);
+      at[child] = [at[parent][0] + dx, at[parent][1] + dy];
+      turn[child] = turn[parent] + angle[child];
+    }
+  }
+
+  ctx.save();
+  ctx.translate(width / 2, height * 0.45);
+  ctx.scale(scale, scale);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const line = (a, b, color, w) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(...a);
+    ctx.lineTo(...b);
+    ctx.stroke();
+  };
+  const end = (joint) => {
+    const [dx, dy] = rotate(ENDS[joint.split("_")[0]], turn[joint]);
+    return [at[joint][0] + dx, at[joint][1] + dy];
+  };
+  const color = (joint) => (!saved.has(joint) ? "#555" : joint.endsWith("left") ? "#4fc3f7" : joint.endsWith("right") ? "#ff8a65" : "#e8e9ec");
+
+  // The torso, from shoulders to hips.
+  ctx.fillStyle = "#2a2f38";
+  ctx.strokeStyle = color("root");
+  ctx.lineWidth = 14;
+  ctx.beginPath();
+  for (const joint of ["shoulder_left", "shoulder_right", "hip_right", "hip_left"]) ctx.lineTo(...at[joint]);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  for (const side of ["left", "right"]) {
+    line(at[`shoulder_${side}`], at[`elbow_${side}`], color(`shoulder_${side}`), 40);
+    line(at[`elbow_${side}`], end(`elbow_${side}`), color(`elbow_${side}`), 32);
+    line(at[`hip_${side}`], at[`knee_${side}`], color(`hip_${side}`), 46);
+    line(at[`knee_${side}`], end(`knee_${side}`), color(`knee_${side}`), 38);
+  }
+  const [hx, hy] = rotate([0, -180], turn.neck);
+  ctx.fillStyle = "#2a2f38";
+  ctx.strokeStyle = color("neck");
+  ctx.lineWidth = 14;
+  ctx.beginPath();
+  ctx.arc(at.neck[0] + hx, at.neck[1] + hy, 170, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+  // The face's direction, so a turned head shows.
+  const [fx, fy] = rotate([0, -300], turn.neck);
+  line([at.neck[0] + hx, at.neck[1] + hy], [at.neck[0] + fx, at.neck[1] + fy], color("neck"), 10);
+  ctx.restore();
+}
+
+// ---------- State ----------
+
+const video = document.createElement("video");
+video.muted = true;
+video.playsInline = true;
+const live = $("liveCanvas").getContext("2d");
+const frameCtx = $("frameCanvas").getContext("2d");
+const figureCtx = $("figureCanvas").getContext("2d");
+
+let landmarker;
+let mode = "live"; // live, countdown, recording, review
+let countdownEnd = 0;
+let recordStart = 0;
+let frames = [];
+let result = null;
+let playing = true;
+let playhead = 0;
+let lastTick = 0;
+let lastVideoTime = -1;
+let lastPoints = null;
+let folder = null;
+
+const card = () => CARDS[$("card").value];
+// The folders under assets that the cards write into.
+const FOLDERS = [...new Set(CARDS.map((c) => c.file.split("/")[0]))];
+// Browsers without folder access, such as Firefox and Safari, download the file instead.
+const canWrite = "showDirectoryPicker" in window;
+
+for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.file})`, i));
+JOINTS.forEach((joint) => {
+  const label = document.createElement("label");
+  label.innerHTML = `<input type="checkbox" value="${joint}" checked> ${joint}`;
+  $("joints").append(label);
+});
+
+function showCard() {
+  const c = card();
+  $("cardInfo").textContent = `${c.who} ${c.does} · ${c.loops ? "repeats always" : "once"}`;
+  $("loop").checked = c.loops;
+  if (mode === "review") recompute();
+}
+$("card").addEventListener("change", showCard);
+showCard();
+
+function settings() {
+  return {
+    start: +$("trimStart").value,
+    end: +$("trimEnd").value,
+    smooth: +$("smooth").value,
+    speed: +$("speed").value,
+    loops: $("loop").checked,
+    seam: +$("seam").value,
+    swap: $("swap").checked,
+  };
+}
+
+function savedJoints() {
+  return new Set([...$("joints").querySelectorAll("input:checked")].map((input) => input.value));
+}
+
+// ---------- Camera ----------
+
+async function start() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    video.srcObject = stream;
+    await video.play();
+    for (const canvas of [$("liveCanvas"), $("frameCanvas"), $("figureCanvas")]) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+    const files = await FilesetResolver.forVisionTasks(WASM);
+    landmarker = await PoseLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: MODEL, delegate: "GPU" },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+    updateRecord();
+    requestAnimationFrame(tick);
+  } catch (error) {
+    status("liveStatus", `Cannot start: ${error.message}`, true);
+  }
+}
+
+function updateRecord() {
+  $("record").disabled = !landmarker || (canWrite && !folder);
+}
+
+function status(id, text, warn = false) {
+  $(id).textContent = text;
+  $(id).classList.toggle("warn", warn);
+}
+
+/** The pose in the current video frame, in mirrored pixels, or null. */
+function detect(now) {
+  if (video.currentTime === lastVideoTime) return undefined;
+  lastVideoTime = video.currentTime;
+  const marks = landmarker.detectForVideo(video, now).landmarks[0];
+  if (!marks) return null;
+  const { videoWidth: w, videoHeight: h } = video;
+  const visibility = marks.map((m) => m.visibility);
+  const near = nearSide([visibility]);
+  const seen = [NOSE, ...Object.values(near)].every((i) => visibility[i] > 0.5);
+  return { points: marks.map((m) => [(1 - m.x) * w, m.y * h]), visibility, seen };
+}
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (mode === "review") return review(now);
+
+  const pose = detect(now);
+  if (pose !== undefined) lastPoints = pose;
+  drawMirrored(live, video);
+  if (lastPoints) drawPose(live, lastPoints.points, video.videoWidth / 640);
+
+  if (mode === "live") {
+    if (!lastPoints) status("liveStatus", "No one in view.", true);
+    else if (!lastPoints.seen) status("liveStatus", "Stand side-on and step back: the whole body, feet included, must be seen.", true);
+    else status("liveStatus", "Ready.");
+  } else if (mode === "countdown") {
+    const left = Math.ceil((countdownEnd - now) / 1000);
+    if (left <= 0) {
+      mode = "recording";
+      recordStart = now;
+      frames = [];
+    } else {
+      overlay(String(left));
+    }
+  }
+  if (mode === "recording") {
+    const t = (now - recordStart) / 1000;
+    if (pose !== undefined) {
+      const frame = { t, points: pose?.points ?? null, visibility: pose?.visibility, image: null };
+      frames.push(frame);
+      createImageBitmap(video, { resizeWidth: 480, resizeHeight: Math.round(480 * video.videoHeight / video.videoWidth) })
+        .then((image) => (frame.image = image));
+    }
+    status("liveStatus", `Recording ${fmt(t)}`, true);
+    live.fillStyle = "#ff4d4d";
+    live.beginPath();
+    live.arc(40, 40, 16, 0, 2 * Math.PI);
+    live.fill();
+    if (t >= MAX_SECONDS) stop();
+  }
+}
+
+function overlay(text) {
+  const { width, height } = live.canvas;
+  live.fillStyle = "rgba(0,0,0,.45)";
+  live.fillRect(0, 0, width, height);
+  live.fillStyle = "#ffb547";
+  live.font = `bold ${height / 3}px system-ui`;
+  live.textAlign = "center";
+  live.textBaseline = "middle";
+  live.fillText(text, width / 2, height / 2);
+}
+
+$("record").addEventListener("click", () => {
+  mode = "countdown";
+  countdownEnd = performance.now() + COUNTDOWN * 1000;
+  $("record").hidden = true;
+  $("stop").hidden = false;
+  $("card").disabled = true;
+});
+
+$("stop").addEventListener("click", stop);
+
+function stop() {
+  if (mode === "countdown") return reset();
+  mode = "review";
+  $("stop").hidden = true;
+  $("live").hidden = true;
+  $("review").hidden = false;
+  $("save").hidden = false;
+  $("card").disabled = false;
+  const duration = frames.at(-1)?.t ?? 0;
+  for (const id of ["trimStart", "trimEnd"]) {
+    $(id).max = duration.toFixed(2);
+  }
+  $("trimStart").value = 0;
+  $("trimEnd").value = duration.toFixed(2);
+  $("saveStatus").textContent = "";
+  playhead = 0;
+  playing = true;
+  $("play").textContent = "Pause";
+  recompute();
+}
+
+function reset() {
+  mode = "live";
+  $("record").hidden = false;
+  $("stop").hidden = true;
+  $("live").hidden = false;
+  $("review").hidden = true;
+  $("save").hidden = true;
+  $("card").disabled = false;
+}
+$("again").addEventListener("click", reset);
+
+// ---------- Review ----------
+
+function recompute() {
+  const s = settings();
+  if (s.start >= s.end) {
+    result = null;
+  } else {
+    result = animate(frames, s);
+  }
+  $("trimStartOut").textContent = fmt(s.start);
+  $("trimEndOut").textContent = fmt(s.end);
+  $("smoothOut").textContent = s.smooth ? fmt(s.smooth) : "off";
+  $("speedOut").textContent = `${s.speed.toFixed(2)}×`;
+  $("seamOut").textContent = s.loops ? fmt(s.seam) : "off";
+  $("seam").disabled = !s.loops;
+  $("saveButton").disabled = !result;
+  if (!result) {
+    status("summary", "Not enough poses between start and end.", true);
+    return;
+  }
+  const missed = frames.filter((f) => !f.points).length;
+  $("scrub").max = result.rows.length - 1;
+  playhead = Math.min(playhead, result.rows.length - 1);
+  status("summary",
+    `${result.rows.length} rows at ${FPS} fps (${fmt(result.rows.length / FPS)}) · ` +
+    `${missed} of ${frames.length} camera frames with no pose`, missed > frames.length / 10);
+}
+
+for (const id of ["trimStart", "trimEnd", "smooth", "speed", "loop", "seam", "swap"]) {
+  $(id).addEventListener("input", recompute);
+}
+$("joints").addEventListener("change", recompute);
+
+$("play").addEventListener("click", () => {
+  playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+});
+$("scrub").addEventListener("input", () => {
+  playing = false;
+  $("play").textContent = "Play";
+  playhead = +$("scrub").value;
+});
+
+function review(now) {
+  const elapsed = Math.min(0.1, (now - lastTick) / 1000);
+  lastTick = now;
+  if (!result) return;
+  if (playing) playhead = (playhead + elapsed * FPS) % result.rows.length;
+  const index = Math.floor(playhead);
+  $("scrub").value = index;
+  $("clock").textContent = `${fmt(index / FPS)} / ${fmt(result.rows.length / FPS)}`;
+
+  // The camera frame nearest the row's source time.
+  const t = result.sources[index];
+  const frame = frames.reduce((best, f) => (Math.abs(f.t - t) < Math.abs(best.t - t) ? f : best));
+  frameCtx.fillStyle = "#000";
+  frameCtx.fillRect(0, 0, frameCtx.canvas.width, frameCtx.canvas.height);
+  if (frame.image) drawMirrored(frameCtx, frame.image);
+  if (frame.points) drawPose(frameCtx, frame.points, frameCtx.canvas.width / 640);
+
+  drawFigure(figureCtx, result.rows[index], savedJoints());
+}
+
+// ---------- Save ----------
+
+function animationFile() {
+  const saved = JOINTS.filter((joint) => savedJoints().has(joint));
+  const columns = saved.map((joint) => JOINTS.indexOf(joint));
+  return JSON.stringify({ version: 1, fps: FPS, joints: saved, rows: result.rows.map((row) => columns.map((j) => row[j])) });
+}
+
+// ---------- Folder ----------
+
+if (!canWrite) {
+  $("pickFolder").hidden = true;
+  status("folderStatus", "This browser cannot write to a folder: Save downloads the file instead.");
+} else if (window.top !== window.self) {
+  // Embedded browsers, such as VS Code's Simple Browser, abort the folder picker without showing it.
+  status("folderStatus", "Open this page in Chrome or Edge: a browser embedded in another app cannot show the folder picker.", true);
+}
+
+$("pickFolder").addEventListener("click", async () => {
+  // A second click while the picker is open would fail with "File picker already active".
+  $("pickFolder").disabled = true;
+  try {
+    // Ask for the folder and for writing apart, so a refused write says so instead of aborting the picker.
+    const picked = await window.showDirectoryPicker({ id: "assets" });
+    const missing = [];
+    for (const name of FOLDERS) {
+      await picked.getDirectoryHandle(name).catch(() => missing.push(name));
+    }
+    if (missing.length) {
+      status("folderStatus", `${picked.name} is not the assets folder: it has no ${missing.join("/, ")}/ folder.`, true);
+    } else if ((await picked.requestPermission({ mode: "readwrite" })) !== "granted") {
+      status("folderStatus", `Chrome was not allowed to edit ${picked.name}/: choose it again and allow editing.`, true);
+    } else {
+      folder = picked;
+      $("pickFolder").textContent = "Change folder";
+      $("pickFolder").classList.remove("primary");
+      status("folderStatus", `Saving into ${folder.name}/.`);
+    }
+  } catch (error) {
+    status("folderStatus", `Cannot use the folder: ${error.name}: ${error.message}`, true);
+  } finally {
+    $("pickFolder").disabled = false;
+    updateRecord();
+  }
+});
+
+// ---------- Save ----------
+
+$("saveButton").addEventListener("click", async () => {
+  if (savedJoints().size === 0) return status("saveStatus", "Pick at least one joint.", true);
+  const path = card().file;
+  const text = animationFile();
+  if (!canWrite) {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    link.download = path.split("/").pop();
+    link.click();
+    return status("saveStatus", `Downloaded ${link.download}: move it to the game's assets/${path}.`);
+  }
+  if (!folder) return status("saveStatus", "Choose the assets folder in step 1 first.", true);
+  $("saveButton").disabled = true;
+  try {
+    // The permission can lapse, such as after the tab sat in the background.
+    if ((await folder.requestPermission({ mode: "readwrite" })) !== "granted") {
+      return status("saveStatus", "Not saved: Chrome was not allowed to edit the folder.", true);
+    }
+    const [dirName, name] = path.split("/");
+    const dir = await folder.getDirectoryHandle(dirName);
+    const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
+    await writable.write(text);
+    await writable.close();
+    status("saveStatus", `Saved ${folder.name}/${path}.`);
+  } catch (error) {
+    status("saveStatus", `Cannot save: ${error.message}`, true);
+  } finally {
+    $("saveButton").disabled = false;
+  }
+});
+
+start();
+</script>
+</body>
+</html>
