@@ -1,3 +1,5 @@
+//! The umbrella crate re-exports every module.
+
 use olivia::math::{Color, Rect, Vec2};
 
 #[test]

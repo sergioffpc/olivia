@@ -4,7 +4,7 @@ Rust workspace for the Olivia 2D game library: the umbrella `olivia` crate plus 
 
 ## Environment
 
-The Rust toolchain exists only in the devcontainer. Run `cargo` there; never install toolchains or packages on the host.
+On Linux, the Rust toolchain exists only in the devcontainer. Run `cargo` there; never install toolchains or packages on the host. On macOS, everything runs natively on the host, with rustup.
 
 Before finishing a change, run:
 
@@ -12,11 +12,22 @@ Before finishing a change, run:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ```
 
 ## Commits
 
 Use Conventional Commits: `<type>[(scope)][!]: <description>`. The `commit-msg` hook in `.githooks/` rejects anything else.
+
+All commits must be signed.
+
+## Branches
+
+Git flow, through pull requests: `main` and `develop` are protected and take no direct pushes. `develop` is the default branch.
+
+- `feature/*` branches from `develop` and merges into `develop`.
+- `release/*` branches from `develop` and merges into `main`, then `main` merges back into `develop`.
+- `hotfix/*` branches from `main` and merges into `main`, then `main` merges back into `develop`.
 
 ## Agent skills
 

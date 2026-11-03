@@ -3,10 +3,80 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
+olivia-animation = { path = "crates/olivia-animation" }
+olivia-audio = { path = "crates/olivia-audio" }
+olivia-filesystem = { path = "crates/olivia-filesystem" }
+olivia-graphics = { path = "crates/olivia-graphics" }
+olivia-input = { path = "crates/olivia-input" }
 olivia-math = { path = "crates/olivia-math" }
+olivia-physics = { path = "crates/olivia-physics" }
+olivia-window = { path = "crates/olivia-window" }
+bytemuck = { version = "1", features = ["derive"] }
+# No fontconfig: a font comes only from the bytes a game hands over.
+cosmic-text = { version = "0.19", default-features = false, features = ["std", "swash"] }
+directories = "6"
 # Must stay at the version rapier2d uses (ADR 0001).
 glam = { version = "0.33", features = ["bytemuck"] }
+hecs = "0.11"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# No cpal-realtime-dbus, so building needs no libdbus-1-dev. Pinned because 0.12.6 moved to glam 0.34,
+# and only one glam is allowed (ADR 0001).
+kira = { version = "=0.12.5", default-features = false, features = [
+    "cpal",
+    "cpal-realtime",
+    "flac",
+    "mp3",
+    "ogg",
+    "pcm",
+    "vorbis",
+    "wav",
+] }
+lyon = "1"
+notify = "8"
+pollster = "1"
+rapier2d = { version = "0.36", features = ["debug-render"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = "0.3"
+# Vulkan, Metal and DX12 only: no GLES backend, so EGL is never loaded.
+wgpu = { version = "30", default-features = false, features = [
+    "dx12",
+    "metal",
+    "parking_lot",
+    "std",
+    "vulkan",
+    "wgsl",
+] }
+# The notitle decorations avoid ab_glyph, whose ttf-parser is unmaintained.
+winit = { version = "0.30", default-features = false, features = [
+    "rwh_06",
+    "wayland",
+    "wayland-csd-adwaita",
+    "wayland-dlopen",
+    "x11",
+] }
+
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+unsafe_code = "deny"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+# A library reports through return values, never the console.
+print_stderr = "warn"
+print_stdout = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"

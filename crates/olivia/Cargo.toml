@@ -2,6 +2,81 @@
 name = "olivia"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["animation", "audio", "filesystem", "graphics", "input", "physics"]
+animation = ["dep:olivia-animation", "filesystem", "graphics"]
+audio = ["dep:olivia-audio"]
+filesystem = ["dep:olivia-filesystem"]
+graphics = ["dep:olivia-graphics"]
+input = ["dep:olivia-input"]
+physics = ["dep:olivia-physics"]
+enhanced-determinism = ["olivia-physics?/enhanced-determinism"]
 
 [dependencies]
+hecs.workspace = true
+olivia-animation = { workspace = true, optional = true }
+olivia-audio = { workspace = true, optional = true }
+olivia-filesystem = { workspace = true, optional = true }
+olivia-graphics = { workspace = true, optional = true }
+olivia-input = { workspace = true, optional = true }
 olivia-math.workspace = true
+olivia-physics = { workspace = true, optional = true }
+olivia-window.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tracing-subscriber.workspace = true
+
+[[example]]
+name = "animation"
+required-features = ["animation"]
+
+[[example]]
+name = "audio"
+required-features = ["audio", "filesystem", "input"]
+
+[[example]]
+name = "clear"
+required-features = ["graphics"]
+
+[[example]]
+name = "filesystem"
+required-features = ["filesystem"]
+
+[[example]]
+name = "device_loss"
+required-features = ["filesystem", "graphics"]
+
+[[example]]
+name = "draw_options"
+required-features = ["graphics"]
+
+[[example]]
+name = "input"
+required-features = ["input"]
+
+[[example]]
+name = "physics"
+required-features = ["filesystem", "graphics", "input", "physics"]
+
+[[example]]
+name = "shapes"
+required-features = ["graphics"]
+
+[[example]]
+name = "spatial"
+required-features = ["audio", "filesystem", "input"]
+
+[[example]]
+name = "sprite"
+required-features = ["filesystem", "graphics"]
+
+[[example]]
+name = "text"
+required-features = ["filesystem", "graphics"]
+
+[lints]
+workspace = true
