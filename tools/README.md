@@ -119,3 +119,46 @@ The page saves each drawing at its file's size, so a box should have the same sh
 ### Save
 
 **Save** writes the drawing's files inside the folder chosen in the first step, over the ones there. An arm or a leg writes its four parts and moves the elbows or knees in the character's `skeleton.json` to where the drawing was cut; the launcher is shrunk and turned to lie along the forearm, as `tools/make_art.py` does. A running game picks them up through hot reload. Browsers without folder access download the pictures instead, and cannot update `skeleton.json`.
+
+## Preview
+
+`preview/preview.html` plays a character's pictures with a movement and a sound, as the game shows them, to check that what the other pages saved fits together.
+
+### Run it
+
+```sh
+python3 -m http.server 8003 --directory tools/preview
+```
+
+Open <http://localhost:8003/preview.html> in Chrome or Edge. The page needs no network.
+
+### Choose
+
+1. Choose the game's `assets` folder. The page only reads it, and in Chrome or Edge watches it: whatever the other pages save there shows straight away. Browsers without folder access take the folder from a file picker, and need it chosen again to see a change.
+2. Pick the movement. It brings its character's pictures, the sound its card plays as it starts, and whether it loops; each can be changed, so the princess's pictures can try the hero's walk.
+3. **Over it** is a movement played once on top, on its own key, as the game fires while walking or jumping. It plays only on the joints it has, with its own sound.
+
+### Play
+
+The stage stands the pictures on the ground, and the timeline below shows the movement, one tick a row, and the sound under it. Drag the sound along the timeline to make it start earlier or later; click or drag anywhere else to move through the movement.
+
+| Key | What it does |
+|---|---|
+| Space | Plays or pauses |
+| R | Plays from the start, with the sound |
+| F | Plays the movement chosen to go over it |
+| ← → | Steps one row back or forward |
+
+| Setting | What it does |
+|---|---|
+| Speed | Slow motion or faster; the sound follows, so its pitch changes too |
+| Loops | Plays round; off, it stops on the last row and, if chosen, plays again after a second |
+| Change from the last movement | How long a newly picked movement takes to take over, as the game blends one into the next |
+| Sound starts | Before or after the movement starts |
+| Sound volume, Music behind | The music plays as in the game, at 40% |
+| Sound on every loop | Plays the sound again each time a looping movement starts over |
+| Size, Facing left, Behind | How the character is shown: the game turns it round to face left |
+| Show the joints | Marks each joint; the faded ones are left out of the movement and stay as drawn |
+| Show the rows before and after | Faint copies a few rows behind and ahead, to see how far each part moves |
+
+Nothing here is saved: the settings are for looking, and the files are changed on the other pages.
