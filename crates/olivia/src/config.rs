@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 
 #[cfg(feature = "filesystem")]
@@ -10,6 +11,7 @@ use olivia_window::Attributes;
 /// How a game starts, fixed before [`run`](crate::run).
 ///
 /// An option for a disabled module is ignored.
+#[expect(clippy::struct_excessive_bools, reason = "independent options")]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     identity: String,
@@ -20,6 +22,7 @@ pub struct Config {
     fullscreen: bool,
     msaa: u32,
     assets: Option<PathBuf>,
+    hot_reload: bool,
     gravity: Vec2,
 }
 
@@ -37,6 +40,7 @@ impl Config {
             fullscreen: false,
             msaa: 4,
             assets: None,
+            hot_reload: env::var_os("CARGO_MANIFEST_DIR").is_some(),
             gravity: Vec2::new(0.0, 9.81),
         }
     }
@@ -101,6 +105,20 @@ impl Config {
     pub fn assets(mut self, path: impl Into<PathBuf>) -> Self {
         self.assets = Some(path.into());
         self
+    }
+
+    /// Sets whether changing a file of the source restarts the game on the new files, through
+    /// [`Game::load`](crate::Game::load). The default is `true` under `cargo run` and `false`
+    /// otherwise, so a shipped game never restarts by itself.
+    #[must_use]
+    pub fn hot_reload(mut self, hot_reload: bool) -> Self {
+        self.hot_reload = hot_reload;
+        self
+    }
+
+    #[cfg(feature = "filesystem")]
+    pub(crate) fn hot_reload_value(&self) -> bool {
+        self.hot_reload
     }
 
     /// How the window starts.

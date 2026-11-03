@@ -46,6 +46,10 @@ The game uses every Olivia module:
 
 Platforms are solid, because Olivia exposes no way to make one-way platforms, so the hero bumps its head on them from below.
 
+## Changing the assets
+
+Under `cargo run`, saving a file in `assets/` restarts the game on it within a moment, from the start of the level. If the new file cannot be loaded, the error goes to the log and the game carries on until the next save.
+
 ## Remaking the assets
 
 ```sh

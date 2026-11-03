@@ -32,6 +32,10 @@ _Avoid_: Context, service
 The read-only area a game's assets come from.
 _Avoid_: Assets folder, resources
 
+**Hot reload**:
+Restarting a running game on the changed files of the source, by running load again from an empty world. A load that fails leaves the running game as it was.
+_Avoid_: Live reload, asset watching
+
 **Save area**:
 The writable area of a game's files, in the user's data directory. A file here shadows the source file with the same path.
 _Avoid_: Save folder, user data

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use directories::ProjectDirs;
 
-use crate::Error;
+use crate::{Error, Watcher};
 
 /// A read-only source and a writable save area, seen as one tree of files.
 #[derive(Debug)]
@@ -147,6 +147,15 @@ impl Filesystem {
                 Error::Io { path: file, source }
             }
         })
+    }
+
+    /// Starts watching the source for changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the source cannot be watched, as when it does not exist.
+    pub fn watch(&self) -> Result<Watcher, Error> {
+        Watcher::new(&self.source)
     }
 
     /// Finds the file `read` would read.
