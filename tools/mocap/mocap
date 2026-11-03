@@ -13,9 +13,12 @@ uv sync --locked --quiet --project "$here"
 if [[ ! -f "$model" ]]; then
     mkdir -p "$(dirname "$model")"
     curl --fail --location --silent --show-error --output "$model.part" "$url"
-    echo "$sha256  $model.part" | sha256sum --check --quiet
+    echo "$sha256  $model.part" | shasum --algorithm 256 --check --quiet
     mv "$model.part" "$model"
 fi
 
 # With no network: MediaPipe contacts Google without being asked. `uv run` may need the network.
+if [[ "$(uname)" == Darwin ]]; then
+    exec sandbox-exec -p '(version 1) (allow default) (deny network*)' "$here/.venv/bin/python" "$here/mocap.py" "$@"
+fi
 exec unshare -rn "$here/.venv/bin/python" "$here/mocap.py" "$@"
