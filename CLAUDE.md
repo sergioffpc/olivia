@@ -4,7 +4,7 @@ Rust workspace for the Olivia 2D game library: the umbrella `olivia` crate plus 
 
 ## Environment
 
-The Rust toolchain exists only in the devcontainer. Run `cargo` there; never install toolchains or packages on the host.
+On Linux, the Rust toolchain exists only in the devcontainer. Run `cargo` there; never install toolchains or packages on the host. On macOS, everything runs natively on the host, with rustup and uv.
 
 Before finishing a change, run:
 

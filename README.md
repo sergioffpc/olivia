@@ -20,9 +20,15 @@ tracing::subscriber::set_global_default(
 
 ## Development
 
-The toolchain lives only in the devcontainer; nothing needs installing on the host beyond VS Code with Dev Containers and podman or Docker.
+On Linux, the toolchain lives only in the devcontainer; nothing needs installing on the host beyond VS Code with Dev Containers and podman or Docker. Open the folder in VS Code and run **Dev Containers: Reopen in Container**. The VS Code setting `dev.containers.dockerPath` must point at `podman` on podman hosts.
 
-Open the folder in VS Code and run **Dev Containers: Reopen in Container**. The VS Code setting `dev.containers.dockerPath` must point at `podman` on podman hosts.
+On macOS, develop and run natively: a container there reaches no GPU, sound or camera. Install [rustup](https://rustup.rs) and, for `tools/mocap`, [uv](https://docs.astral.sh/uv/); `rust-toolchain.toml` picks the Rust version. Then enable the commit hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+On both, build and check with:
 
 ```sh
 cargo build
@@ -34,7 +40,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
 CI also runs `cargo-deny` against `deny.toml`.
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and must be signed. The devcontainer enables the `commit-msg` hook in `.githooks/`.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and must be signed. The `commit-msg` hook in `.githooks/` checks them; the devcontainer enables it.
 
 Branches follow git flow, through pull requests: `feature/*` targets `develop`, while `release/*` and `hotfix/*` target `main` and then merge back into `develop`.
 
