@@ -54,6 +54,14 @@ const FART_TIME: f32 = 0.9;
 const FART_SIZE: f32 = 1.5;
 /// How much slower the background moves than the camera.
 const PARALLAX: f32 = 0.6;
+const STAR_SIZE: Vec2 = Vec2::new(1.6, 0.8);
+const STAR_VELOCITY: Vec2 = Vec2::new(6.0, 4.0);
+/// The shortest time between two shooting stars.
+const STAR_WAIT: f32 = 3.0;
+/// How much longer than that it can take.
+const STAR_WAIT_SPREAD: f32 = 6.0;
+const GOLDEN_RATIO: f32 = 0.618_034;
+const SILVER_RATIO: f32 = 0.414_214;
 const BLINKS_PER_SECOND: f64 = 8.0;
 const DIGITS: usize = 3;
 const HUD_SIZE: f32 = 52.0;
@@ -128,6 +136,8 @@ struct Pit;
 struct Captive;
 /// A cloud with this much time left.
 struct Fart(f32);
+/// A shooting star, which only passes behind the game.
+pub struct Star;
 /// What a new game replaces.
 struct Actor;
 
@@ -136,6 +146,11 @@ fn sized(texture: &Texture, size: Vec2) -> Draw {
     Draw::new()
         .origin(Vec2::splat(0.5))
         .scale(size / texture.size())
+}
+
+/// The `count`th step of `ratio` around 0 to 1: enough of a surprise, with no pattern to see.
+fn scatter(count: u32, ratio: f32) -> f32 {
+    (count as f32 * ratio).fract()
 }
 
 /// A sensor box that sits still: what it touches passes through.
@@ -163,6 +178,7 @@ struct Textures {
     digits: Vec<Texture>,
     projectile: Texture,
     fart: Texture,
+    star: Texture,
     coin: Texture,
     goal: Texture,
     crawl: Texture,
@@ -182,6 +198,7 @@ impl Textures {
             digits,
             projectile: read("fx/projectile.png")?,
             fart: read("fx/fart.png")?,
+            star: read("fx/star.png")?,
             coin: read("level/coin.png")?,
             goal: read("level/goal.png")?,
             crawl: read("enemy_crawl.png")?,
@@ -354,6 +371,8 @@ pub struct Platformer {
     status: Entity,
     camera: Entity,
     backgrounds: Vec<(Entity, f32)>,
+    stars: u32,
+    star_wait: f32,
     lives: Vec<Entity>,
     digits: Vec<Entity>,
     diagnostics: Option<Entity>,
@@ -753,6 +772,44 @@ impl Platformer {
         Ok(())
     }
 
+    fn spawn_star(&self, world: &mut World, x: f32) {
+        let texture = &self.textures.star;
+        let draw = sized(texture, STAR_SIZE).depth(depth::BACKDROP + 1.0);
+        let transform = Transform {
+            rotation: STAR_VELOCITY.y.atan2(STAR_VELOCITY.x),
+            ..Transform::at(x, -STAR_SIZE.x)
+        };
+        world.spawn((Star, transform, Sprite::new(texture.clone()).draw(draw)));
+    }
+
+    /// Sends a shooting star across the view now and then, and clears those that have passed.
+    fn fall_stars(&mut self, u: &mut Update<'_>) -> Result<()> {
+        let dt = u.timer.dt();
+        self.star_wait -= dt;
+        if self.star_wait <= 0.0 {
+            self.stars += 1;
+            self.star_wait = STAR_WAIT + STAR_WAIT_SPREAD * scatter(self.stars, GOLDEN_RATIO);
+            // It moves right as it falls, so it starts further left to cross the view.
+            let left = u.world.get::<&Camera>(self.camera)?.position.x - VIEW.x;
+            self.spawn_star(u.world, left + VIEW.x * scatter(self.stars, SILVER_RATIO));
+        }
+        let mut gone = Vec::new();
+        for (entity, transform) in u
+            .world
+            .query_mut::<(Entity, &mut Transform)>()
+            .with::<&Star>()
+        {
+            transform.position += STAR_VELOCITY * dt;
+            if transform.position.y > VIEW.y + STAR_SIZE.x {
+                gone.push(entity);
+            }
+        }
+        for entity in gone {
+            u.world.despawn(entity)?;
+        }
+        Ok(())
+    }
+
     fn show_status(&self, world: &World, status: Status) -> Result<()> {
         let textures = &self.textures;
         for (index, entity) in (0u32..).zip(&self.lives) {
@@ -845,6 +902,8 @@ impl Game for Platformer {
             status,
             camera,
             backgrounds,
+            stars: 0,
+            star_wait: STAR_WAIT,
             lives,
             digits,
             diagnostics: None,
@@ -886,6 +945,7 @@ impl Game for Platformer {
         Self::thin_farts(&mut u)?;
         self.show_status(u.world, status)?;
         self.follow(u.world)?;
+        self.fall_stars(&mut u)?;
         *u.world.get::<&mut Status>(self.status)? = status;
         Ok(())
     }

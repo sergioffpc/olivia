@@ -9,6 +9,7 @@
 | The hero's launcher | Draw what the hero uses to fire things. The hand holds it at the black dot. | `hero/weapon` | `hero/launcher.png` |
 | What the hero fires | Draw the thing the hero fires. Fill the whole box. | `fx/projectile` | `fx/projectile.png` |
 | The fart cloud | Draw the cloud that comes out when the hero does the extra jump. Fill the whole box. | `fx/fart` | `fx/fart.png` |
+| The shooting star | Draw a star flying to the right, with its tail behind it. Fill the whole box. | `fx/star` | `fx/star.png` |
 | A baddie that crawls | Draw a long, low baddie that crawls along. Fill the whole box. | `enemy_crawl` | `enemy_crawl.png` |
 | A baddie that rolls | Draw a round baddie that will spin as it rolls. Fill the whole box. | `enemy_roll` | `enemy_roll.png` |
 | A baddie that floats | Draw a baddie that floats through the air. Fill the whole box. | `enemy_float` | `enemy_float.png` |

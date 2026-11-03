@@ -20,7 +20,7 @@ assets/
   hero/            the hero: 11 parts, skeleton.json, anim_*.json
   princess/        who is saved: 10 parts, skeleton.json, anim_*.json
   enemy_crawl.png  enemy_roll.png  enemy_float.png
-  fx/              projectile.png, fart.png
+  fx/              projectile.png, fart.png, star.png
   level/           background.png, platform.png, coin.png, goal.png
   hud/             digit_0..9.png, life.png, life_lost.png
   sfx/             one .wav per sound card
