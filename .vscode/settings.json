@@ -1,4 +1,9 @@
 {
   "editor.formatOnSave": true,
-  "rust-analyzer.check.command": "clippy"
+  "files.autoSave": "afterDelay",
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.linkedProjects": [
+    "Cargo.toml",
+    "games/astronaut-cat/Cargo.toml"
+  ]
 }
