@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "olivia"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "console_error_panic_hook",
  "hecs",
@@ -1960,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-animation"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "olivia-filesystem",
  "olivia-graphics",
@@ -1972,7 +1972,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-audio"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "kira",
  "olivia-math",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-filesystem"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "base64",
  "directories",
@@ -1998,7 +1998,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-graphics"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-input"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "olivia-math",
  "olivia-window",
@@ -2021,14 +2021,14 @@ dependencies = [
 
 [[package]]
 name = "olivia-math"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "glam 0.33.12",
 ]
 
 [[package]]
 name = "olivia-physics"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "olivia-math",
  "rapier2d",
@@ -2036,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-window"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "olivia-math",
  "thiserror 2.0.21",
