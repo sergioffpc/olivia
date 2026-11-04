@@ -1916,8 +1916,10 @@ version = "1.0.0"
 dependencies = [
  "kira",
  "olivia-math",
+ "send_wrapper",
  "thiserror 2.0.21",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
