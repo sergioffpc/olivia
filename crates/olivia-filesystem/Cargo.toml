@@ -5,12 +5,33 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-directories.workspace = true
-notify.workspace = true
 thiserror.workspace = true
 
-[dev-dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories.workspace = true
+notify.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+base64.workspace = true
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = [
+    "Document",
+    "DomException",
+    "RequestCache",
+    "RequestInit",
+    "Response",
+    "Storage",
+    "Url",
+    "Window",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tempfile.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true
 
 [lints]
 workspace = true
