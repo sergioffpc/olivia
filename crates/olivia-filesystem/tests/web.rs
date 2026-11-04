@@ -51,7 +51,7 @@ fn filesystem(identity: &str, assets: &str) -> Filesystem {
 /// The filesystem of the game named `identity`, with no saves, over the preloaded fixture.
 async fn preloaded(identity: &str) -> Filesystem {
     let mut fs = filesystem(identity, "tests/fixtures/assets");
-    fs.preload().await.unwrap();
+    fs.preload(|_, _| {}).await.unwrap();
     fs
 }
 
@@ -166,9 +166,19 @@ async fn list_of_a_directory_in_neither_area_is_not_found() {
 }
 
 #[wasm_bindgen_test]
+async fn preload_reports_the_files_fetched_out_of_the_manifest() {
+    let mut fs = filesystem("progress", "tests/fixtures/assets");
+    let mut progress = Vec::new();
+    fs.preload(|fetched, total| progress.push((fetched, total)))
+        .await
+        .unwrap();
+    assert_eq!(progress, [(0, 3), (1, 3), (2, 3), (3, 3)]);
+}
+
+#[wasm_bindgen_test]
 async fn a_listed_but_missing_file_is_a_start_failure() {
     let mut fs = filesystem("broken", "tests/fixtures/broken");
-    let result = fs.preload().await;
+    let result = fs.preload(|_, _| {}).await;
     let Err(Error::Io { path, source }) = result else {
         panic!("{result:?}");
     };
@@ -179,7 +189,7 @@ async fn a_listed_but_missing_file_is_a_start_failure() {
 #[wasm_bindgen_test]
 async fn a_missing_manifest_is_a_start_failure() {
     let mut fs = filesystem("no-manifest", "tests/fixtures/nowhere");
-    let result = fs.preload().await;
+    let result = fs.preload(|_, _| {}).await;
     let Err(Error::Io { path, .. }) = result else {
         panic!("{result:?}");
     };

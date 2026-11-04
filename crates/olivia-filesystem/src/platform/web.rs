@@ -37,8 +37,12 @@ impl Source {
         }
     }
 
-    /// Fetches the manifest beside the source, and then every file it lists, all at once.
-    pub(crate) async fn preload(&mut self) -> Result<(), Error> {
+    /// Fetches the manifest beside the source, and then every file it lists, all at once,
+    /// reporting to `progress` the files fetched so far out of those listed.
+    pub(crate) async fn preload(
+        &mut self,
+        mut progress: impl FnMut(usize, usize),
+    ) -> Result<(), Error> {
         let path = format!("{}.txt", self.root);
         let manifest = fetch(&path).await?;
         let manifest = String::from_utf8(manifest).map_err(|error| Error::Io {
@@ -50,9 +54,12 @@ impl Source {
             .filter(|line| !line.is_empty())
             .map(|file| (file, fetch(&format!("{}/{file}", self.root))))
             .collect();
+        let total = requests.len();
+        progress(0, total);
         let mut files = BTreeMap::new();
         for (file, request) in requests {
             files.insert(file.to_owned(), request.await?);
+            progress(files.len(), total);
         }
         self.files = files;
         Ok(())

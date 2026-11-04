@@ -37,6 +37,11 @@ use crate::{Config, Game, Modules, Result, Setup, Timer, Update, platform};
 /// filter when set, and to the browser console on the web. A `tracing` subscriber the game
 /// installed before is kept instead.
 ///
+/// On the web, a progress bar fills as the source arrives and goes when [`Game::load`] returns.
+/// A failure, a panic included, stops the game and its audio and shows ⚠ with the error over the
+/// last frame, dimmed. The page never reloads or retries. If the `.wasm` or its JS cannot be
+/// fetched or started, Olivia never runs: the page stays blank and the error goes to the console.
+///
 /// # Errors
 ///
 /// Returns an error if the identity is invalid, before any window opens;
@@ -46,6 +51,7 @@ use crate::{Config, Game, Modules, Result, Setup, Timer, Update, platform};
 /// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
     platform::init_logging();
+    platform::init_panic_hook();
     let modules = Modules::new(&config)?;
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
 }
@@ -293,9 +299,13 @@ impl<G: Game> Driver for GameLoop<G> {
     fn start(mut modules: Modules, window: &Window) -> Starting<Modules, Self::Error> {
         #[cfg(feature = "graphics")]
         let raw = Arc::clone(window.raw());
+        // Shown at once, even with no source to fetch.
+        platform::show_progress(0, 1);
         Box::pin(async move {
             #[cfg(feature = "filesystem")]
-            modules.filesystem.preload().await?;
+            modules.filesystem.preload(platform::show_progress).await?;
+            // Full while the GPU is set up and the game loads.
+            platform::show_progress(1, 1);
             #[cfg(feature = "graphics")]
             modules.graphics.attach(&raw).await?;
             Ok(modules)
@@ -303,7 +313,9 @@ impl<G: Game> Driver for GameLoop<G> {
     }
 
     fn load(modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
-        Self::new(window, size, modules)
+        let game = Self::new(window, size, modules)?;
+        platform::hide_progress();
+        Ok(game)
     }
 
     fn event(&mut self, event: WindowEvent) {
@@ -342,7 +354,10 @@ impl<G: Game> Driver for GameLoop<G> {
         Poll::Ready(Ok(()))
     }
 
+    /// Logs `error` and stops the audio, and on the web shows it over the canvas's last frame. The
+    /// game stops once this returns, as the window drops it.
     fn fail(error: &Self::Error) {
         error!(%error, "the game stopped");
+        platform::fail(&error.to_string());
     }
 }

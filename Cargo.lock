@@ -1971,6 +1971,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
+ "wasm-bindgen",
+ "web-sys",
  "web-time",
 ]
 
