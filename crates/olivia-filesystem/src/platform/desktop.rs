@@ -54,7 +54,10 @@ impl Dir {
 
     /// Nothing to do: the source on disk is read when asked for.
     #[expect(clippy::unused_self, reason = "the web fetches the source here")]
-    pub(crate) fn preload(&mut self) -> impl Future<Output = Result<(), Error>> {
+    pub(crate) fn preload(
+        &mut self,
+        _progress: impl FnMut(usize, usize),
+    ) -> impl Future<Output = Result<(), Error>> {
         future::ready(Ok(()))
     }
 

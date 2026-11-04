@@ -310,10 +310,12 @@ fn a_valid_identity_starts_with_an_empty_save_area() {
 }
 
 #[test]
-fn preload_on_desktop_is_ready_at_once_and_changes_nothing() {
+fn preload_on_desktop_is_ready_at_once_fetches_nothing_and_changes_nothing() {
     let mut a = areas();
     put(a.source.path(), "one.txt", b"source");
-    let poll = pin!(a.fs.preload()).poll(&mut Context::from_waker(Waker::noop()));
+    let preload =
+        a.fs.preload(|fetched, total| panic!("fetched {fetched} of {total} on desktop"));
+    let poll = pin!(preload).poll(&mut Context::from_waker(Waker::noop()));
     assert!(matches!(poll, Poll::Ready(Ok(()))));
     assert_eq!(a.fs.read("one.txt").unwrap(), b"source");
 }

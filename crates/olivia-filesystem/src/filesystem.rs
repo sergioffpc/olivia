@@ -49,12 +49,15 @@ impl Filesystem {
 
     /// Fetches the source into memory on the web, and does nothing on desktop.
     ///
+    /// On the web, `progress` receives the files fetched so far and the manifest's line count: once
+    /// the manifest arrives, and then after each file. Desktop fetches nothing and never calls it.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if the manifest or a file it lists cannot be fetched.
     #[doc(hidden)]
-    pub async fn preload(&mut self) -> Result<(), Error> {
-        self.source.preload().await
+    pub async fn preload(&mut self, progress: impl FnMut(usize, usize)) -> Result<(), Error> {
+        self.source.preload(progress).await
     }
 
     /// Reads a file, from the save area if it is there and from the source otherwise.
