@@ -41,7 +41,7 @@ pub use timer::Timer;
 pub type Result<T = (), E = Box<dyn std::error::Error + Send + Sync>> = std::result::Result<T, E>;
 
 /// A game: the phases Olivia drives around the [world](ecs) it simulates and draws.
-pub trait Game: Sized {
+pub trait Game: Sized + 'static {
     /// Builds the game. Runs after the window exists and before anything else.
     ///
     /// With [hot reload](Config::hot_reload) it runs again whenever the source changes, on an empty

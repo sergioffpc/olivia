@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use olivia_math::Vec2;
 use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::window::Fullscreen;
 
+use crate::platform;
 /// What happened to the window since the last update.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,17 +43,18 @@ impl Window {
         }
     }
 
-    /// Sets the title.
+    /// Sets the title, which on the web is the page's title.
     pub fn set_title(&mut self, title: &str) {
         if let Some(raw) = &self.raw {
-            raw.set_title(title);
+            platform::set_title(raw, title);
         }
     }
 
-    /// Enters or leaves fullscreen.
+    /// Enters or leaves fullscreen. On the web, a request the browser refuses is repeated on the
+    /// player's next key or pointer press.
     pub fn set_fullscreen(&mut self, fullscreen: bool) {
         if let Some(raw) = &self.raw {
-            raw.set_fullscreen(fullscreen.then_some(Fullscreen::Borderless(None)));
+            platform::set_fullscreen(raw, fullscreen);
         }
     }
 
