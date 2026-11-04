@@ -1898,6 +1898,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
+ "web-time",
 ]
 
 [[package]]
@@ -1983,6 +1984,7 @@ dependencies = [
  "olivia-math",
  "thiserror 2.0.21",
  "tracing",
+ "web-time",
  "winit",
 ]
 

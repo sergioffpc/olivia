@@ -3,10 +3,10 @@
 use std::cell::{Cell, RefCell};
 use std::iter;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use olivia::math::Vec2;
-use olivia::window::{Window, WindowEvent};
+use olivia::window::{Next, Window};
 use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Level, Subscriber};
@@ -131,25 +131,50 @@ fn load_is_an_info_span_and_update_and_draw_are_trace_spans() {
     );
 }
 
-#[test]
-fn while_minimised_nothing_is_drawn_and_updates_keep_running() {
+/// A loaded `Traced<0>` on a headless window, whose frames are never presented.
+fn start() -> (GameLoop<Traced<0>>, Window) {
     let mut window = Window::headless();
     let modules = Modules::new(&Config::new("test")).unwrap();
-    let mut game_loop = GameLoop::<Traced<0>>::new(&mut window, Vec2::ZERO, modules).unwrap();
-    game_loop.run_frame(Duration::ZERO, &mut window).unwrap();
+    let game_loop = GameLoop::new(&mut window, Vec2::ZERO, modules).unwrap();
+    (game_loop, window)
+}
 
-    game_loop.push(WindowEvent::Minimized(true));
-    let (records, ()) = recorded(|| {
-        game_loop.run_frame(STEP, &mut window).unwrap();
-        game_loop.run_frame(STEP, &mut window).unwrap();
-    });
-    assert_eq!(phases(&records), "UU");
+#[test]
+fn an_unpresented_frame_asks_for_the_next_one_a_fixed_step_after_it_began() {
+    let (mut game_loop, mut window) = start();
+    let now = Instant::now();
+    let next = game_loop.run_frame_at(now, &mut window).unwrap();
+    assert_eq!(next, Next::At(now + STEP));
+}
 
-    game_loop.push(WindowEvent::Minimized(false));
-    let (records, ()) = recorded(|| {
-        game_loop.run_frame(STEP, &mut window).unwrap();
-    });
+#[test]
+fn a_frame_that_comes_late_runs_the_steps_it_missed() {
+    let (mut game_loop, mut window) = start();
+    let now = Instant::now();
+    game_loop.run_frame_at(now, &mut window).unwrap();
+    let (records, _) = recorded(|| game_loop.run_frame_at(now + STEP * 3, &mut window));
+    assert_eq!(phases(&records), "UUUD");
+}
+
+#[test]
+fn a_frame_after_a_pause_restarts_the_clock_with_no_catch_up_steps() {
+    let (mut game_loop, mut window) = start();
+    let now = Instant::now();
+    game_loop.run_frame_at(now, &mut window).unwrap();
+    let after_pause = now + Duration::from_secs(5);
+    let (records, _) = recorded(|| game_loop.run_frame_at(after_pause, &mut window));
+    assert_eq!(records, [(Level::TRACE, "draw")]);
+    let (records, _) = recorded(|| game_loop.run_frame_at(after_pause + STEP, &mut window));
     assert_eq!(phases(&records), "UD");
+}
+
+#[test]
+fn a_frame_that_quits_asks_for_no_next_one() {
+    let mut window = Window::headless();
+    let modules = Modules::new(&Config::new("test")).unwrap();
+    let mut game_loop = GameLoop::<Traced<1>>::new(&mut window, Vec2::ZERO, modules).unwrap();
+    let next = game_loop.run_frame_at(Instant::now(), &mut window).unwrap();
+    assert_eq!(next, Next::Stop);
 }
 
 /// Records each span and event of the loop as a level and a name, `event` for events. Leaves out
