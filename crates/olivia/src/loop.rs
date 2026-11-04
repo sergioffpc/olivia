@@ -15,11 +15,15 @@ use tracing::{info_span, trace_span};
 use web_time::Instant;
 
 use crate::clock::SystemClock;
-use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
+use crate::{Config, Game, Modules, Result, Setup, Timer, Update, platform};
 
 /// Opens a window and runs `G` on it until it quits or a phase fails.
 ///
 /// Must be called on the main thread, at most once per process.
+///
+/// It first sets up logging at `info`, to the terminal on desktop, where `RUST_LOG` replaces the
+/// filter when set, and to the browser console on the web. A `tracing` subscriber the game
+/// installed before is kept instead.
 ///
 /// # Errors
 ///
@@ -28,6 +32,7 @@ use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
 /// no GPU can draw to it, at the start or after the GPU is lost; or the first `Err` from
 /// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
+    platform::init_logging();
     let modules = Modules::new(&config)?;
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
 }
@@ -58,6 +63,16 @@ fn load<G: Game>(window: &mut Window, modules: &mut Modules) -> Result<G> {
     #[cfg(feature = "physics")]
     modules.simulation.sync(&mut modules.world);
     Ok(game)
+}
+
+/// Whether `event` presses a key or a mouse button, which lets audio play on the web.
+#[cfg(feature = "audio")]
+fn is_press(event: &raw::Event) -> bool {
+    match event {
+        raw::Event::KeyboardInput { event, .. } => event.state.is_pressed(),
+        raw::Event::MouseInput { state, .. } => state.is_pressed(),
+        _ => false,
+    }
 }
 
 impl<G: Game> GameLoop<G> {
@@ -241,6 +256,12 @@ impl<G: Game> Driver for GameLoop<G> {
 
     #[cfg_attr(not(feature = "input"), expect(unused_variables))]
     fn raw_event(&mut self, event: &raw::Event, scale_factor: f64) {
+        // The browser lets audio play only from inside the handler of a key or button press,
+        // which is where this runs on the web.
+        #[cfg(feature = "audio")]
+        if is_press(event) {
+            self.modules.audio.resume();
+        }
         #[cfg(feature = "input")]
         self.modules.input.on_event(event, scale_factor);
     }

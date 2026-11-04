@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, Weak};
 use olivia_math::{Color, Vec2};
 use olivia_window::Window;
 use tracing::{debug, warn};
-use wgpu::ErrorFilter;
+use wgpu::{ErrorFilter, Limits};
 
 use crate::Error;
 use crate::camera::Camera;
@@ -167,7 +167,8 @@ impl Graphics {
     ///
     /// # Panics
     ///
-    /// Panics if the image is larger than the GPU supports.
+    /// Panics if the image is wider or taller than 2048 pixels, WebGL2's limit, which every
+    /// platform keeps.
     pub fn texture(&mut self, bytes: &[u8]) -> Result<Texture, Error> {
         let image = image::load_from_memory(bytes)
             .map_err(|error| Error::UndecodableImage(error.into()))?
@@ -185,7 +186,7 @@ impl Graphics {
     /// # Panics
     ///
     /// Panics if the texture is empty, if `pixels` does not hold 4 bytes per pixel, or if the
-    /// texture is larger than the GPU supports.
+    /// texture is wider or taller than 2048 pixels, WebGL2's limit, which every platform keeps.
     pub fn texture_rgba(
         &mut self,
         width: u32,
@@ -202,6 +203,11 @@ impl Graphics {
     }
 
     fn upload(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Texture {
+        let max = Limits::downlevel_webgl2_defaults().max_texture_dimension_2d;
+        assert!(
+            width <= max && height <= max,
+            "a {width} by {height} texture is larger than {max} pixels on a side"
+        );
         let bind_group = self
             .gpu
             .as_ref()
