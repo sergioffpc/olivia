@@ -1868,6 +1868,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber",
+ "web-time",
 ]
 
 [[package]]
@@ -1951,6 +1952,7 @@ dependencies = [
  "olivia-math",
  "thiserror 2.0.21",
  "tracing",
+ "web-time",
  "winit",
 ]
 

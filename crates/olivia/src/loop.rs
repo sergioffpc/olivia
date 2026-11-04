@@ -8,10 +8,11 @@ use olivia_filesystem::Watcher;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 use olivia_math::Vec2;
-use olivia_window::{Driver, Window, WindowEvent, raw};
+use olivia_window::{Driver, Next, Window, WindowEvent, raw};
 #[cfg(feature = "filesystem")]
 use tracing::{error, info, warn};
 use tracing::{info_span, trace_span};
+use web_time::Instant;
 
 use crate::clock::SystemClock;
 use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
@@ -41,7 +42,6 @@ pub struct GameLoop<G> {
     quit: Cell<bool>,
     /// The events waiting for the next step.
     events: Vec<WindowEvent>,
-    is_minimized: bool,
     /// Whether the last frame reached the window, so the clock leaves its pace to vsync.
     presented: bool,
     /// The window's logical size, which a reloaded game has to be told.
@@ -89,7 +89,6 @@ impl<G: Game> GameLoop<G> {
             timer: Timer::new(),
             quit: Cell::new(false),
             events: vec![WindowEvent::Resized(size)],
-            is_minimized: false,
             presented: false,
             #[cfg(feature = "filesystem")]
             size,
@@ -100,9 +99,6 @@ impl<G: Game> GameLoop<G> {
 
     /// Receives an event from the window.
     pub fn push(&mut self, event: WindowEvent) {
-        if let WindowEvent::Minimized(is_minimized) = event {
-            self.is_minimized = is_minimized;
-        }
         #[cfg(feature = "filesystem")]
         if let WindowEvent::Resized(size) = event {
             self.size = size;
@@ -114,6 +110,19 @@ impl<G: Game> GameLoop<G> {
     #[cfg(feature = "input")]
     pub fn input(&mut self) -> &mut Input {
         &mut self.modules.input
+    }
+
+    /// Runs a frame that starts at `now`, timed by the wall clock, and returns when to run the next.
+    ///
+    /// # Errors
+    ///
+    /// As [`run_frame`](Self::run_frame).
+    pub fn run_frame_at(&mut self, now: Instant, window: &mut Window) -> Result<Next> {
+        let frame_time = self.clock.start_frame(now);
+        if !self.run_frame(frame_time, window)? {
+            return Ok(Next::Stop);
+        }
+        Ok(self.clock.end_frame(self.presented))
     }
 
     /// Runs a frame that took `frame_time` and returns whether to keep going.
@@ -150,7 +159,7 @@ impl<G: Game> GameLoop<G> {
             }
         }
 
-        self.presented = !self.is_minimized && self.present()?;
+        self.presented = self.present()?;
         Ok(true)
     }
 
@@ -236,8 +245,7 @@ impl<G: Game> Driver for GameLoop<G> {
         self.modules.input.on_event(event, scale_factor);
     }
 
-    fn frame(&mut self, window: &mut Window) -> Result<bool> {
-        let frame_time = self.clock.next_frame(self.presented);
-        self.run_frame(frame_time, window)
+    fn frame(&mut self, window: &mut Window) -> Result<Next> {
+        self.run_frame_at(Instant::now(), window)
     }
 }

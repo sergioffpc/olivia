@@ -1,8 +1,9 @@
 use olivia_math::Vec2;
 use tracing::info;
+use web_time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::WindowEvent as WinitEvent;
+use winit::event::{StartCause, WindowEvent as WinitEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Fullscreen, WindowId};
 
@@ -20,6 +21,17 @@ pub struct Attributes {
     pub resizable: bool,
     /// Whether the window starts fullscreen.
     pub fullscreen: bool,
+}
+
+/// When a driver wants its next frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Next {
+    /// As soon as the window is redrawn: presenting the frame just run has paced it.
+    Redraw,
+    /// No sooner than this: nothing paced the frame just run.
+    At(Instant),
+    /// Never: the driver has stopped.
+    Stop,
 }
 
 /// What [`run`] drives once the window exists.
@@ -43,12 +55,15 @@ pub trait Driver: Sized {
     /// Receives every event as the platform reports it, on a window of this `scale_factor`.
     fn raw_event(&mut self, event: &WinitEvent, scale_factor: f64);
 
-    /// Runs one frame and returns whether to keep going.
+    /// Runs one frame, when the window is redrawn, and returns when to run the next.
+    ///
+    /// A window the player cannot see, such as a minimised one, may not be redrawn, so frames stop
+    /// there until it comes back.
     ///
     /// # Errors
     ///
     /// An `Err` closes the window and returns from [`run`].
-    fn frame(&mut self, window: &mut Window) -> Result<bool, Self::Error>;
+    fn frame(&mut self, window: &mut Window) -> Result<Next, Self::Error>;
 }
 
 /// Opens a window and drives `D`, started from `seed`, on it until it stops. Must be called on the
@@ -75,7 +90,6 @@ pub fn run<D: Driver>(attributes: Attributes, seed: D::Seed) -> Result<(), D::Er
 struct Running<D> {
     driver: D,
     window: Window,
-    is_minimized: bool,
 }
 
 struct Host<D: Driver> {
@@ -107,11 +121,27 @@ impl<D: Driver> Host<D> {
         let size = logical_size(raw.inner_size(), raw.scale_factor());
         let mut window = Window::new(raw);
         let driver = D::start(seed, &mut window, size)?;
-        Ok(Running {
-            driver,
-            window,
-            is_minimized: false,
-        })
+        Ok(Running { driver, window })
+    }
+
+    /// Runs a frame and asks for the next one.
+    fn frame(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        if let Some(size) = running.window.applied_size.take() {
+            running.driver.event(WindowEvent::Resized(size));
+        }
+        match running.driver.frame(&mut running.window) {
+            Ok(Next::Redraw) => {
+                event_loop.set_control_flow(ControlFlow::Wait);
+                running.window.raw().request_redraw();
+            }
+            // The redraw is asked for once this time comes, in `new_events`.
+            Ok(Next::At(time)) => event_loop.set_control_flow(ControlFlow::WaitUntil(time)),
+            Ok(Next::Stop) => self.stop(event_loop, Ok(())),
+            Err(error) => self.stop(event_loop, Err(error)),
+        }
     }
 
     /// Tears down the driver and the window, and leaves `result` for [`run`] to return.
@@ -129,14 +159,22 @@ impl<D: Driver> ApplicationHandler for Host<D> {
         };
         match self.start(seed, event_loop) {
             Ok(running) => {
+                running.window.raw().request_redraw();
                 self.running = Some(running);
-                event_loop.set_control_flow(ControlFlow::Poll);
             }
             Err(error) => self.stop(event_loop, Err(error)),
         }
     }
 
-    fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, event: WinitEvent) {
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        if let (StartCause::ResumeTimeReached { .. }, Some(running)) = (cause, &self.running) {
+            // Waiting on, so that a window that is not redrawn does not wake the loop again.
+            event_loop.set_control_flow(ControlFlow::Wait);
+            running.window.raw().request_redraw();
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WinitEvent) {
         let Some(running) = &mut self.running else {
             return;
         };
@@ -148,31 +186,9 @@ impl<D: Driver> ApplicationHandler for Host<D> {
             WinitEvent::Resized(size) => WindowEvent::Resized(logical_size(size, scale_factor)),
             WinitEvent::Focused(focused) => WindowEvent::Focus(focused),
             WinitEvent::CloseRequested => WindowEvent::CloseRequested,
+            WinitEvent::RedrawRequested => return self.frame(event_loop),
             _ => return,
         };
         running.driver.event(event);
-    }
-
-    // Frames run from here and not on redraw requests, which stop while the window is minimised.
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(running) = &mut self.running else {
-            return;
-        };
-
-        // No platform sends an event for this, so it has to be asked for.
-        let is_minimized = running.window.raw().is_minimized().unwrap_or(false);
-        if is_minimized != running.is_minimized {
-            running.is_minimized = is_minimized;
-            running.driver.event(WindowEvent::Minimized(is_minimized));
-        }
-        if let Some(size) = running.window.applied_size.take() {
-            running.driver.event(WindowEvent::Resized(size));
-        }
-
-        match running.driver.frame(&mut running.window) {
-            Ok(true) => {}
-            Ok(false) => self.stop(event_loop, Ok(())),
-            Err(error) => self.stop(event_loop, Err(error)),
-        }
     }
 }

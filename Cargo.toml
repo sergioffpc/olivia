@@ -46,6 +46,7 @@ tempfile = "3"
 thiserror = "2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = "0.3"
+web-time = "1"
 # Vulkan, Metal and DX12 only: no GLES backend, so EGL is never loaded.
 wgpu = { version = "30", default-features = false, features = [
     "dx12",
