@@ -1,0 +1,892 @@
+<!doctype html>
+<!--
+  Plays a character's pictures with one of its movements and a sound, as the game does.
+  Open it from the tools page, tools/index.html, which chooses the assets folder:
+    python3 -m http.server 8000 --directory games/rabisco/tools
+  then open http://localhost:8000/#preview.
+-->
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pré-visualização</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #2c3038; --text: #e8e9ec; --dim: #9096a0;
+    --accent: #ffb547; --rec: #ff4d4d; --left: #4fc3f7; --right: #ff8a65;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  canvas { width: 100%; background: #000; border-radius: 8px; display: block; }
+  #timeline { margin-top: 10px; cursor: pointer; touch-action: none; }
+  select, button {
+    font: inherit; color: var(--text); background: #262a31; border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px;
+  }
+  button { cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  .status { color: var(--dim); min-height: 1.4em; }
+  .status.warn { color: var(--accent); }
+  .picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 20px; }
+  .picks label { display: grid; gap: 4px; }
+  .picks label span, .settings label span { color: var(--dim); font-size: 12px; }
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 20px; }
+  .settings label { display: grid; gap: 2px; }
+  .settings label.check { display: flex; gap: 8px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  #scrub { flex: 1; min-width: 160px; }
+  .keys { color: var(--dim); font-size: 12px; }
+  kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: #262a31; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p id="waiting" class="status">Escolhe a pasta assets do jogo, lá em cima, para tocar o que tem.</p>
+
+  <section id="choose" hidden>
+    <h2>1 · Imagens, movimento e som</h2>
+    <div class="picks">
+      <label><span>Imagens</span><select id="character"></select></label>
+      <label><span>Movimento</span><select id="animation"></select></label>
+      <label><span>Som</span><select id="sound"></select></label>
+    </div>
+    <div class="picks" style="margin-top:10px">
+      <label><span>Por cima, na sua tecla</span><select id="overlay"></select></label>
+      <label><span>O seu som</span><select id="overlaySound"></select></label>
+    </div>
+    <p id="pickStatus" class="status"></p>
+  </section>
+
+  <section id="stageSection" hidden>
+    <h2>2 · Tocar</h2>
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <canvas id="timeline" width="1280" height="110"></canvas>
+    <div class="row" style="margin-top:10px">
+      <button id="play" class="primary">Pausa</button>
+      <button id="restart">Do início</button>
+      <button id="fire">Tocar por cima</button>
+      <button id="back">◀</button>
+      <input id="scrub" type="range" min="0" max="0" step="0.001" value="0">
+      <button id="forward">▶</button>
+      <span id="clock" class="status"></span>
+    </div>
+    <p class="keys">
+      <kbd>Espaço</kbd> tocar ou pausa · <kbd>R</kbd> do início · <kbd>F</kbd> tocar por cima ·
+      <kbd>←</kbd> <kbd>→</kbd> uma linha · arrasta o som na linha do tempo para o mudar de sítio
+    </p>
+    <p id="playStatus" class="status"></p>
+  </section>
+
+  <section id="settingsSection" hidden>
+    <h2>3 · Definições</h2>
+    <div class="settings">
+      <label><span>Velocidade <b id="speedOut"></b></span><input id="speed" type="range" min="0.1" max="2" step="0.05" value="1"></label>
+      <label class="check"><input id="loop" type="checkbox"> Repete</label>
+      <label class="check"><input id="replay" type="checkbox" checked> Tocar outra vez ao fim de um segundo, quando não repete</label>
+      <label><span>Passagem do movimento anterior <b id="crossfadeOut"></b></span><input id="crossfade" type="range" min="0" max="0.5" step="0.01" value="0.1"></label>
+      <label><span>O som começa <b id="delayOut"></b></span><input id="delay" type="range" min="-1" max="1" step="0.01" value="0"></label>
+      <label><span>Volume do som <b id="volumeOut"></b></span><input id="volume" type="range" min="0" max="1" step="0.01" value="1"></label>
+      <label class="check"><input id="everyLoop" type="checkbox" checked> Som em cada volta</label>
+      <label class="check"><input id="music" type="checkbox"> Música por trás</label>
+      <label><span>Volume da música <b id="musicVolumeOut"></b></span><input id="musicVolume" type="range" min="0" max="1" step="0.01" value="0.4"></label>
+      <label><span>Tamanho <b id="zoomOut"></b></span><input id="zoom" type="range" min="0.3" max="2" step="0.05" value="1"></label>
+      <label class="check"><input id="facingLeft" type="checkbox"> Virado para a esquerda</label>
+      <label><span>Atrás</span><select id="backdrop">
+        <option value="scenery">O cenário</option>
+        <option value="checker">Xadrez</option>
+        <option value="dark">Escuro</option>
+        <option value="light">Claro</option>
+      </select></label>
+      <label class="check"><input id="bones" type="checkbox"> Mostrar as articulações</label>
+      <label class="check"><input id="ghosts" type="checkbox"> Mostrar as linhas antes e depois</label>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+// What the game uses, as in games/astronaut-cat/src/game.rs.
+const CROSSFADE = 0.1;
+const OVERLAY_FADE = 0.06;
+const MUSIC = "sfx/music.wav";
+const SCENERY = "level/background.png";
+const REPLAY_AFTER = 1;
+const GHOST_ROWS = 3;
+const POLL_MS = 1000;
+
+// The movement cards of tools/make_cards.py, with the sound the game plays as each starts.
+const CARDS = {
+  "hero/anim_idle.json": { name: "M1 Parado", loops: true },
+  "hero/anim_walk.json": { name: "M2 A andar", loops: true },
+  "hero/anim_jump.json": { name: "M3 Saltar", loops: false, sound: "sfx/jump.wav" },
+  "hero/anim_double_jump.json": { name: "M4 Salto extra", loops: false, sound: "sfx/fart.wav" },
+  "hero/anim_shoot.json": { name: "M5 Disparar", loops: false, sound: "sfx/shoot.wav" },
+  "hero/anim_hurt.json": { name: "M6 Magoar-se", loops: false, sound: "sfx/hurt.wav" },
+  "hero/anim_win.json": { name: "M7 Vitória", loops: false, sound: "sfx/win.wav" },
+  "princess/anim_help.json": { name: "M8 Socorro!", loops: true, sound: "sfx/help.wav" },
+  "princess/anim_win.json": { name: "M9 Livre!", loops: false, sound: "sfx/win.wav" },
+};
+const SOUNDS = {
+  "sfx/jump.wav": "S1 O herói salta",
+  "sfx/fart.wav": "S2 O salto extra",
+  "sfx/shoot.wav": "S3 O herói dispara",
+  "sfx/hit.wav": "S4 Acertou num mau",
+  "sfx/pickup.wav": "S5 Apanhou uma coisa",
+  "sfx/hurt.wav": "S6 O herói magoa-se",
+  "sfx/gameover.wav": "S7 Fim do jogo",
+  "sfx/help.wav": "S8 Socorro!",
+  "sfx/win.wav": "S9 Vitória",
+  "sfx/music.wav": "S10 A música",
+};
+// The game fires over the walk, the stand and the jumps.
+const OVERLAY = "hero/anim_shoot.json";
+
+const $ = (id) => document.getElementById(id);
+const fmt = (s) => `${s.toFixed(2)} s`;
+const TAU = 2 * Math.PI;
+/** The angle `amount` of the way from `from` to `to`, along the shortest path, as the game turns. */
+const shortest = (from, to, amount) => from + ((((to - from + Math.PI) % TAU) + TAU) % TAU - Math.PI) * amount;
+
+function status(id, text, warn = false) {
+  $(id).textContent = text;
+  $(id).classList.toggle("warn", warn);
+}
+
+// ---------- Files ----------
+
+// Each file under the folder, by its path: { handle } with folder access, or { file } without.
+let files = new Map();
+let root = null;
+// What was read, by path: { modified, value }.
+const loaded = new Map();
+
+async function list(dir) {
+  const found = new Map();
+  for await (const [name, entry] of dir.entries()) {
+    if (entry.kind !== "directory") continue;
+    for await (const [inner, file] of entry.entries()) {
+      if (file.kind === "file") found.set(`${name}/${inner}`, { handle: file });
+    }
+  }
+  return found;
+}
+
+async function fileOf(path) {
+  const entry = files.get(path);
+  if (!entry) return null;
+  return entry.file ?? entry.handle.getFile();
+}
+
+/** Reads `path` with `read`, again only once it changed. */
+async function load(path, read) {
+  const file = await fileOf(path);
+  if (!file) return null;
+  const known = loaded.get(path);
+  if (known && known.modified === file.lastModified && known.size === file.size) return known.value;
+  const value = await read(file);
+  loaded.set(path, { modified: file.lastModified, size: file.size, value });
+  return value;
+}
+
+const readJson = async (file) => JSON.parse(await file.text());
+const readImage = (file) => createImageBitmap(file);
+const readSound = async (file) => audio().decodeAudioData(await file.arrayBuffer());
+
+// ---------- Character ----------
+
+/** A skeleton.json with its pictures, as the game's Character holds it. */
+async function loadCharacter(folder) {
+  const skeleton = await load(`${folder}/skeleton.json`, readJson);
+  const entries = skeleton.joints;
+  const missing = [];
+  const joints = await Promise.all(entries.map(async (entry) => {
+    const parent = entry.parent === undefined ? -1 : entries.findIndex((other) => other.part === entry.parent);
+    const offset = parent < 0 ? [0, 0]
+      : [entry.parent_point[0] - entries[parent].point[0], entry.parent_point[1] - entries[parent].point[1]];
+    const image = await load(`${folder}/${entry.part}.png`, readImage).catch(() => null);
+    if (!image) missing.push(`${entry.part}.png`);
+    return { name: entry.name, part: entry.part, point: entry.point, parent, offset, image };
+  }));
+  // Every joint after the one it hangs from.
+  const walk = [joints.findIndex((joint) => joint.parent < 0)];
+  for (let next = 0; next < walk.length; next++) {
+    joints.forEach((joint, index) => joint.parent === walk[next] && walk.push(index));
+  }
+  if (walk.length !== joints.length) throw new Error(`${folder}/skeleton.json não forma uma só árvore`);
+  const character = { folder, joints, walk, missing };
+  character.bounds = bounds(character, poses(character, joints.map(() => 0)));
+  return character;
+}
+
+/** Where each joint is from the root, and how much its part turns, in the picture's pixels. */
+function poses(character, angles) {
+  const out = [];
+  for (const index of character.walk) {
+    const joint = character.joints[index];
+    const parent = joint.parent < 0 ? { at: [0, 0], turn: 0 } : out[joint.parent];
+    const [c, s] = [Math.cos(parent.turn), Math.sin(parent.turn)];
+    const [x, y] = joint.offset;
+    out[index] = { at: [parent.at[0] + x * c - y * s, parent.at[1] + x * s + y * c], turn: parent.turn + angles[index] };
+  }
+  return out;
+}
+
+/** The box round every picture in a pose. */
+function bounds(character, posed) {
+  let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
+  character.joints.forEach((joint, index) => {
+    if (!joint.image) return;
+    const { at, turn } = posed[index];
+    const [c, s] = [Math.cos(turn), Math.sin(turn)];
+    for (const [cx, cy] of [[0, 0], [joint.image.width, 0], [0, joint.image.height], [joint.image.width, joint.image.height]]) {
+      const [x, y] = [cx - joint.point[0], cy - joint.point[1]];
+      const [px, py] = [at[0] + x * c - y * s, at[1] + x * s + y * c];
+      [left, top, right, bottom] = [Math.min(left, px), Math.min(top, py), Math.max(right, px), Math.max(bottom, py)];
+    }
+  });
+  return { left, top, right, bottom };
+}
+
+// ---------- Animation ----------
+
+/** An animation file, checked as the game checks it, with each skeleton joint's column. */
+function columnsOf(character, animation) {
+  const lacking = animation.joints.find((name) => !character.joints.some((joint) => joint.name === name));
+  if (lacking) throw new Error(`as imagens não têm a articulação ${lacking}`);
+  return character.joints.map((joint) => {
+    const column = animation.joints.indexOf(joint.name);
+    return column < 0 ? null : column;
+  });
+}
+
+const lengthOf = (animation) => animation.rows.length / animation.fps;
+
+/** The two rows around `age`, and how far between them, as the game reads them. */
+function rowsAt(animation, age, looping) {
+  const rows = animation.rows;
+  const at = Math.max(0, age) * animation.fps;
+  const row = Math.floor(at);
+  if (looping) return [rows[row % rows.length], rows[(row + 1) % rows.length], at - row];
+  if (row + 1 < rows.length) return [rows[row], rows[row + 1], at - row];
+  return [rows.at(-1), rows.at(-1), 0];
+}
+
+/** The angle of each part from a track `age` seconds in, before any crossfade. */
+function own(track, age) {
+  const [row, next, between] = rowsAt(track.animation, age, track.looping);
+  return track.columns.map((column) => (column === null ? 0 : shortest(row[column], next[column], between)));
+}
+
+const fade = (track) => (track.crossfade > 0 ? Math.min(1, Math.max(0, track.age / track.crossfade)) : 1);
+
+function angles() {
+  if (!character) return [];
+  let out = base ? own(base, base.age).map((to, i) => shortest(base.from[i], to, fade(base))) : character.joints.map(() => 0);
+  if (overlay) {
+    const amount = fade(overlay);
+    const mine = own(overlay, overlay.age);
+    out = out.map((angle, i) => {
+      if (overlay.columns[i] === null) return angle;
+      return overlay.leaving ? shortest(overlay.from[i], angle, amount) : shortest(overlay.from[i], mine[i], amount);
+    });
+  }
+  return out;
+}
+
+// ---------- Sound ----------
+
+let context = null;
+let sfxGain, musicGain;
+let playingSounds = new Set();
+let musicSource = null;
+
+function audio() {
+  if (!context) {
+    context = new AudioContext();
+    sfxGain = context.createGain();
+    sfxGain.connect(context.destination);
+    musicGain = context.createGain();
+    musicGain.connect(context.destination);
+    showSettings();
+  }
+  return context;
+}
+
+/** Plays `buffer` from `offset` seconds in, `wait` seconds from now, at the animation's speed. */
+function playSound(buffer, offset, wait, keep = true) {
+  if (!buffer || offset >= buffer.duration) return;
+  const source = audio().createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = speed();
+  source.connect(sfxGain);
+  source.start(context.currentTime + Math.max(0, wait), Math.max(0, offset));
+  if (keep) {
+    playingSounds.add(source);
+    source.onended = () => playingSounds.delete(source);
+  }
+}
+
+function stopSounds() {
+  for (const source of playingSounds) source.stop();
+  playingSounds.clear();
+}
+
+/** Plays the movement's sound from where the playhead is, in the loop it is in. */
+function syncSound() {
+  stopSounds();
+  if (!playing || !sound || !base) return;
+  const length = lengthOf(base.animation);
+  const local = $("everyLoop").checked && base.looping ? base.age % length : base.age;
+  const at = local - delay();
+  playSound(sound, at, -at / speed());
+}
+
+async function syncMusic() {
+  const wanted = $("music").checked && playing && files.has(MUSIC);
+  if (!wanted) {
+    musicSource?.stop();
+    musicSource = null;
+    return;
+  }
+  if (musicSource) return;
+  const buffer = await load(MUSIC, readSound);
+  if (musicSource || !$("music").checked || !playing) return;
+  musicSource = audio().createBufferSource();
+  musicSource.buffer = buffer;
+  musicSource.loop = true;
+  musicSource.connect(musicGain);
+  musicSource.start();
+}
+
+// ---------- State ----------
+
+let character = null;
+let base = null; // { path, animation, columns, looping, from, crossfade, age }
+let overlay = null; // the same, with leaving
+let sound = null;
+let overlaySound = null;
+let scenery = null;
+let playing = true;
+let lastTick = 0;
+let loopIndex = 0;
+let pending = Promise.resolve();
+
+const speed = () => +$("speed").value;
+const delay = () => +$("delay").value;
+
+function startBase(path, animation, from) {
+  const columns = columnsOf(character, animation);
+  base = { path, animation, columns, looping: $("loop").checked, age: 0, from: null, crossfade: +$("crossfade").value };
+  // From the pose on screen, or else straight from the first row.
+  base.from = from ?? own(base, 0);
+  loopIndex = 0;
+  updateScrub();
+}
+
+function restart() {
+  if (!base) return;
+  base.age = 0;
+  base.from = own(base, 0);
+  loopIndex = 0;
+  overlay = null;
+  syncSound();
+}
+
+function fire() {
+  const path = $("overlay").value;
+  if (!character || !path) return;
+  const animation = loaded.get(path)?.value;
+  if (!animation) return;
+  try {
+    overlay = { path, animation, columns: columnsOf(character, animation), looping: false, age: 0,
+      from: angles(), crossfade: OVERLAY_FADE, leaving: false };
+    playSound(overlaySound, 0, 0, false);
+  } catch (error) {
+    status("playStatus", `Não dá para tocar por cima: ${error.message}.`, true);
+  }
+}
+
+// ---------- Folder ----------
+
+// The tools page chooses the assets folder for every page and hands it over: the folder, which is
+// watched, or without folder access its files, which are chosen again after a change.
+if (window.parent === window) location.replace("../#preview");
+addEventListener("message", async (event) => {
+  if (event.origin !== location.origin) return;
+  if ("folder" in event.data) {
+    root = event.data.folder;
+    files = root ? await list(root) : new Map();
+  } else if ("files" in event.data) {
+    root = null;
+    files = new Map(event.data.files.map(([path, file]) => [path, { file }]));
+  } else {
+    return;
+  }
+  loaded.clear();
+  if (files.size) await opened();
+});
+
+/** Fills the choices from what the folder holds, keeping the ones made. */
+function fillChoices() {
+  const paths = [...files.keys()].sort();
+  const fill = (select, options, none) => {
+    const kept = select.value;
+    select.replaceChildren();
+    if (none) select.add(new Option(none, ""));
+    for (const [value, label] of options) select.add(new Option(label, value));
+    if ([...select.options].some((option) => option.value === kept)) select.value = kept;
+  };
+  const characters = paths.filter((p) => p.endsWith("/skeleton.json")).map((p) => p.split("/")[0]);
+  const animations = paths.filter((p) => /\/anim_[^/]*\.json$/.test(p));
+  const sounds = paths.filter((p) => p.endsWith(".wav"));
+  const named = (path, names) => [path, names[path] ? `${names[path].name ?? names[path]} (${path})` : path];
+  fill($("character"), characters.map((folder) => [folder, folder]));
+  fill($("animation"), animations.map((path) => named(path, CARDS)));
+  fill($("sound"), sounds.map((path) => named(path, SOUNDS)), "Sem som");
+  fill($("overlay"), animations.map((path) => named(path, CARDS)), "Nada");
+  fill($("overlaySound"), sounds.map((path) => named(path, SOUNDS)), "Sem som");
+}
+
+async function opened() {
+  const first = $("animation").options.length === 0;
+  fillChoices();
+  $("waiting").hidden = true;
+  $("choose").hidden = false;
+  $("stageSection").hidden = false;
+  $("settingsSection").hidden = false;
+  if (first) {
+    if (files.has(OVERLAY)) $("overlay").value = OVERLAY;
+    if (files.has(CARDS[OVERLAY].sound)) $("overlaySound").value = CARDS[OVERLAY].sound;
+    if (files.has("hero/anim_walk.json")) $("animation").value = "hero/anim_walk.json";
+    animationChosen();
+  }
+  await refresh();
+}
+
+// ---------- Choices ----------
+
+/** A movement picks its own character's pictures, its card's sound and whether it loops. */
+function animationChosen() {
+  const path = $("animation").value;
+  const folder = path.split("/")[0];
+  if ([...$("character").options].some((option) => option.value === folder)) $("character").value = folder;
+  const card = CARDS[path];
+  $("sound").value = card?.sound && files.has(card.sound) ? card.sound : "";
+  $("loop").checked = card?.loops ?? true;
+  $("everyLoop").checked = true;
+  showSettings();
+  const lacking = card?.sound && !files.has(card.sound) ? `${card.sound} ainda não foi gravado.` : "";
+  status("pickStatus", lacking, Boolean(lacking));
+  refresh(true);
+}
+
+$("animation").addEventListener("change", animationChosen);
+for (const id of ["character", "sound", "overlay", "overlaySound"]) $(id).addEventListener("change", () => refresh());
+
+/**
+ * Reads whatever was chosen, again where a file changed, and starts what changed. `chosen` starts
+ * the movement from the start, crossfading from the pose on screen, as the game changes movement.
+ */
+function refresh(chosen = false) {
+  pending = pending.then(() => reload(chosen)).catch((error) => status("playStatus", error.message, true));
+  return pending;
+}
+
+async function reload(chosen) {
+  const folder = $("character").value;
+  const path = $("animation").value;
+  if (!folder || !path) return;
+  const was = character;
+  const skeletonFile = loaded.get(`${folder}/skeleton.json`);
+  const heard = sound;
+  try {
+    character = await loadCharacter(folder);
+  } catch (error) {
+    character = null;
+    base = null;
+    return status("playStatus", `Não dá para mostrar ${folder}: ${error.message}.`, true);
+  }
+  const animation = await load(path, readJson);
+  const overlayPath = $("overlay").value;
+  if (overlayPath) await load(overlayPath, readJson);
+  sound = $("sound").value ? await load($("sound").value, readSound) : null;
+  overlaySound = $("overlaySound").value ? await load($("overlaySound").value, readSound) : null;
+  scenery = files.has(SCENERY) ? await load(SCENERY, readImage) : null;
+
+  const other = was?.folder !== folder || skeletonFile !== loaded.get(`${folder}/skeleton.json`);
+  try {
+    if (chosen || other || !base || base.path !== path) {
+      const from = !chosen || !was || other || !base ? null : angles();
+      startBase(path, animation, from);
+      syncSound();
+    } else if (base.animation !== animation) {
+      // The file changed: keep the playhead.
+      base.columns = columnsOf(character, animation);
+      base.animation = animation;
+      updateScrub();
+    }
+  } catch (error) {
+    base = null;
+    return status("playStatus", `Não dá para tocar ${path}: ${error.message}.`, true);
+  }
+  if (sound !== heard) syncSound();
+  const missing = character.missing.length ? ` Faltam imagens: ${character.missing.join(", ")}.` : "";
+  status("playStatus",
+    `${path}: ${animation.rows.length} linhas a ${animation.fps} fps (${fmt(lengthOf(animation))}), ` +
+    `${animation.joints.length} de ${character.joints.length} articulações.` +
+    (sound ? ` ${$("sound").value}: ${fmt(sound.duration)}.` : "") + missing,
+    Boolean(missing));
+}
+
+// Saving from the other pages changes the files: read them again, and list what is new.
+setInterval(async () => {
+  if (!root || document.hidden) return;
+  try {
+    const found = await list(root);
+    const before = [...files.keys()].join();
+    files = found;
+    if ([...found.keys()].join() !== before) fillChoices();
+    const used = [`${$("character").value}/skeleton.json`, $("animation").value, $("overlay").value,
+      $("sound").value, $("overlaySound").value];
+    let changed = false;
+    for (const path of loaded.keys()) {
+      const file = await fileOf(path);
+      const known = loaded.get(path);
+      if (file && (file.lastModified !== known.modified || file.size !== known.size)) changed = true;
+    }
+    if (changed || used.some((path) => path && files.has(path) && !loaded.has(path))) await refresh();
+  } catch {
+    // The folder can vanish or lose its permission; the next pick fixes it.
+  }
+}, POLL_MS);
+
+// ---------- Settings ----------
+
+function showSettings() {
+  $("speedOut").textContent = `${speed().toFixed(2)}×`;
+  $("crossfadeOut").textContent = +$("crossfade").value ? fmt(+$("crossfade").value) : "um corte";
+  $("delayOut").textContent = delay() === 0 ? "com o movimento" : delay() > 0 ? `${fmt(delay())} depois` : `${fmt(-delay())} antes`;
+  $("volumeOut").textContent = `${Math.round(+$("volume").value * 100)}%`;
+  $("musicVolumeOut").textContent = `${Math.round(+$("musicVolume").value * 100)}%`;
+  $("zoomOut").textContent = `${Math.round(+$("zoom").value * 100)}%`;
+  $("musicVolume").disabled = !$("music").checked;
+  $("everyLoop").disabled = !$("loop").checked;
+  if (context) {
+    sfxGain.gain.value = +$("volume").value;
+    musicGain.gain.value = +$("musicVolume").value;
+  }
+}
+showSettings();
+
+for (const id of ["speed", "crossfade", "volume", "musicVolume", "zoom"]) $(id).addEventListener("input", showSettings);
+$("speed").addEventListener("change", syncSound);
+$("delay").addEventListener("input", () => { showSettings(); syncSound(); });
+$("loop").addEventListener("change", () => {
+  showSettings();
+  if (base) base.looping = $("loop").checked;
+  syncSound();
+});
+$("everyLoop").addEventListener("change", syncSound);
+$("music").addEventListener("change", () => { audio(); showSettings(); syncMusic(); });
+
+// ---------- Transport ----------
+
+function setPlaying(on) {
+  playing = on;
+  $("play").textContent = playing ? "Pausa" : "Tocar";
+  context?.resume();
+  syncSound();
+  syncMusic();
+}
+
+function updateScrub() {
+  if (!base) return;
+  $("scrub").max = lengthOf(base.animation).toFixed(3);
+}
+
+function seek(age) {
+  if (!base) return;
+  if (playing) setPlaying(false);
+  base.age = Math.max(0, Math.min(age, lengthOf(base.animation)));
+  base.from = own(base, base.age);
+  loopIndex = 0;
+  overlay = null;
+}
+
+function step(rows) {
+  if (!base) return;
+  const fps = base.animation.fps;
+  const length = lengthOf(base.animation);
+  const local = base.looping ? base.age % length : Math.min(base.age, length);
+  seek(((Math.round(local * fps) + rows + base.animation.rows.length) % base.animation.rows.length) / fps);
+}
+
+$("play").addEventListener("click", () => setPlaying(!playing));
+$("restart").addEventListener("click", () => { context?.resume(); restart(); if (!playing) setPlaying(true); });
+$("fire").addEventListener("click", () => { context?.resume(); fire(); });
+$("back").addEventListener("click", () => step(-1));
+$("forward").addEventListener("click", () => step(1));
+$("scrub").addEventListener("input", () => seek(+$("scrub").value));
+
+document.addEventListener("keydown", (event) => {
+  if (event.target.matches("select, input:not([type=range]):not([type=checkbox])") || event.metaKey || event.ctrlKey) return;
+  const actions = {
+    " ": () => setPlaying(!playing),
+    r: () => $("restart").click(),
+    f: () => $("fire").click(),
+    ArrowLeft: () => step(-1),
+    ArrowRight: () => step(1),
+  };
+  const action = actions[event.key] ?? actions[event.key.toLowerCase()];
+  if (!action) return;
+  event.preventDefault();
+  action();
+});
+
+// ---------- Timeline ----------
+
+const timeline = $("timeline").getContext("2d");
+let dragging = null;
+
+/** The seconds the timeline spans and where the sound sits on it. */
+function span() {
+  const length = lengthOf(base.animation);
+  const end = Math.max(length, sound ? delay() + sound.duration : 0);
+  const start = Math.min(0, delay());
+  return { start, end: end + 0.05 * (end - start), length };
+}
+
+const toX = (t, s) => ((t - s.start) / (s.end - s.start)) * timeline.canvas.width;
+const toT = (x, s) => s.start + (x / timeline.canvas.width) * (s.end - s.start);
+
+function drawTimeline() {
+  const { width, height } = timeline.canvas;
+  timeline.fillStyle = "#0d0f12";
+  timeline.fillRect(0, 0, width, height);
+  if (!base) return;
+  const s = span();
+  const lane = height / 2;
+
+  // The movement, one tick a row.
+  const rows = base.animation.rows.length;
+  timeline.fillStyle = "#262a31";
+  timeline.fillRect(toX(0, s), 8, toX(s.length, s) - toX(0, s), lane - 12);
+  timeline.fillStyle = "#4a505c";
+  for (let row = 0; row <= rows; row++) {
+    const x = toX(row / base.animation.fps, s);
+    timeline.fillRect(x, row % 10 === 0 ? 8 : lane - 12, 1, row % 10 === 0 ? lane - 12 : 8);
+  }
+  timeline.fillStyle = "#e8e9ec";
+  timeline.font = "20px system-ui";
+  timeline.textBaseline = "top";
+  timeline.fillText($("animation").value, toX(0, s) + 8, 14);
+
+  // The sound, at its delay.
+  if (sound) {
+    const [x0, x1] = [toX(delay(), s), toX(delay() + sound.duration, s)];
+    timeline.fillStyle = dragging ? "#4a3a1e" : "#33291a";
+    timeline.fillRect(x0, lane + 4, x1 - x0, lane - 12);
+    const data = sound.getChannelData(0);
+    const mid = lane + 4 + (lane - 12) / 2;
+    timeline.fillStyle = "#ffb547";
+    for (let x = Math.max(0, Math.floor(x0)); x < Math.min(width, x1); x++) {
+      const from = Math.floor(((x - x0) / (x1 - x0)) * data.length);
+      const to = Math.floor(((x + 1 - x0) / (x1 - x0)) * data.length);
+      let peak = 0;
+      for (let i = from; i < to; i += 4) peak = Math.max(peak, Math.abs(data[i]));
+      const h = Math.max(1, peak * (lane - 14));
+      timeline.fillRect(x, mid - h / 2, 1, h);
+    }
+  } else {
+    timeline.fillStyle = "#9096a0";
+    timeline.fillText("Sem som", toX(0, s) + 8, lane + 12);
+  }
+
+  // The playhead, in the loop it is in.
+  const local = base.looping ? base.age % s.length : Math.min(base.age, s.length);
+  timeline.fillStyle = "#ff4d4d";
+  timeline.fillRect(toX(local, s) - 1, 0, 3, height);
+}
+
+$("timeline").addEventListener("pointerdown", (event) => {
+  if (!base) return;
+  const rect = event.target.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * timeline.canvas.width;
+  const y = ((event.clientY - rect.top) / rect.height) * timeline.canvas.height;
+  const s = span();
+  const t = toT(x, s);
+  event.target.setPointerCapture(event.pointerId);
+  // The sound's lane drags the sound; anywhere else moves the playhead.
+  if (sound && y > timeline.canvas.height / 2 && t >= delay() && t <= delay() + sound.duration) {
+    dragging = { grab: t - delay(), span: s };
+  } else {
+    dragging = null;
+    seek(Math.min(t, s.length));
+    event.target.onpointermove = (move) => {
+      const mx = ((move.clientX - rect.left) / rect.width) * timeline.canvas.width;
+      seek(Math.min(toT(mx, s), s.length));
+    };
+  }
+});
+
+$("timeline").addEventListener("pointermove", (event) => {
+  if (!dragging) return;
+  const rect = event.target.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * timeline.canvas.width;
+  // The span stays as it was when grabbed, so the sound follows the pointer.
+  const wanted = toT(x, dragging.span) - dragging.grab;
+  $("delay").value = Math.max(+$("delay").min, Math.min(+$("delay").max, wanted)).toFixed(2);
+  showSettings();
+});
+
+$("timeline").addEventListener("pointerup", () => {
+  if (dragging) syncSound();
+  dragging = null;
+  $("timeline").onpointermove = null;
+});
+
+// ---------- Stage ----------
+
+const stage = $("stage").getContext("2d");
+let checker = null;
+
+function drawBackdrop() {
+  const { width, height } = stage.canvas;
+  const backdrop = $("backdrop").value;
+  if (backdrop === "scenery" && scenery) {
+    // Covers the stage, as the scenery fills the window.
+    const scale = Math.max(width / scenery.width, height / scenery.height);
+    stage.drawImage(scenery, (width - scenery.width * scale) / 2, (height - scenery.height * scale) / 2,
+      scenery.width * scale, scenery.height * scale);
+  } else if (backdrop === "checker" || backdrop === "scenery") {
+    if (!checker) {
+      const tile = document.createElement("canvas");
+      tile.width = tile.height = 32;
+      const t = tile.getContext("2d");
+      t.fillStyle = "#3a3d44";
+      t.fillRect(0, 0, 32, 32);
+      t.fillStyle = "#2a2d33";
+      t.fillRect(0, 0, 16, 16);
+      t.fillRect(16, 16, 16, 16);
+      checker = stage.createPattern(tile, "repeat");
+    }
+    stage.fillStyle = checker;
+    stage.fillRect(0, 0, width, height);
+  } else {
+    stage.fillStyle = backdrop === "light" ? "#e8e9ec" : "#0d0f12";
+    stage.fillRect(0, 0, width, height);
+  }
+}
+
+/** Draws the pictures in `posed`, in the skeleton's order, as the game draws them. */
+function drawParts(posed, alpha = 1) {
+  stage.globalAlpha = alpha;
+  character.joints.forEach((joint, index) => {
+    if (!joint.image) return;
+    const { at, turn } = posed[index];
+    stage.save();
+    stage.translate(...at);
+    stage.rotate(turn);
+    stage.drawImage(joint.image, -joint.point[0], -joint.point[1]);
+    stage.restore();
+  });
+  stage.globalAlpha = 1;
+}
+
+function drawBones(posed, scale) {
+  stage.lineWidth = 4 / scale;
+  stage.strokeStyle = "#ffb547";
+  character.joints.forEach((joint, index) => {
+    if (joint.parent < 0) return;
+    stage.beginPath();
+    stage.moveTo(...posed[joint.parent].at);
+    stage.lineTo(...posed[index].at);
+    stage.stroke();
+  });
+  character.joints.forEach((joint, index) => {
+    const covered = base?.columns[index] !== null;
+    stage.fillStyle = joint.name.endsWith("left") ? "#4fc3f7" : joint.name.endsWith("right") ? "#ff8a65" : "#e8e9ec";
+    stage.globalAlpha = covered ? 1 : 0.35;
+    stage.beginPath();
+    stage.arc(...posed[index].at, 9 / scale, 0, TAU);
+    stage.fill();
+  });
+  stage.globalAlpha = 1;
+}
+
+function drawStage() {
+  const { width, height } = stage.canvas;
+  drawBackdrop();
+  if (!character) return;
+  // The pictures' rest pose stands on the ground, filling most of the height at 100%.
+  const ground = height * 0.9;
+  const { top, bottom } = character.bounds;
+  const scale = (+$("zoom").value * height * 0.75) / (bottom - top);
+  stage.fillStyle = "rgba(0,0,0,.25)";
+  stage.fillRect(0, ground, width, height - ground);
+  stage.save();
+  stage.translate(width / 2, ground - bottom * scale);
+  // The game mirrors the whole character round its root joint.
+  stage.scale($("facingLeft").checked ? -scale : scale, scale);
+  if ($("ghosts").checked && base) {
+    for (const rows of [-GHOST_ROWS, GHOST_ROWS]) {
+      const age = base.age + rows / base.animation.fps;
+      if (age >= 0) drawParts(poses(character, own(base, age)), 0.22);
+    }
+  }
+  const posed = poses(character, angles());
+  drawParts(posed);
+  if ($("bones").checked) drawBones(posed, scale);
+  stage.restore();
+}
+
+// ---------- Tick ----------
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  const elapsed = Math.min(0.1, (now - lastTick) / 1000);
+  lastTick = now;
+  if (base && playing) {
+    const dt = elapsed * speed();
+    base.age += dt;
+    const length = lengthOf(base.animation);
+    if (base.looping) {
+      const index = Math.floor(base.age / length);
+      if (index !== loopIndex) {
+        loopIndex = index;
+        if ($("everyLoop").checked) syncSound();
+      }
+    } else if (base.age >= length + REPLAY_AFTER * speed() && $("replay").checked) {
+      restart();
+    }
+    if (overlay) {
+      overlay.age += dt;
+      if (!overlay.leaving && overlay.age >= lengthOf(overlay.animation)) {
+        // Finished: it fades back to what is below it, as the game takes it off.
+        overlay.from = angles();
+        overlay.leaving = true;
+        overlay.age = 0;
+      } else if (overlay.leaving && overlay.age >= overlay.crossfade) {
+        overlay = null;
+      }
+    }
+  }
+  if (base) {
+    const length = lengthOf(base.animation);
+    const local = base.looping ? base.age % length : Math.min(base.age, length);
+    $("scrub").value = local;
+    const row = Math.min(base.animation.rows.length - 1, Math.floor(local * base.animation.fps));
+    $("clock").textContent = `${fmt(local)} / ${fmt(length)} · linha ${row + 1} de ${base.animation.rows.length}`;
+  }
+  drawStage();
+  drawTimeline();
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
