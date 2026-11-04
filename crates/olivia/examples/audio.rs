@@ -80,6 +80,5 @@ impl Game for Demo {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
     olivia::run::<Demo>(Config::new("olivia-audio").title("Audio"))
 }

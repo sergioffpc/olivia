@@ -5,6 +5,5 @@ use astronaut_cat::Platformer;
 use olivia::Result;
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
     olivia::run::<Platformer>(Platformer::config())
 }

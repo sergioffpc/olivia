@@ -57,7 +57,7 @@ impl Config {
         self.gravity
     }
 
-    /// Sets the window title.
+    /// Sets the window title, which on the web is the page's title.
     #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
@@ -65,6 +65,9 @@ impl Config {
     }
 
     /// Sets the window's logical size. The default is 1280 by 720.
+    ///
+    /// On the web it is the canvas's size in CSS pixels when the window is not
+    /// [resizable](Self::resizable).
     #[must_use]
     pub fn size(mut self, width: f32, height: f32) -> Self {
         self.size = Vec2::new(width, height);
@@ -72,6 +75,9 @@ impl Config {
     }
 
     /// Sets whether the player can resize the window. The default is `true`.
+    ///
+    /// On the web, a resizable window fills the browser window and follows it, and one that is not
+    /// is centred in it at [`size`](Self::size).
     #[must_use]
     pub fn resizable(mut self, resizable: bool) -> Self {
         self.resizable = resizable;
@@ -79,6 +85,8 @@ impl Config {
     }
 
     /// Sets whether drawing follows vsync. The default is `true`.
+    ///
+    /// It has no effect on the web, where the browser always paces frames to the display.
     #[must_use]
     pub fn vsync(mut self, vsync: bool) -> Self {
         self.vsync = vsync;
@@ -86,6 +94,9 @@ impl Config {
     }
 
     /// Sets whether the window starts fullscreen. The default is `false`.
+    ///
+    /// A browser enters fullscreen only during a key or pointer press, so on the web the request
+    /// may wait for the player's first one.
     #[must_use]
     pub fn fullscreen(mut self, fullscreen: bool) -> Self {
         self.fullscreen = fullscreen;
@@ -101,6 +112,10 @@ impl Config {
 
     /// Overrides where the game's assets are read from. The default is `assets/` next to the
     /// executable, or at the project root under `cargo run`.
+    ///
+    /// On the web, `path` is a URL path relative to the page's base URL, `assets/` by default:
+    /// its segments join with `/`, and an absolute path starts at the site root. The manifest
+    /// beside it is named after it, as `assets.txt` is for `assets/`.
     #[must_use]
     pub fn assets(mut self, path: impl Into<PathBuf>) -> Self {
         self.assets = Some(path.into());
@@ -109,7 +124,8 @@ impl Config {
 
     /// Sets whether changing a file of the source restarts the game on the new files, through
     /// [`Game::load`](crate::Game::load). The default is `true` under `cargo run` and `false`
-    /// otherwise, so a shipped game never restarts by itself.
+    /// otherwise, so a shipped game never restarts by itself. The web has no hot reload, and its
+    /// default is `false`.
     #[must_use]
     pub fn hot_reload(mut self, hot_reload: bool) -> Self {
         self.hot_reload = hot_reload;

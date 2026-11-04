@@ -1,51 +1,63 @@
 use std::collections::BTreeSet;
-use std::env;
-use std::fs::{self, File};
-use std::io::{self, ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use directories::ProjectDirs;
-
+use crate::platform::{self, Save, Source};
 use crate::{Error, Watcher};
 
 /// A read-only source and a writable save area, seen as one tree of files.
+///
+/// On the web, the source is fetched into memory by the time the game loads, and does not change
+/// after that. The save area is the browser's `localStorage`: about 5 MiB per origin, shared by
+/// every game published there, of which base64 takes a third. The browser may clear it, as Safari
+/// does after seven days without a visit.
 #[derive(Debug)]
 pub struct Filesystem {
-    source: PathBuf,
-    save: PathBuf,
+    source: Source,
+    save: Save,
 }
 
 impl Filesystem {
-    /// Creates the filesystem of the game named `identity`. Nothing is created on disk yet.
+    /// Creates the filesystem of the game named `identity`. Nothing is written yet.
     ///
     /// The source is `assets`; by default, `assets/` at the project root under `cargo run` and
-    /// next to the executable otherwise. The save area is the platform's user data directory for
-    /// `identity`.
+    /// next to the executable otherwise. On the web, `assets` is a URL path relative to the page's
+    /// base URL, `assets/` by default. The save area is the platform's user data directory for
+    /// `identity`, or on the web the `localStorage` keys under `olivia/<identity>/`.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidIdentity`] if `identity` cannot name a directory, or [`Error::Io`]
-    /// if the directories cannot be found.
+    /// if the directories cannot be found, or on the web if `localStorage` cannot be reached.
     pub fn new(identity: &str, assets: Option<PathBuf>) -> Result<Self, Error> {
         if !is_valid_segment(identity) || identity.trim() != identity {
             return Err(Error::InvalidIdentity(identity.to_owned()));
         }
-        let save = ProjectDirs::from("", "", identity)
-            .ok_or_else(|| Error::Io {
-                path: PathBuf::from(identity),
-                source: io::Error::new(ErrorKind::NotFound, "no home directory"),
-            })?
-            .data_dir()
-            .to_owned();
-        let source = assets.map_or_else(default_source, Ok)?;
+        let (source, save) = platform::areas(identity, assets)?;
         Ok(Self { source, save })
     }
 
-    /// Creates a filesystem over these two directories.
+    /// Creates a filesystem over these two areas: directories on desktop, and on the web the URL
+    /// path of the source and the name under which the saves are kept.
     #[doc(hidden)]
     #[must_use]
     pub fn with_areas(source: PathBuf, save: PathBuf) -> Self {
-        Self { source, save }
+        Self {
+            source: Source::new(source),
+            save: Save::new(save),
+        }
+    }
+
+    /// Fetches the source into memory on the web, and does nothing on desktop.
+    ///
+    /// On the web, `progress` receives the files fetched so far and the manifest's line count: once
+    /// the manifest arrives, and then after each file. Desktop fetches nothing and never calls it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the manifest or a file it lists cannot be fetched.
+    #[doc(hidden)]
+    pub async fn preload(&mut self, progress: impl FnMut(usize, usize)) -> Result<(), Error> {
+        self.source.preload(progress).await
     }
 
     /// Reads a file, from the save area if it is there and from the source otherwise.
@@ -55,10 +67,13 @@ impl Filesystem {
     /// Returns [`Error::NotFound`] if the file is in neither area, or [`Error::Io`] if it cannot
     /// be read, or [`Error::InvalidPath`].
     pub fn read(&self, path: &str) -> Result<Vec<u8>, Error> {
-        let file = self
-            .locate(path)?
-            .ok_or_else(|| Error::NotFound(path.to_owned()))?;
-        fs::read(&file).map_err(|source| Error::Io { path: file, source })
+        validate(path)?;
+        if let Some(bytes) = self.save.read(path)? {
+            return Ok(bytes);
+        }
+        self.source
+            .read(path)?
+            .ok_or_else(|| Error::NotFound(path.to_owned()))
     }
 
     /// Writes a new file to the save area, creating its parent directories. It may shadow a file
@@ -67,19 +82,12 @@ impl Filesystem {
     /// # Errors
     ///
     /// Returns [`Error::AlreadyExists`] if the file is in the save area, which is left as it was,
-    /// [`Error::Io`] if it cannot be written, or [`Error::InvalidPath`].
+    /// [`Error::Io`] if it cannot be written, or [`Error::InvalidPath`]. A full save area is
+    /// [`Error::Io`] with [`ErrorKind::StorageFull`](std::io::ErrorKind::StorageFull), and nothing
+    /// is written.
     pub fn write(&mut self, path: &str, bytes: &[u8]) -> Result<(), Error> {
-        let file = save_path(&self.save, path)?;
-        if let Some(parent) = file.parent() {
-            fs::create_dir_all(parent).map_err(|source| Error::Io {
-                path: parent.to_owned(),
-                source,
-            })?;
-        }
-        write_new(&file, bytes).map_err(|source| match source.kind() {
-            ErrorKind::AlreadyExists => Error::AlreadyExists(path.to_owned()),
-            _ => Error::Io { path: file, source },
-        })
+        validate(path)?;
+        self.save.write(path, bytes)
     }
 
     /// Says whether [`read`](Self::read) would find the file, in either area.
@@ -88,7 +96,8 @@ impl Filesystem {
     ///
     /// Returns [`Error::InvalidPath`], or [`Error::Io`] if an area cannot be examined.
     pub fn exists(&self, path: &str) -> Result<bool, Error> {
-        Ok(self.locate(path)?.is_some())
+        validate(path)?;
+        Ok(self.save.is_file(path)? || self.source.is_file(path)?)
     }
 
     /// Lists the files directly inside a directory, in either area, as sorted paths that
@@ -103,28 +112,10 @@ impl Filesystem {
         validate(path)?;
         let mut found = false;
         let mut files = BTreeSet::new();
-        for area in [&self.save, &self.source] {
-            let dir = area.join(path);
-            let io_error = |source| Error::Io {
-                path: dir.clone(),
-                source,
-            };
-            let entries = match fs::read_dir(&dir) {
-                Ok(entries) => entries,
-                Err(source) if is_missing(&source) => continue,
-                Err(source) => return Err(io_error(source)),
-            };
+        for names in [self.save.list(path)?, self.source.list(path)?] {
+            let Some(names) = names else { continue };
             found = true;
-            for entry in entries {
-                let entry = entry.map_err(io_error)?;
-                let name = entry.file_name();
-                let Some(name) = name.to_str().filter(|name| is_valid_segment(name)) else {
-                    continue;
-                };
-                if is_file(&entry.path())? {
-                    files.insert(format!("{path}/{name}"));
-                }
-            }
+            files.extend(names.into_iter().map(|name| format!("{path}/{name}")));
         }
         if !found {
             return Err(Error::NotFound(path.to_owned()));
@@ -139,78 +130,20 @@ impl Filesystem {
     /// Returns [`Error::NotFound`] if the file is not in the save area, [`Error::Io`] if it cannot
     /// be deleted, or [`Error::InvalidPath`].
     pub fn remove(&mut self, path: &str) -> Result<(), Error> {
-        let file = save_path(&self.save, path)?;
-        fs::remove_file(&file).map_err(|source| {
-            if is_missing(&source) {
-                Error::NotFound(path.to_owned())
-            } else {
-                Error::Io { path: file, source }
-            }
-        })
+        validate(path)?;
+        self.save.remove(path)
     }
 
     /// Starts watching the source for changes.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] if the source cannot be watched, as when it does not exist.
+    /// Returns [`Error::Io`] if the source cannot be watched, as when it does not exist, and on
+    /// the web, where the source never changes, with
+    /// [`ErrorKind::Unsupported`](std::io::ErrorKind::Unsupported).
     pub fn watch(&self) -> Result<Watcher, Error> {
-        Watcher::new(&self.source)
+        self.source.watch().map(Watcher)
     }
-
-    /// Finds the file `read` would read.
-    fn locate(&self, path: &str) -> Result<Option<PathBuf>, Error> {
-        validate(path)?;
-        for area in [&self.save, &self.source] {
-            let file = area.join(path);
-            if is_file(&file)? {
-                return Ok(Some(file));
-            }
-        }
-        Ok(None)
-    }
-}
-
-/// `assets/` at the project root under `cargo run`, and next to the executable otherwise.
-fn default_source() -> Result<PathBuf, Error> {
-    if let Some(root) = env::var_os("CARGO_MANIFEST_DIR") {
-        return Ok(PathBuf::from(root).join("assets"));
-    }
-    let executable = env::current_exe().map_err(|source| Error::Io {
-        path: PathBuf::from("assets"),
-        source,
-    })?;
-    Ok(executable.with_file_name("assets"))
-}
-
-fn is_file(path: &Path) -> Result<bool, Error> {
-    match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata.is_file()),
-        Err(source) if is_missing(&source) => Ok(false),
-        Err(source) => Err(Error::Io {
-            path: path.to_owned(),
-            source,
-        }),
-    }
-}
-
-/// Whether nothing is at a path, including when one of its parents is a file.
-fn is_missing(error: &io::Error) -> bool {
-    matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory)
-}
-
-/// Creates `path` with `bytes`, or leaves no file behind: a partial one could never be replaced.
-fn write_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let result = File::create_new(path)?.write_all(bytes);
-    if result.is_err() {
-        let _ = fs::remove_file(path);
-    }
-    result
-}
-
-fn save_path(save: &Path, path: &str) -> Result<PathBuf, Error> {
-    validate(path)?;
-    Ok(save.join(path))
 }
 
 fn validate(path: &str) -> Result<(), Error> {
@@ -223,6 +156,6 @@ fn validate(path: &str) -> Result<(), Error> {
 
 /// Whether `segment` names one entry of a directory on every platform. A backslash or a colon
 /// would escape the area on Windows.
-fn is_valid_segment(segment: &str) -> bool {
+pub(crate) fn is_valid_segment(segment: &str) -> bool {
     !matches!(segment, "" | "." | "..") && !segment.contains(['/', '\\', ':'])
 }

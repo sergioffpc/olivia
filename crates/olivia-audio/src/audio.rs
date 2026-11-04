@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use kira::backend::Backend;
 use kira::listener::ListenerHandle;
@@ -8,9 +8,11 @@ use kira::track::{MainTrackBuilder, SpatialTrackHandle};
 use kira::{AudioManager, AudioManagerSettings, Decibels};
 use olivia_math::Vec2;
 use tracing::warn;
+use web_time::Instant;
 
 use crate::cue::{TRANSITION, decibels};
 use crate::mock::Mock;
+use crate::platform;
 use crate::{Cue, Emitter, Error, Play, Sound, emitter};
 
 /// The shortest time between two warnings about sounds that could not start.
@@ -31,7 +33,7 @@ struct Output {
 }
 
 enum Manager {
-    Device(Box<AudioManager>),
+    Device(Box<AudioManager<platform::Backend>>),
     Mock(Box<AudioManager<Mock>>),
 }
 
@@ -87,7 +89,7 @@ fn listener<B: Backend>(manager: &mut AudioManager<B>) -> ListenerHandle {
 impl Default for Audio {
     /// Opens the default audio device, or stays silent and emits one `warn` if there is none.
     fn default() -> Self {
-        match AudioManager::new(AudioManagerSettings::default()) {
+        match AudioManager::<platform::Backend>::new(AudioManagerSettings::default()) {
             Ok(mut manager) => {
                 let listener = listener(&mut manager);
                 Self::with_output(Some(Output {
@@ -156,6 +158,20 @@ impl Audio {
         }
     }
 
+    /// Lets the audio play on the web, where the browser holds it back until the player presses a
+    /// key or a button. Must be called inside the handler of that press. Does nothing on the
+    /// desktop, and nothing once the audio plays.
+    #[doc(hidden)]
+    pub fn resume(&mut self) {
+        if let Some(Output {
+            manager: Manager::Device(manager),
+            ..
+        }) = &mut self.output
+        {
+            platform::resume(manager.backend_mut());
+        }
+    }
+
     /// Decodes `bytes` up front, for short sounds.
     ///
     /// # Errors
@@ -166,6 +182,10 @@ impl Audio {
     }
 
     /// Keeps `bytes` and decodes them while playing, for long tracks.
+    ///
+    /// On the web it decodes them up front, as [`sound`](Self::sound) does. For a long track that
+    /// can take hundreds of milliseconds, and the decoded sound holds about 10 MB per stereo
+    /// minute.
     ///
     /// # Errors
     ///

@@ -2,6 +2,8 @@
 
 use std::fs;
 use std::path::Path;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
 
 use olivia_filesystem::{Error, Filesystem};
 use tempfile::TempDir;
@@ -305,6 +307,17 @@ fn a_valid_identity_starts_with_an_empty_save_area() {
     let source = TempDir::new().unwrap();
     let fs = Filesystem::new("olivia-test-untouched", Some(source.path().to_owned())).unwrap();
     assert!(!fs.exists("one.txt").unwrap());
+}
+
+#[test]
+fn preload_on_desktop_is_ready_at_once_fetches_nothing_and_changes_nothing() {
+    let mut a = areas();
+    put(a.source.path(), "one.txt", b"source");
+    let preload =
+        a.fs.preload(|fetched, total| panic!("fetched {fetched} of {total} on desktop"));
+    let poll = pin!(preload).poll(&mut Context::from_waker(Waker::noop()));
+    assert!(matches!(poll, Poll::Ready(Ok(()))));
+    assert_eq!(a.fs.read("one.txt").unwrap(), b"source");
 }
 
 #[test]

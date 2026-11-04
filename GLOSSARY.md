@@ -8,6 +8,10 @@ A Rust 2D game library inspired by LÖVE, built from one crate per module.
 The user's program: the behaviour Olivia drives through the game loop, acting on the entities in its world.
 _Avoid_: App, application, scene
 
+**Platform**:
+Where a game runs: the desktop (Windows, macOS, Linux) or the web (a desktop browser). A game sees the same interfaces on every platform.
+_Avoid_: Target, native, backend
+
 **Phase**:
 One of the two moments in which Olivia calls the game: load or update.
 _Avoid_: Callback, hook, stage
@@ -37,7 +41,7 @@ Restarting a running game on the changed files of the source, by running load ag
 _Avoid_: Live reload, asset watching
 
 **Save area**:
-The writable area of a game's files, in the user's data directory. A file here shadows the source file with the same path.
+The writable area of a game's files, kept for the user on their own machine and shared by every game with the same identity. A file here shadows the source file with the same path.
 _Avoid_: Save folder, user data
 
 **Fixed step**:

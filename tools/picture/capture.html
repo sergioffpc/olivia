@@ -1,0 +1,1287 @@
+<!doctype html>
+<!--
+  Photographs a box of a drawing sheet, cuts it out and saves it as the game's picture.
+  Open it from the tools page, tools/index.html, which chooses the assets folder:
+    python3 -m http.server 8000 --directory tools
+  then open http://localhost:8000/#picture.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Picture capture</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #2c3038; --text: #e8e9ec; --dim: #9096a0;
+    --accent: #ffb547; --found: #5ee08a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
+  h3 { font-size: 12px; color: var(--dim); font-weight: normal; margin: 0 0 4px; }
+  h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0; grid-column: 1 / -1; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .views { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .views { grid-template-columns: 1fr; } }
+  canvas { max-width: 100%; border-radius: 8px; display: block; }
+  #liveCanvas, #photoCanvas { width: 100%; background: #000; }
+  #photoCanvas { touch-action: none; cursor: crosshair; }
+  #resultCanvas {
+    max-height: 60vh; margin: 0 auto;
+    background: repeating-conic-gradient(#3a3e46 0 25%, #2a2d33 0 50%) 0 0 / 24px 24px;
+  }
+  #resultCanvas.pixels { image-rendering: pixelated; }
+  select, button {
+    font: inherit; color: var(--text); background: #262a31; border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; max-width: 100%;
+  }
+  button { cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  .card { color: var(--dim); }
+  .status { color: var(--dim); min-height: 1.4em; }
+  .status.warn { color: var(--accent); }
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px; }
+  .settings label { display: grid; gap: 2px; }
+  .settings label span { color: var(--dim); font-size: 12px; }
+  .settings label.check { display: flex; gap: 8px; align-items: center; }
+  .settings small { color: var(--dim); font-size: 12px; }
+  .settings > div { display: grid; gap: 2px; align-content: start; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <h2>1 · Picture</h2>
+    <div class="row">
+      <select id="card"></select>
+      <span id="cardInfo" class="card"></span>
+    </div>
+  </section>
+
+  <section id="live">
+    <h2>2 · Photo</h2>
+    <canvas id="liveCanvas" width="960" height="540"></canvas>
+    <div class="row" style="margin-top:10px">
+      <select id="camera" title="Camera"></select>
+      <button id="capture" class="primary" disabled>Take photo</button>
+      <button id="openPhoto">Open a photo</button>
+      <input id="photoFile" type="file" accept="image/*" hidden>
+      <span id="liveStatus" class="status">Starting the camera…</span>
+    </div>
+    <p class="status">Hold the sheet flat with only the drawing's box in view, a little paper around it. The box turns green once the page finds it. A photo from a phone works too: open it, or drop it on the page.</p>
+  </section>
+
+  <section id="review" hidden>
+    <h2>3 · Review</h2>
+    <div class="views">
+      <div>
+        <h3>Photo: drag the corners onto the box's corners</h3>
+        <canvas id="photoCanvas"></canvas>
+      </div>
+      <div>
+        <h3>Result: what the game gets</h3>
+        <canvas id="resultCanvas"></canvas>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="findAgain">Find the box again</button>
+      <span id="summary" class="status"></span>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <span class="card">Looks:</span>
+      <button data-look="natural">As drawn</button>
+      <button data-look="colourful">Colourful</button>
+      <button data-look="cartoon">Cartoon</button>
+      <button data-look="pixel">Pixel art</button>
+      <button data-look="sticker">Sticker</button>
+    </div>
+
+    <div class="settings" style="margin-top:14px">
+      <h4>Paper</h4>
+      <div>
+        <label class="check"><input id="evenLight" type="checkbox" checked> Even out the light</label>
+        <small>Makes the paper white all over, even with a shadow or yellow light on it.</small>
+      </div>
+      <div>
+        <label class="check"><input id="removePaper" type="checkbox" checked> Remove the paper</label>
+        <label><span>How much counts as paper <b id="paperOut"></b></span><input id="paper" type="range" min="0.04" max="0.5" step="0.01" value="0.14"></label>
+        <small>Higher also removes pale colours and pencil marks.</small>
+      </div>
+      <div>
+        <label class="check"><input id="holes" type="checkbox" checked> Keep the white inside the drawing</label>
+        <small>White left inside the outline, such as the eyes, stays white instead of see-through.</small>
+      </div>
+      <div>
+        <label class="check"><input id="specks" type="checkbox" checked> Remove specks</label>
+        <small>Dust, crumbs and stray dots around the drawing.</small>
+      </div>
+
+      <h4>Colour</h4>
+      <div>
+        <label><span>Colourful <b id="saturationOut"></b></span><input id="saturation" type="range" min="0" max="3" step="0.05" value="1.5"></label>
+        <small>Brings out crayon colours that came out pale.</small>
+      </div>
+      <div>
+        <label><span>Brightness <b id="brightnessOut"></b></span><input id="brightness" type="range" min="-0.3" max="0.3" step="0.01" value="0"></label>
+        <label><span>Contrast <b id="contrastOut"></b></span><input id="contrast" type="range" min="0.5" max="2" step="0.05" value="1.15"></label>
+      </div>
+      <div>
+        <label><span>Change the colours <b id="hueOut"></b></span><input id="hue" type="range" min="-180" max="180" step="5" value="0"></label>
+        <small>Turns every colour round the rainbow.</small>
+      </div>
+      <div>
+        <label><span>Smooth the crayon <b id="smoothOut"></b></span><input id="smooth" type="range" min="0" max="3" step="1" value="0"></label>
+        <small>Evens out the scribbles inside each colour.</small>
+      </div>
+
+      <h4>Style</h4>
+      <div>
+        <label><span>Colours <b id="coloursOut"></b></span><input id="colours" type="range" min="1" max="32" step="1" value="1"></label>
+        <small>Fewer colours give flat patches, like a cartoon.</small>
+      </div>
+      <div>
+        <label><span>Pixel size <b id="pixelOut"></b></span><input id="pixel" type="range" min="1" max="32" step="1" value="1"></label>
+        <small>Big pixels, like an old console game.</small>
+      </div>
+      <div>
+        <label><span>Outline</span>
+          <select id="outline">
+            <option value="none">None</option>
+            <option value="black">Black</option>
+            <option value="white">White</option>
+          </select>
+        </label>
+        <label><span>Outline width <b id="outlineWidthOut"></b></span><input id="outlineWidth" type="range" min="1" max="40" step="1" value="6"></label>
+        <small>Draws a line round the whole drawing, so it stands out on any scenery.</small>
+      </div>
+    </div>
+  </section>
+
+  <section id="save" hidden>
+    <h2>4 · Save</h2>
+    <div class="row">
+      <button id="saveButton" class="primary">Save</button>
+      <button id="again">Take another photo</button>
+      <span id="saveStatus" class="status"></span>
+    </div>
+  </section>
+</main>
+
+<video id="video" playsinline muted hidden></video>
+
+<script type="module">
+// The share of the box's size looked at outside it, to find the paper's colour around it.
+const MARGIN = 0.05;
+// How far past "How much counts as paper" a colour goes from see-through to solid.
+const SOFT = 0.08;
+// Photos larger than this are scaled down on opening.
+const MAX_PHOTO = 4000;
+const INK = [35, 30, 40];
+const WHITE = [250, 250, 245];
+
+// The sheets of games/astronaut-cat/docs/sheets.md. The character boxes are measured, at 8 pixels
+// per millimetre of sheet, as in tools/make_art.py; single drawings are saved at their file's size.
+const CARDS = [];
+for (const [folder, who] of [["hero", "The hero"], ["princess", "Who is saved"]]) {
+  CARDS.push(
+    { name: `${who}: head`, file: `${folder}/head.png`, size: [511, 456] },
+    { name: `${who}: body`, file: `${folder}/torso.png`, size: [484, 654] },
+    { name: `${who}: arm`, size: [325, 654], limb: { folder, part: "arm", joint: "elbow", tick: 347 } },
+    { name: `${who}: leg`, size: [383, 570], limb: { folder, part: "leg", joint: "knee", tick: 307 } },
+  );
+}
+CARDS.push(
+  // Shrunk and turned to lie along the forearm when saved, as tools/make_art.py does.
+  { name: "The hero's launcher", file: "hero/launcher.png", size: [1333, 740], launcher: { scale: 0.45 } },
+  { name: "What the hero fires", file: "fx/projectile.png", size: [256, 256] },
+  { name: "The fart cloud", file: "fx/fart.png", size: [384, 384] },
+  { name: "The shooting star", file: "fx/star.png", size: [512, 256] },
+  { name: "A baddie that crawls", file: "enemy_crawl.png", size: [860, 500] },
+  { name: "A baddie that rolls", file: "enemy_roll.png", size: [512, 512] },
+  { name: "A baddie that floats", file: "enemy_float.png", size: [440, 600] },
+  { name: "The scenery", file: "level/background.png", size: [1920, 1114], paper: false },
+  { name: "The ground", file: "level/platform.png", size: [1024, 230], paper: false },
+  { name: "What gets picked up", file: "level/coin.png", size: [256, 256] },
+  // The bars of a cage leave gaps that must stay see-through.
+  { name: "Where they are held", file: "level/goal.png", size: [440, 600], holes: false },
+  // The middle of a 0, 6, 8 or 9 is a hole too.
+  ...Array.from({ length: 10 }, (_, d) => ({ name: `The number ${d}`, file: `hud/digit_${d}.png`, size: [256, 256], holes: false })),
+  { name: "A life", file: "hud/life.png", size: [256, 256] },
+  { name: "A lost life", file: "hud/life_lost.png", size: [256, 256] },
+);
+
+const LOOKS = {
+  natural: { saturation: 1, brightness: 0, contrast: 1, hue: 0, smooth: 0, colours: 1, pixel: 1, outline: "none" },
+  colourful: { saturation: 1.5, brightness: 0, contrast: 1.15, hue: 0, smooth: 0, colours: 1, pixel: 1, outline: "none" },
+  cartoon: { saturation: 1.6, brightness: 0.02, contrast: 1.2, hue: 0, smooth: 2, colours: 8, pixel: 1, outline: "black", outlineWidth: 6 },
+  pixel: { saturation: 1.5, brightness: 0, contrast: 1.2, hue: 0, smooth: 1, colours: 16, pixel: 8, outline: "black", outlineWidth: 8 },
+  sticker: { saturation: 1.5, brightness: 0, contrast: 1.15, hue: 0, smooth: 0, colours: 1, pixel: 1, outline: "white", outlineWidth: 14 },
+};
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
+
+/** The files a card writes, under the assets folder. */
+function files(c) {
+  if (!c.limb) return [c.file];
+  const { folder, part } = c.limb;
+  return [
+    ...["upper", "lower"].flatMap((half) => ["left", "right"].map((side) => `${folder}/${half}_${part}_${side}.png`)),
+    `${folder}/skeleton.json`,
+  ];
+}
+
+/** The same numbers on every run, so moving a slider back gives back the same picture. */
+function random(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function canvasOf(width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
+// ---------- Finding the box ----------
+
+const detect = canvasOf(1, 1).getContext("2d", { willReadFrequently: true });
+
+/**
+ * The corners of the box's printed border in source, clockwise from the top left, or null.
+ * The border is the largest thin dark line that does not touch the photo's edges: a drawing
+ * touching it joins it, but stays inside, so the outermost points are still the border's corners.
+ */
+function findBox(source, maxSide) {
+  const sw = source.videoWidth ?? source.width;
+  const sh = source.videoHeight ?? source.height;
+  const scale = Math.min(1, maxSide / Math.max(sw, sh));
+  const w = Math.round(sw * scale);
+  const h = Math.round(sh * scale);
+  detect.canvas.width = w;
+  detect.canvas.height = h;
+  detect.drawImage(source, 0, 0, w, h);
+  const { data } = detect.getImageData(0, 0, w, h);
+
+  const grey = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) grey[i] = (0.299 * data[4 * i] + 0.587 * data[4 * i + 1] + 0.114 * data[4 * i + 2]) / 255;
+  // Darker than the paper around it: the mean over a window, from an integral image.
+  const W1 = w + 1;
+  const sum = new Float64Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    for (let x = 0; x < w; x++) {
+      row += grey[y * w + x];
+      sum[(y + 1) * W1 + x + 1] = sum[y * W1 + x + 1] + row;
+    }
+  }
+  const r = Math.max(4, Math.round(Math.max(w, h) / 24));
+  const dark = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r);
+    const y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r);
+      const x1 = Math.min(w, x + r + 1);
+      const mean = (sum[y1 * W1 + x1] - sum[y0 * W1 + x1] - sum[y1 * W1 + x0] + sum[y0 * W1 + x0]) / ((x1 - x0) * (y1 - y0));
+      dark[y * w + x] = grey[y * w + x] < mean - 0.08 ? 1 : 0;
+    }
+  }
+
+  const stack = new Int32Array(w * h);
+  let best = null;
+  for (let start = 0; start < w * h; start++) {
+    if (dark[start] !== 1) continue;
+    dark[start] = 2;
+    let top = 0;
+    stack[top++] = start;
+    let count = 0;
+    let edge = false;
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    // The corners: the points furthest along each diagonal.
+    const corner = [[0, 0, Infinity], [0, 0, -Infinity], [0, 0, -Infinity], [0, 0, Infinity]];
+    while (top) {
+      const i = stack[--top];
+      const x = i % w;
+      const y = (i - x) / w;
+      count++;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      if (x + y < corner[0][2]) corner[0] = [x, y, x + y];
+      if (x - y > corner[1][2]) corner[1] = [x, y, x - y];
+      if (x + y > corner[2][2]) corner[2] = [x, y, x + y];
+      if (x - y < corner[3][2]) corner[3] = [x, y, x - y];
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const j = ny * w + nx;
+          if (dark[j] === 1) {
+            dark[j] = 2;
+            stack[top++] = j;
+          }
+        }
+      }
+    }
+    const bw = maxX - minX;
+    const bh = maxY - minY;
+    if (edge || count < 50 || bw < 0.2 * w || bh < 0.2 * h) continue;
+    // Four points on a bent line, or a drawing alone, make a shape much smaller than its bounds.
+    const quad = corner.map(([x, y]) => [x, y]);
+    if (area(quad) < 0.6 * bw * bh) continue;
+    // A printed line is thin. The desk around the sheet is dark only beside the paper, so it
+    // makes a band as wide as the window around each pixel.
+    if (count / perimeter(quad) > r / 3) continue;
+    if (!best || bw * bh > best.size) best = { size: bw * bh, quad };
+  }
+  return best && best.quad.map(([x, y]) => [(x + 0.5) / scale, (y + 0.5) / scale]);
+}
+
+function area(quad) {
+  let twice = 0;
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = quad[i];
+    const [bx, by] = quad[(i + 1) % 4];
+    twice += ax * by - bx * ay;
+  }
+  return Math.abs(twice) / 2;
+}
+
+function perimeter(quad) {
+  return quad.reduce((sum, [x, y], i) => sum + Math.hypot(quad[(i + 1) % 4][0] - x, quad[(i + 1) % 4][1] - y), 0);
+}
+
+/** Maps (u, v) of the unit square onto the quad, clockwise from the top left. */
+function squareToQuad([[x0, y0], [x1, y1], [x2, y2], [x3, y3]]) {
+  const sx = x0 - x1 + x2 - x3;
+  const sy = y0 - y1 + y2 - y3;
+  let g = 0;
+  let h = 0;
+  if (Math.abs(sx) > 1e-9 || Math.abs(sy) > 1e-9) {
+    const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2;
+    const den = dx1 * dy2 - dx2 * dy1;
+    g = (sx * dy2 - dx2 * sy) / den;
+    h = (dx1 * sy - sx * dy1) / den;
+  }
+  const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3, d = y1 - y0 + g * y1, e = y3 - y0 + h * y3;
+  return (u, v) => {
+    const z = g * u + h * v + 1;
+    return [(a * u + b * v + x0) / z, (d * u + e * v + y0) / z];
+  };
+}
+
+// ---------- Cutting out ----------
+
+/**
+ * Straightens the box to w by h, with MARGIN of the paper around it on every side.
+ * Returns the RGB of every pixel, from 0 to 1.
+ */
+function warp(photo, quad, w, h) {
+  const mx = Math.round(w * MARGIN);
+  const my = Math.round(h * MARGIN);
+  const ww = w + 2 * mx;
+  const hh = h + 2 * my;
+  const map = squareToQuad(quad);
+  const { data, width, height } = photo;
+  const rgb = new Float32Array(ww * hh * 3);
+  for (let j = 0; j < hh; j++) {
+    const v = (j + 0.5 - my) / h;
+    for (let i = 0; i < ww; i++) {
+      const [sx, sy] = map((i + 0.5 - mx) / w, v);
+      const x = clamp(sx - 0.5, 0, width - 1.001);
+      const y = clamp(sy - 0.5, 0, height - 1.001);
+      const x0 = Math.floor(x), y0 = Math.floor(y);
+      const fx = x - x0, fy = y - y0;
+      const p = (y0 * width + x0) * 4;
+      const q = p + width * 4;
+      const o = (j * ww + i) * 3;
+      for (let c = 0; c < 3; c++) {
+        const top = data[p + c] + (data[p + 4 + c] - data[p + c]) * fx;
+        const bottom = data[q + c] + (data[q + 4 + c] - data[q + c]) * fx;
+        rgb[o + c] = (top + (bottom - top) * fy) / 255;
+      }
+    }
+  }
+  return { rgb, ww, hh, mx, my, w, h };
+}
+
+/**
+ * Divides each pixel by the paper's colour there, fitted as a slope across the box to the paper
+ * seen just outside it, so the paper turns white even under a shadow or a yellow lamp.
+ */
+function evenLight(work) {
+  const { rgb, ww, hh, mx, my, w, h } = work;
+  const SEGMENTS = 32;
+  const buckets = Array.from({ length: SEGMENTS }, () => []);
+  for (let j = 0; j < hh; j += 2) {
+    for (let i = 0; i < ww; i += 2) {
+      // Only the outer part of the margin, away from the border line.
+      const inside = i >= mx * 0.6 && i < ww - mx * 0.6 && j >= my * 0.6 && j < hh - my * 0.6;
+      if (inside) continue;
+      const u = (i + 0.5 - mx) / w;
+      const v = (j + 0.5 - my) / h;
+      const s = Math.floor(((Math.atan2(v - 0.5, u - 0.5) + Math.PI) / (2 * Math.PI)) * SEGMENTS) % SEGMENTS;
+      const o = (j * ww + i) * 3;
+      buckets[s].push([u, v, rgb[o], rgb[o + 1], rgb[o + 2]]);
+    }
+  }
+  // In each part of the ring, the bright half: paper, not a neighbouring box's line or drawing.
+  const points = [];
+  for (const bucket of buckets) {
+    if (bucket.length < 4) continue;
+    bucket.sort((a, b) => a[2] + a[3] + a[4] - (b[2] + b[3] + b[4]));
+    const kept = bucket.slice(Math.floor(bucket.length * 0.5), Math.ceil(bucket.length * 0.9));
+    const mean = [0, 0, 0, 0, 0];
+    for (const p of kept) for (let k = 0; k < 5; k++) mean[k] += p[k] / kept.length;
+    points.push(mean);
+  }
+  if (points.length < 8) return false;
+  const planes = [2, 3, 4].map((k) => fitPlane(points, k));
+  for (let j = 0; j < hh; j++) {
+    const v = (j + 0.5 - my) / h;
+    for (let i = 0; i < ww; i++) {
+      const u = (i + 0.5 - mx) / w;
+      const o = (j * ww + i) * 3;
+      for (let c = 0; c < 3; c++) {
+        const [a, b, d] = planes[c];
+        rgb[o + c] = Math.min(1, rgb[o + c] / Math.max(0.15, a + b * u + d * v));
+      }
+    }
+  }
+  return true;
+}
+
+/** The least squares a + b u + d v through the points' value k. */
+function fitPlane(points, k) {
+  const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const t = [0, 0, 0];
+  for (const p of points) {
+    const row = [1, p[0], p[1]];
+    for (let r = 0; r < 3; r++) {
+      t[r] += row[r] * p[k];
+      for (let c = 0; c < 3; c++) m[r][c] += row[r] * row[c];
+    }
+  }
+  const det = (a) =>
+    a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+    a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+    a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+  const whole = det(m);
+  if (Math.abs(whole) < 1e-9) return [points.reduce((s, p) => s + p[k], 0) / points.length, 0, 0];
+  return [0, 1, 2].map((c) => det(m.map((row, r) => row.map((value, cc) => (cc === c ? t[r] : value)))) / whole);
+}
+
+/** Where the inside of the box starts on each side, past the printed border line. */
+function insideBorder(work) {
+  const { rgb, ww, hh, mx, my, w, h } = work;
+  const isDark = (i, j) => {
+    const o = (j * ww + i) * 3;
+    return 0.299 * rgb[o] + 0.587 * rgb[o + 1] + 0.114 * rgb[o + 2] < 0.35;
+  };
+  const darkShare = (along, at, horizontal) => {
+    let n = 0;
+    for (let k = along[0]; k < along[1]; k += 2) if (horizontal ? isDark(k, at) : isDark(at, k)) n++;
+    return n / Math.ceil((along[1] - along[0]) / 2);
+  };
+  // From just outside the corners inwards: the run of rows that are mostly line.
+  const scan = (from, step, limit, along, horizontal, past) => {
+    let line = false;
+    for (let at = from, n = 0; n < limit; at += step, n++) {
+      const dark = darkShare(along, at, horizontal) > 0.5;
+      if (dark) line = true;
+      // Further on, past the line's soft edge.
+      else if (line) return at + past * step;
+    }
+    return null;
+  };
+  const cols = [mx + Math.round(w * 0.1), mx + Math.round(w * 0.9)];
+  const rows = [my + Math.round(h * 0.1), my + Math.round(h * 0.9)];
+  const reachX = Math.round(mx * 0.5 + w * 0.05);
+  const reachY = Math.round(my * 0.5 + h * 0.05);
+  const pastX = Math.max(2, Math.round(w * 0.004));
+  const pastY = Math.max(2, Math.round(h * 0.004));
+  const top = scan(Math.round(my * 0.5), 1, reachY, cols, true, pastY) ?? my;
+  const bottom = scan(hh - 1 - Math.round(my * 0.5), -1, reachY, cols, true, pastY) ?? hh - my - 1;
+  const left = scan(Math.round(mx * 0.5), 1, reachX, rows, false, pastX) ?? mx;
+  const right = scan(ww - 1 - Math.round(mx * 0.5), -1, reachX, rows, false, pastX) ?? ww - mx - 1;
+  return { left, top, right: right + 1, bottom: bottom + 1 };
+}
+
+/** The inside of the box, scaled to the card's size, as RGBA. */
+function cutOut(work, even) {
+  if (even) evenLight(work);
+  const { rgb, ww, hh, w, h } = work;
+  const full = new ImageData(ww, hh);
+  for (let i = 0; i < ww * hh; i++) {
+    full.data[4 * i] = rgb[3 * i] * 255;
+    full.data[4 * i + 1] = rgb[3 * i + 1] * 255;
+    full.data[4 * i + 2] = rgb[3 * i + 2] * 255;
+    full.data[4 * i + 3] = 255;
+  }
+  const source = canvasOf(ww, hh);
+  source.getContext("2d").putImageData(full, 0, 0);
+  const { left, top, right, bottom } = insideBorder(work);
+  const target = canvasOf(w, h).getContext("2d", { willReadFrequently: true });
+  target.imageSmoothingQuality = "high";
+  target.drawImage(source, left, top, right - left, bottom - top, 0, 0, w, h);
+  return target.getImageData(0, 0, w, h);
+}
+
+// ---------- Style ----------
+
+function median3(x, w, h) {
+  const out = new Float32Array(x.length);
+  const v = new Float32Array(9);
+  for (let y = 0; y < h; y++) {
+    for (let i = 0; i < w; i++) {
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = Math.min(h - 1, Math.max(0, y + dy));
+        for (let dx = -1; dx <= 1; dx++) v[n++] = x[yy * w + Math.min(w - 1, Math.max(0, i + dx))];
+      }
+      for (let a = 1; a < 9; a++) {
+        const t = v[a];
+        let b = a - 1;
+        for (; b >= 0 && v[b] > t; b--) v[b + 1] = v[b];
+        v[b + 1] = t;
+      }
+      out[y * w + i] = v[4];
+    }
+  }
+  return out;
+}
+
+/** Labels the 4-connected runs of mask; returns the label of each pixel and each label's size. */
+function regions(mask, w, h) {
+  const label = new Int32Array(w * h).fill(-1);
+  const sizes = [];
+  const stack = new Int32Array(w * h);
+  for (let start = 0; start < w * h; start++) {
+    if (!mask[start] || label[start] >= 0) continue;
+    const id = sizes.length;
+    let top = 0;
+    let size = 0;
+    stack[top++] = start;
+    label[start] = id;
+    while (top) {
+      const i = stack[--top];
+      size++;
+      const x = i % w;
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+        if (j >= 0 && j < w * h && mask[j] && label[j] < 0) {
+          label[j] = id;
+          stack[top++] = j;
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  return { label, sizes };
+}
+
+/** Groups the solid pixels' colours into k, and paints each pixel its group's colour. */
+function fewerColours(r, g, b, a, k) {
+  const solid = [];
+  for (let i = 0; i < a.length; i++) if (a[i] > 0.5) solid.push(i);
+  if (solid.length <= k) return;
+  const next = random(7);
+  const step = Math.max(1, Math.floor(solid.length / 4000));
+  const sample = solid.filter((_, n) => n % step === 0);
+  const dist = (i, c) => (r[i] - c[0]) ** 2 + (g[i] - c[1]) ** 2 + (b[i] - c[2]) ** 2;
+  // k-means++: each new centre is likely far from the ones already chosen.
+  const first = sample[Math.floor(next() * sample.length)];
+  const centres = [[r[first], g[first], b[first]]];
+  const near = Float64Array.from(sample, (i) => dist(i, centres[0]));
+  while (centres.length < k) {
+    const total = near.reduce((s, d) => s + d, 0);
+    let pick = next() * total;
+    let n = 0;
+    while (n < sample.length - 1 && (pick -= near[n]) > 0) n++;
+    const c = [r[sample[n]], g[sample[n]], b[sample[n]]];
+    centres.push(c);
+    sample.forEach((i, m) => (near[m] = Math.min(near[m], dist(i, c))));
+  }
+  const closest = (i) => {
+    let best = 0;
+    for (let c = 1; c < k; c++) if (dist(i, centres[c]) < dist(i, centres[best])) best = c;
+    return best;
+  };
+  for (let round = 0; round < 10; round++) {
+    const sums = centres.map(() => [0, 0, 0, 0]);
+    for (const i of sample) {
+      const s = sums[closest(i)];
+      s[0] += r[i];
+      s[1] += g[i];
+      s[2] += b[i];
+      s[3]++;
+    }
+    sums.forEach((s, c) => s[3] && (centres[c] = [s[0] / s[3], s[1] / s[3], s[2] / s[3]]));
+  }
+  for (const i of solid) {
+    const c = centres[closest(i)];
+    r[i] = c[0];
+    g[i] = c[1];
+    b[i] = c[2];
+  }
+}
+
+/** How far each pixel is from the nearest solid one, in pixels. */
+function distances(a, w, h) {
+  const d = Float32Array.from(a, (v) => (v > 0.5 ? 0 : 1e9));
+  const D = Math.SQRT2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (x > 0) d[i] = Math.min(d[i], d[i - 1] + 1);
+      if (y > 0) {
+        d[i] = Math.min(d[i], d[i - w] + 1);
+        if (x > 0) d[i] = Math.min(d[i], d[i - w - 1] + D);
+        if (x < w - 1) d[i] = Math.min(d[i], d[i - w + 1] + D);
+      }
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      if (x < w - 1) d[i] = Math.min(d[i], d[i + 1] + 1);
+      if (y < h - 1) {
+        d[i] = Math.min(d[i], d[i + w] + 1);
+        if (x < w - 1) d[i] = Math.min(d[i], d[i + w + 1] + D);
+        if (x > 0) d[i] = Math.min(d[i], d[i + w - 1] + D);
+      }
+    }
+  }
+  return d;
+}
+
+/** The cut-out drawing with the settings applied, as a canvas of the card's size. */
+function stylize(base, s) {
+  const { width: w, height: h, data } = base;
+  const n = w * h;
+  let r = new Float32Array(n);
+  let g = new Float32Array(n);
+  let b = new Float32Array(n);
+  const a = new Float32Array(n).fill(1);
+  for (let i = 0; i < n; i++) {
+    r[i] = data[4 * i] / 255;
+    g[i] = data[4 * i + 1] / 255;
+    b[i] = data[4 * i + 2] / 255;
+  }
+  for (let pass = 0; pass < s.smooth; pass++) [r, g, b] = [median3(r, w, h), median3(g, w, h), median3(b, w, h)];
+
+  if (s.removePaper) {
+    const solid = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      // How far from white: the paper is white once the light is even.
+      const d = 1 - Math.min(r[i], g[i], b[i]);
+      a[i] = clamp((d - s.paper) / SOFT);
+      solid[i] = a[i] > 0.5 ? 1 : 0;
+    }
+    if (s.specks) {
+      const { label, sizes } = regions(solid, w, h);
+      const least = Math.max(6, n * 0.0002);
+      for (let i = 0; i < n; i++) {
+        if (label[i] >= 0 && sizes[label[i]] < least) {
+          a[i] = 0;
+          solid[i] = 0;
+        }
+      }
+    }
+    if (s.holes) {
+      // The see-through parts that do not reach the edge are inside the drawing.
+      const open = solid.map((v) => 1 - v);
+      const { label } = regions(open, w, h);
+      const outside = new Set();
+      for (let x = 0; x < w; x++) outside.add(label[x]).add(label[n - w + x]);
+      for (let y = 0; y < h; y++) outside.add(label[y * w]).add(label[y * w + w - 1]);
+      for (let i = 0; i < n; i++) {
+        if (open[i] && !outside.has(label[i])) {
+          a[i] = 1;
+          solid[i] = 1;
+        }
+      }
+    }
+    // The edge of a line is part paper, which leaves a pale ring round the drawing: the pixels
+    // near the edge take the strongest colour near them instead.
+    const edge = distances(solid.map((v) => 1 - v), w, h);
+    const [r0, g0, b0] = [r.slice(), g.slice(), b.slice()];
+    const R = 3;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (a[i] === 0 || edge[i] > R) continue;
+        let best = i;
+        let strongest = -1;
+        for (let yy = Math.max(0, y - R); yy <= Math.min(h - 1, y + R); yy++) {
+          for (let xx = Math.max(0, x - R); xx <= Math.min(w - 1, x + R); xx++) {
+            const j = yy * w + xx;
+            const d = 1 - Math.min(r0[j], g0[j], b0[j]);
+            if (solid[j] && d > strongest) {
+              strongest = d;
+              best = j;
+            }
+          }
+        }
+        r[i] = r0[best];
+        g[i] = g0[best];
+        b[i] = b0[best];
+      }
+    }
+  }
+
+  const angle = (s.hue * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  // The hue rotation of SVG's feColorMatrix.
+  const hue = [
+    [0.213 + cos * 0.787 - sin * 0.213, 0.715 - cos * 0.715 - sin * 0.715, 0.072 - cos * 0.072 + sin * 0.928],
+    [0.213 - cos * 0.213 + sin * 0.143, 0.715 + cos * 0.285 + sin * 0.14, 0.072 - cos * 0.072 - sin * 0.283],
+    [0.213 - cos * 0.213 - sin * 0.787, 0.715 - cos * 0.715 + sin * 0.715, 0.072 + cos * 0.928 + sin * 0.072],
+  ];
+  const [hr, hg, hb] = hue;
+  const tone = (v, luma) => clamp((luma + (v - luma) * s.saturation - 0.5) * s.contrast + 0.5 + s.brightness);
+  for (let i = 0; i < n; i++) {
+    const [r0, g0, b0] = [r[i], g[i], b[i]];
+    const r1 = hr[0] * r0 + hr[1] * g0 + hr[2] * b0;
+    const g1 = hg[0] * r0 + hg[1] * g0 + hg[2] * b0;
+    const b1 = hb[0] * r0 + hb[1] * g0 + hb[2] * b0;
+    const luma = 0.213 * r1 + 0.715 * g1 + 0.072 * b1;
+    r[i] = tone(r1, luma);
+    g[i] = tone(g1, luma);
+    b[i] = tone(b1, luma);
+  }
+
+  // Big pixels: each one the average of its block, solid or see-through.
+  const p = s.pixel;
+  const gw = Math.ceil(w / p);
+  const gh = Math.ceil(h / p);
+  let ga = a;
+  if (p > 1) {
+    const [pr, pg, pb, pa] = [0, 0, 0, 0].map(() => new Float32Array(gw * gh));
+    const count = new Float32Array(gw * gh);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const k = Math.floor(y / p) * gw + Math.floor(x / p);
+        pr[k] += r[i] * a[i];
+        pg[k] += g[i] * a[i];
+        pb[k] += b[i] * a[i];
+        pa[k] += a[i];
+        count[k]++;
+      }
+    }
+    for (let k = 0; k < gw * gh; k++) {
+      const cover = pa[k] / count[k];
+      if (pa[k] > 0) {
+        pr[k] /= pa[k];
+        pg[k] /= pa[k];
+        pb[k] /= pa[k];
+      }
+      pa[k] = s.removePaper ? (cover >= 0.5 ? 1 : 0) : cover;
+    }
+    [r, g, b, ga] = [pr, pg, pb, pa];
+  }
+
+  if (s.colours > 1) fewerColours(r, g, b, ga, s.colours);
+
+  const out = new ImageData(gw, gh);
+  const width = s.outlineWidth / p;
+  const line = s.outline === "black" ? INK : WHITE;
+  const far = s.outline !== "none" && s.removePaper ? distances(ga, gw, gh) : null;
+  for (let k = 0; k < gw * gh; k++) {
+    let alpha = ga[k];
+    let [cr, cg, cb] = [r[k] * 255, g[k] * 255, b[k] * 255];
+    if (far) {
+      // The outline goes under the drawing.
+      const o = p > 1 ? (far[k] <= width ? 1 : 0) : clamp(width + 0.5 - far[k]);
+      const total = alpha + o * (1 - alpha);
+      if (total > 0) {
+        const under = o * (1 - alpha);
+        cr = (cr * alpha + line[0] * under) / total;
+        cg = (cg * alpha + line[1] * under) / total;
+        cb = (cb * alpha + line[2] * under) / total;
+      }
+      alpha = total;
+    }
+    out.data[4 * k] = cr;
+    out.data[4 * k + 1] = cg;
+    out.data[4 * k + 2] = cb;
+    out.data[4 * k + 3] = alpha * 255;
+  }
+  const small = canvasOf(gw, gh);
+  small.getContext("2d").putImageData(out, 0, 0);
+  if (p === 1) return small;
+  const result = canvasOf(w, h);
+  const ctx = result.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(small, 0, 0, gw * p, gh * p);
+  return result;
+}
+
+// ---------- Parts ----------
+
+function flipped(source) {
+  const canvas = canvasOf(source.width, source.height);
+  const ctx = canvas.getContext("2d");
+  ctx.translate(source.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
+/**
+ * Cuts a limb at its tick, as tools/make_art.py does: both halves keep a half disc of the
+ * drawing around the joint, so the elbow or knee has no gap when it bends.
+ */
+function roundCut(limb, tick) {
+  const { width, height } = limb;
+  const row = limb.getContext("2d").getImageData(0, tick, width, 1).data;
+  let from = -1;
+  let to = -1;
+  for (let x = 0; x < width; x++) {
+    if (row[4 * x + 3] > 40) {
+      if (from < 0) from = x;
+      to = x + 1;
+    }
+  }
+  if (from < 0) [from, to] = [0, width];
+  const middle = Math.floor((from + to) / 2);
+  const radius = Math.floor((to - from) / 2) + 2;
+  const top = tick - radius;
+  const half = (y, h, keep) => {
+    const canvas = canvasOf(width, h);
+    const ctx = canvas.getContext("2d");
+    ctx.translate(0, -y);
+    ctx.beginPath();
+    ctx.rect(0, keep[0], width, keep[1] - keep[0]);
+    ctx.arc(middle, tick, radius, 0, 2 * Math.PI);
+    ctx.clip();
+    ctx.drawImage(limb, 0, 0);
+    return canvas;
+  };
+  const upper = half(0, Math.min(height, tick + radius), [0, tick + 1]);
+  const lower = half(top, height - top, [tick, height]);
+  return { upper, lower, joint: [middle, tick], lowerJoint: [middle, tick - top] };
+}
+
+/** The files to write: [path, canvas] pairs, and the joints of skeleton.json that move. */
+function outputs(c, picture) {
+  if (c.launcher) {
+    const [w, h] = c.size.map((v) => Math.round(v * c.launcher.scale));
+    // Turned a quarter clockwise, to lie along the forearm.
+    const turned = canvasOf(h, w);
+    const ctx = turned.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.translate(h, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(picture, 0, 0, w, h);
+    return { pictures: [[c.file, turned]], joints: {} };
+  }
+  if (!c.limb) return { pictures: [[c.file, picture]], joints: {} };
+  const { folder, part, joint, tick } = c.limb;
+  const pictures = [];
+  const joints = {};
+  for (const side of ["left", "right"]) {
+    const cut = roundCut(side === "right" ? flipped(picture) : picture, tick);
+    pictures.push([`${folder}/upper_${part}_${side}.png`, cut.upper], [`${folder}/lower_${part}_${side}.png`, cut.lower]);
+    joints[`${joint}_${side}`] = { parent_point: cut.joint, point: cut.lowerJoint };
+    if (part === "arm" && side === "right") joints.hand_right = { parent_point: [cut.lowerJoint[0], cut.lower.height - 40] };
+  }
+  return { pictures, joints };
+}
+
+// ---------- State ----------
+
+const video = $("video");
+const live = $("liveCanvas").getContext("2d");
+const photoView = $("photoCanvas").getContext("2d");
+const resultView = $("resultCanvas").getContext("2d");
+
+let stream;
+let mode = "live"; // live, review
+let frame = 0;
+let liveQuad = null;
+let photo = null; // a canvas
+let photoData = null;
+let quad = null;
+let found = false;
+let base = null;
+let picture = null;
+let pending = false;
+let dragging = -1;
+let folder = null;
+
+const card = () => CARDS[$("card").value];
+// Browsers without folder access, such as Firefox and Safari, download the files instead.
+const canWrite = "showDirectoryPicker" in window;
+
+for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.limb ? `${c.limb.folder}/*_${c.limb.part}_*` : c.file})`, i));
+
+function showCard() {
+  const c = card();
+  const [w, h] = c.size;
+  const saved = files(c).join(", ");
+  $("cardInfo").textContent = `${w} × ${h} · saves ${saved}`;
+  $("removePaper").checked = c.paper !== false;
+  $("holes").checked = c.holes !== false;
+  if (mode === "review") rebuild();
+}
+$("card").addEventListener("change", showCard);
+showCard();
+
+function settings() {
+  return {
+    removePaper: $("removePaper").checked,
+    paper: +$("paper").value,
+    holes: $("holes").checked,
+    specks: $("specks").checked,
+    saturation: +$("saturation").value,
+    brightness: +$("brightness").value,
+    contrast: +$("contrast").value,
+    hue: +$("hue").value,
+    smooth: +$("smooth").value,
+    colours: +$("colours").value,
+    pixel: +$("pixel").value,
+    outline: $("outline").value,
+    outlineWidth: +$("outlineWidth").value,
+  };
+}
+
+function status(id, text, warn = false) {
+  $(id).textContent = text;
+  $(id).classList.toggle("warn", warn);
+}
+
+function updateCapture() {
+  $("capture").disabled = !stream || (canWrite && !folder);
+  $("openPhoto").disabled = canWrite && !folder;
+}
+
+// ---------- Camera ----------
+
+async function openCamera(deviceId) {
+  stream?.getTracks().forEach((track) => track.stop());
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      facingMode: deviceId ? undefined : "environment",
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+    },
+  });
+  video.srcObject = stream;
+  await video.play();
+}
+
+async function start() {
+  try {
+    await openCamera();
+    const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+    for (const d of cameras) $("camera").add(new Option(d.label || "Camera", d.deviceId));
+    $("camera").value = stream.getVideoTracks()[0].getSettings().deviceId ?? "";
+  } catch (error) {
+    stream = null;
+    $("camera").hidden = true;
+    status("liveStatus", `No camera (${error.message}): open a photo instead.`, true);
+  }
+  updateCapture();
+  requestAnimationFrame(tick);
+}
+
+$("camera").addEventListener("change", () => openCamera($("camera").value).catch((error) => {
+  status("liveStatus", `Cannot use the camera: ${error.message}`, true);
+}));
+
+function drawQuad(ctx, corners, scale, color, handles) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, ctx.canvas.width / 400);
+  ctx.beginPath();
+  corners.forEach(([x, y], i) => (i ? ctx.lineTo(x * scale, y * scale) : ctx.moveTo(x * scale, y * scale)));
+  ctx.closePath();
+  ctx.stroke();
+  if (!handles) return;
+  ctx.fillStyle = color;
+  for (const [x, y] of corners) {
+    ctx.beginPath();
+    ctx.arc(x * scale, y * scale, handleRadius(), 0, 2 * Math.PI);
+    ctx.globalAlpha = 0.35;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+  }
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (mode !== "live" || !stream || !video.videoWidth) return;
+  const { videoWidth: vw, videoHeight: vh } = video;
+  const canvas = live.canvas;
+  if (canvas.height !== Math.round((canvas.width * vh) / vw)) canvas.height = Math.round((canvas.width * vh) / vw);
+  live.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // Finding the box every few frames keeps the preview smooth.
+  if (frame++ % 3 === 0) liveQuad = findBox(video, 480);
+  if (liveQuad) drawQuad(live, liveQuad, canvas.width / vw, "#5ee08a");
+  if (canWrite && !folder) status("liveStatus", "Choose the assets folder at the top first.", true);
+  else if (liveQuad) status("liveStatus", "Box found: take the photo.");
+  else status("liveStatus", "Looking for the box…", true);
+}
+
+$("capture").addEventListener("click", () => {
+  const canvas = canvasOf(video.videoWidth, video.videoHeight);
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  usePhoto(canvas);
+});
+
+$("openPhoto").addEventListener("click", () => $("photoFile").click());
+$("photoFile").addEventListener("change", () => {
+  const [file] = $("photoFile").files;
+  if (file) openPhoto(file);
+  $("photoFile").value = "";
+});
+document.addEventListener("dragover", (event) => event.preventDefault());
+document.addEventListener("drop", (event) => {
+  event.preventDefault();
+  const file = [...event.dataTransfer.files].find((f) => f.type.startsWith("image/"));
+  if (file && !(canWrite && !folder)) openPhoto(file);
+});
+
+async function openPhoto(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_PHOTO / Math.max(bitmap.width, bitmap.height));
+    const canvas = canvasOf(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    usePhoto(canvas);
+  } catch (error) {
+    status("liveStatus", `Cannot open ${file.name}: ${error.message}`, true);
+  }
+}
+
+function usePhoto(canvas) {
+  photo = canvas;
+  photoData = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+  mode = "review";
+  $("live").hidden = true;
+  $("review").hidden = false;
+  $("save").hidden = false;
+  $("saveStatus").textContent = "";
+  const view = photoView.canvas;
+  view.width = Math.min(1400, photo.width);
+  view.height = Math.round((view.width * photo.height) / photo.width);
+  findAgain();
+}
+
+function reset() {
+  mode = "live";
+  $("live").hidden = false;
+  $("review").hidden = true;
+  $("save").hidden = true;
+}
+$("again").addEventListener("click", reset);
+
+// ---------- Review ----------
+
+function findAgain() {
+  quad = findBox(photo, 1000);
+  found = !!quad;
+  if (!quad) {
+    const { width: w, height: h } = photo;
+    quad = [[w * 0.15, h * 0.15], [w * 0.85, h * 0.15], [w * 0.85, h * 0.85], [w * 0.15, h * 0.85]];
+  }
+  rebuild();
+}
+$("findAgain").addEventListener("click", findAgain);
+
+function drawPhoto() {
+  const view = photoView.canvas;
+  const scale = view.width / photo.width;
+  photoView.drawImage(photo, 0, 0, view.width, view.height);
+  drawQuad(photoView, quad, scale, found || dragging >= 0 ? "#5ee08a" : "#ffb547", true);
+}
+
+/** Straightens the box again: after the corners, the card or the light change. */
+function rebuild() {
+  const [w, h] = card().size;
+  base = cutOut(warp(photoData, quad, w, h), $("evenLight").checked);
+  drawPhoto();
+  restyle();
+}
+
+function restyle() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => {
+    pending = false;
+    if (mode !== "review") return;
+    showResult(settings());
+  });
+}
+
+function showResult(s) {
+  $("paperOut").textContent = `${Math.round(s.paper * 100)}%`;
+  $("saturationOut").textContent = `${Math.round(s.saturation * 100)}%`;
+  $("brightnessOut").textContent = s.brightness === 0 ? "as photographed" : `${s.brightness > 0 ? "+" : ""}${Math.round(s.brightness * 100)}`;
+  $("contrastOut").textContent = `${Math.round(s.contrast * 100)}%`;
+  $("hueOut").textContent = s.hue === 0 ? "as drawn" : `${s.hue > 0 ? "+" : ""}${s.hue}°`;
+  $("smoothOut").textContent = s.smooth === 0 ? "off" : `× ${s.smooth}`;
+  $("coloursOut").textContent = s.colours === 1 ? "all" : s.colours;
+  $("pixelOut").textContent = s.pixel === 1 ? "off" : `${s.pixel} px`;
+  $("outlineWidthOut").textContent = `${s.outlineWidth} px`;
+  for (const id of ["paper", "holes", "specks", "outline", "outlineWidth"]) $(id).disabled = !s.removePaper;
+  $("outlineWidth").disabled ||= s.outline === "none";
+
+  picture = stylize(base, s);
+  const view = resultView.canvas;
+  view.width = picture.width;
+  view.height = picture.height;
+  view.classList.toggle("pixels", s.pixel > 1);
+  resultView.drawImage(picture, 0, 0);
+  const c = card();
+  if (c.limb) {
+    // Where the limb bends.
+    resultView.strokeStyle = "#ffb547";
+    resultView.lineWidth = 3;
+    resultView.setLineDash([12, 8]);
+    resultView.beginPath();
+    resultView.moveTo(0, c.limb.tick);
+    resultView.lineTo(view.width, c.limb.tick);
+    resultView.stroke();
+  }
+  const notes = [`${picture.width} × ${picture.height}`];
+  if (!found) notes.push("the box was not found: drag the corners onto it");
+  if (c.limb) notes.push(`the dashed line is where the ${c.limb.joint} bends`);
+  status("summary", notes.join(" · "), !found);
+}
+
+for (const id of ["removePaper", "paper", "holes", "specks", "saturation", "brightness", "contrast", "hue", "smooth", "colours", "pixel", "outline", "outlineWidth"]) {
+  $(id).addEventListener("input", restyle);
+}
+$("evenLight").addEventListener("input", () => mode === "review" && rebuild());
+
+for (const button of document.querySelectorAll("[data-look]")) {
+  button.addEventListener("click", () => {
+    for (const [id, value] of Object.entries(LOOKS[button.dataset.look])) $(id).value = value;
+    restyle();
+  });
+}
+
+// Dragging a corner.
+const handleRadius = () => photoView.canvas.width / 70;
+function photoPoint(event) {
+  const rect = photoView.canvas.getBoundingClientRect();
+  const scale = photo.width / rect.width;
+  return [(event.clientX - rect.left) * scale, (event.clientY - rect.top) * scale];
+}
+$("photoCanvas").addEventListener("pointerdown", (event) => {
+  const [x, y] = photoPoint(event);
+  const reach = (handleRadius() * 3 * photo.width) / photoView.canvas.width;
+  let nearest = -1;
+  quad.forEach(([qx, qy], i) => {
+    const d = Math.hypot(qx - x, qy - y);
+    if (d < reach && (nearest < 0 || d < Math.hypot(quad[nearest][0] - x, quad[nearest][1] - y))) nearest = i;
+  });
+  if (nearest < 0) return;
+  dragging = nearest;
+  $("photoCanvas").setPointerCapture(event.pointerId);
+});
+$("photoCanvas").addEventListener("pointermove", (event) => {
+  if (dragging < 0) return;
+  const [x, y] = photoPoint(event);
+  quad[dragging] = [clamp(x, 0, photo.width), clamp(y, 0, photo.height)];
+  drawPhoto();
+});
+$("photoCanvas").addEventListener("pointerup", () => {
+  if (dragging < 0) return;
+  dragging = -1;
+  found = true;
+  rebuild();
+});
+
+// ---------- Folder ----------
+
+// The tools page chooses the assets folder for every page and hands it over.
+if (window.parent === window) location.replace("../#picture");
+addEventListener("message", (event) => {
+  if (event.origin !== location.origin || !("folder" in event.data)) return;
+  folder = event.data.folder;
+  updateCapture();
+});
+
+// ---------- Save ----------
+
+const png = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+
+async function fileIn(path, create) {
+  const names = path.split("/");
+  let dir = folder;
+  for (const name of names.slice(0, -1)) dir = await dir.getDirectoryHandle(name);
+  return dir.getFileHandle(names.at(-1), { create });
+}
+
+async function write(path, data) {
+  const writable = await (await fileIn(path, true)).createWritable();
+  await writable.write(data);
+  await writable.close();
+}
+
+$("saveButton").addEventListener("click", async () => {
+  if (!picture) return;
+  const c = card();
+  const { pictures, joints } = outputs(c, picture);
+  if (!canWrite) {
+    for (const [path, canvas] of pictures) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(await png(canvas));
+      link.download = path.split("/").pop();
+      link.click();
+    }
+    const moved = pictures.map(([path]) => `assets/${path}`).join(", ");
+    const warning = c.limb ? ` skeleton.json is not updated, so the ${c.limb.joint}s may sit a little off.` : "";
+    return status("saveStatus", `Downloaded: move them to the game's ${moved}.${warning}`, !!c.limb);
+  }
+  if (!folder) return status("saveStatus", "Choose the assets folder at the top first.", true);
+  $("saveButton").disabled = true;
+  try {
+    // The permission can lapse, such as after the tab sat in the background.
+    if ((await folder.requestPermission({ mode: "readwrite" })) !== "granted") {
+      return status("saveStatus", "Not saved: Chrome was not allowed to edit the folder.", true);
+    }
+    for (const [path, canvas] of pictures) await write(path, await png(canvas));
+    const written = pictures.map(([path]) => path);
+    if (c.limb) {
+      // The joints follow where the limb was cut, so the halves meet.
+      const path = `${c.limb.folder}/skeleton.json`;
+      const skeleton = JSON.parse(await (await (await fileIn(path, false)).getFile()).text());
+      for (const entry of skeleton.joints) Object.assign(entry, joints[entry.name] ?? {});
+      await write(path, `${JSON.stringify(skeleton, null, 2)}\n`);
+      written.push(path);
+    }
+    status("saveStatus", `Saved ${written.map((path) => `${folder.name}/${path}`).join(", ")}.`);
+  } catch (error) {
+    status("saveStatus", `Cannot save: ${error.message}`, true);
+  } finally {
+    $("saveButton").disabled = false;
+  }
+});
+
+start();
+</script>
+</body>
+</html>

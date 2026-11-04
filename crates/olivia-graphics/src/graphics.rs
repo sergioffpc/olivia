@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex, Weak};
 
 use olivia_math::{Color, Vec2};
-use olivia_window::Window;
+use olivia_window::RawWindow;
 use tracing::{debug, warn};
-use wgpu::ErrorFilter;
+use wgpu::{ErrorFilter, Limits};
 
 use crate::Error;
 use crate::camera::Camera;
@@ -75,35 +75,47 @@ impl Graphics {
     /// # Errors
     ///
     /// Returns [`Error::NoAdapter`] or [`Error::NoDevice`] if no GPU can draw to it.
-    ///
-    /// # Panics
-    ///
-    /// Panics on a headless window.
     #[doc(hidden)]
-    pub fn attach(&mut self, window: &Window) -> Result<(), Error> {
-        self.gpu = Some(Gpu::new(window.raw(), self.config)?);
+    pub async fn attach(&mut self, window: &Arc<RawWindow>) -> Result<(), Error> {
+        self.gpu = Some(Gpu::new(window, self.config).await?);
         self.white = self.upload(1, 1, WHITE.to_vec());
         Ok(())
     }
 
-    /// Brings back whatever the GPU lost, so that the next frame has a valid surface.
+    /// Whether the GPU device is lost, so that only [`recover`](Self::recover) brings drawing
+    /// back.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn is_device_lost(&self) -> bool {
+        self.gpu.as_ref().is_some_and(Gpu::is_device_lost)
+    }
+
+    /// Replaces the surface if the last frame found it lost, so that the next frame has a valid
+    /// one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NoAdapter`] if no surface can be made for the window any more.
+    #[doc(hidden)]
+    pub fn recreate_lost_surface(&mut self) -> Result<(), Error> {
+        self.gpu.as_mut().map_or(Ok(()), Gpu::recreate_lost_surface)
+    }
+
+    /// Replaces a lost GPU device with a new one, and rebuilds every image and font on it.
     ///
     /// # Errors
     ///
     /// Returns [`Error::NoAdapter`] or [`Error::NoDevice`] if no GPU can draw to the window any
     /// more, or [`Error::NoDevice`] if the new device cannot hold what the old one did.
     #[doc(hidden)]
-    pub fn recover(&mut self) -> Result<(), Error> {
-        let Some(gpu) = &mut self.gpu else {
+    pub async fn recover(&mut self) -> Result<(), Error> {
+        let Some(old) = self.gpu.take() else {
             return Ok(());
         };
-        if !gpu.is_device_lost() {
-            return gpu.recreate_lost_surface();
-        }
-        let window = Arc::clone(&gpu.window);
+        let window = Arc::clone(&old.window);
         // The old swapchain goes first: a window takes only one at a time.
-        self.gpu = None;
-        let gpu = Gpu::new(&window, self.config)?;
+        drop(old);
+        let gpu = Gpu::new(&window, self.config).await?;
         let device = gpu.device.clone();
         self.gpu = Some(gpu);
 
@@ -117,7 +129,7 @@ impl Graphics {
         self.rebuild();
         let mut failure = None;
         for scope in scopes.into_iter().rev() {
-            failure = pollster::block_on(scope.pop()).or(failure);
+            failure = scope.pop().await.or(failure);
         }
         if let Some(error) = failure {
             return Err(Error::NoDevice(error.into()));
@@ -167,7 +179,8 @@ impl Graphics {
     ///
     /// # Panics
     ///
-    /// Panics if the image is larger than the GPU supports.
+    /// Panics if the image is wider or taller than 2048 pixels, WebGL2's limit, which every
+    /// platform keeps.
     pub fn texture(&mut self, bytes: &[u8]) -> Result<Texture, Error> {
         let image = image::load_from_memory(bytes)
             .map_err(|error| Error::UndecodableImage(error.into()))?
@@ -185,7 +198,7 @@ impl Graphics {
     /// # Panics
     ///
     /// Panics if the texture is empty, if `pixels` does not hold 4 bytes per pixel, or if the
-    /// texture is larger than the GPU supports.
+    /// texture is wider or taller than 2048 pixels, WebGL2's limit, which every platform keeps.
     pub fn texture_rgba(
         &mut self,
         width: u32,
@@ -202,6 +215,11 @@ impl Graphics {
     }
 
     fn upload(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Texture {
+        let max = Limits::downlevel_webgl2_defaults().max_texture_dimension_2d;
+        assert!(
+            width <= max && height <= max,
+            "a {width} by {height} texture is larger than {max} pixels on a side"
+        );
         let bind_group = self
             .gpu
             .as_ref()

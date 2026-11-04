@@ -1,10 +1,11 @@
 //! The window a game runs in.
 
 mod driver;
+mod platform;
 mod window;
 
 #[doc(hidden)]
-pub use driver::{Attributes, Driver, run};
+pub use driver::{Attributes, Driver, Next, Starting, run};
 pub use window::{Window, WindowEvent};
 
 /// What `olivia-input` reads from the platform. Unstable: it changes with `winit`.

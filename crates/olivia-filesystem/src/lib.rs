@@ -5,12 +5,16 @@
 //! usually do not.
 
 mod filesystem;
+mod manifest;
+mod platform;
 mod watcher;
 
 use std::io;
 use std::path::PathBuf;
 
 pub use filesystem::Filesystem;
+#[doc(hidden)]
+pub use manifest::write_manifest;
 pub use watcher::Watcher;
 
 /// A failure of this module.

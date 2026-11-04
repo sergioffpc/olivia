@@ -5,6 +5,7 @@ mod audio;
 mod cue;
 mod emitter;
 mod mock;
+mod platform;
 mod play;
 mod sound;
 
@@ -15,6 +16,13 @@ pub use cue::decibels;
 pub use emitter::Emitter;
 pub use play::Play;
 pub use sound::Sound;
+
+/// Suspends all audio on the web, for a panic hook, which cannot reach [`Audio`]. Does nothing on
+/// the desktop.
+#[doc(hidden)]
+pub fn suspend_all() {
+    platform::suspend_all();
+}
 
 /// A failure of this module.
 #[non_exhaustive]

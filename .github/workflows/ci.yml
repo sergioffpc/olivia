@@ -9,26 +9,116 @@ permissions:
   contents: read
 
 jobs:
+  # Whether the change touches more than docs. A pull request of Markdown only skips the
+  # checks below; every push runs them.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.files.outputs.code == 'true' }}
+    steps:
+      - id: files
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename') ||
+              files=unknown
+          if grep -qv '\.md$' <<<"$files"; then echo code=true >>"$GITHUB_OUTPUT"; fi
+
+  # A required check, so its steps are skipped rather than the job: a skipped job would not
+  # report under its matrix name.
   check:
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - run: rustup toolchain install
-      - if: runner.os == 'Linux'
+      - if: needs.changes.outputs.code == 'true'
+        uses: actions/checkout@v7
+        with:
+          # The tests build the fonts and sounds of crates/olivia/assets in.
+          lfs: true
+      - if: needs.changes.outputs.code == 'true'
+        run: rustup toolchain install
+      - if: needs.changes.outputs.code == 'true' && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo clippy --locked -p olivia --all-targets --no-default-features -- -D warnings
-      - run: cargo test --locked
-      - run: cargo doc --locked --no-deps
+      - if: needs.changes.outputs.code == 'true'
+        run: cargo fmt --check
+      - if: needs.changes.outputs.code == 'true'
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - if: needs.changes.outputs.code == 'true'
+        run: cargo clippy --locked -p olivia --all-targets --no-default-features -- -D warnings
+      - if: needs.changes.outputs.code == 'true'
+        run: cargo test --locked
+      - if: needs.changes.outputs.code == 'true'
+        run: cargo doc --locked --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
+  web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tests build the fonts and sounds of crates/olivia/assets in.
+          lfs: true
+      - run: rustup toolchain install
+      # The runner of the web tests, at the wasm-bindgen version in Cargo.lock. The runner image
+      # has Chrome and chromedriver.
+      - run: |
+          wasm_bindgen=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          release="wasm-bindgen-$wasm_bindgen-x86_64-unknown-linux-musl"
+          curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$wasm_bindgen/$release.tar.gz" |
+              tar -xz -C "$HOME/.cargo/bin" --strip-components=1 "$release/wasm-bindgen-test-runner"
+      - run: |
+          curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.22.1/trunk-x86_64-unknown-linux-gnu.tar.gz |
+              tar -xz -C "$HOME/.cargo/bin" trunk
+      - run: cargo clippy --locked --target wasm32-unknown-unknown --workspace -- -D warnings
+      - run: cargo test --locked --target wasm32-unknown-unknown -p olivia-filesystem --test web
+      # The site's base path, /olivia for this repository.
+      - id: pages
+        uses: actions/configure-pages@v6
+      # The site root stays empty; each game lives in its own folder.
+      - run: >-
+          trunk build --release --locked --dist ../../dist/astronaut-cat
+          --public-url "${{ steps.pages.outputs.base_path }}/astronaut-cat/"
+        working-directory: games/astronaut-cat
+      - run: ls -l dist/astronaut-cat/*.wasm
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  # Publishes the site from a push to main only; pull requests and develop build it but stop
+  # there.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}astronaut-cat/
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
   deny:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

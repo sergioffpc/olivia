@@ -2,18 +2,16 @@ use std::sync::Arc;
 
 use olivia_math::Vec2;
 use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::window::Fullscreen;
 
+use crate::platform;
 /// What happened to the window since the last update.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WindowEvent {
     /// The window has this logical size.
     Resized(Vec2),
-    /// The window gained or lost focus.
+    /// The window gained or lost focus. Losing it is how the game notices the player leaving.
     Focus(bool),
-    /// The window was minimised or restored. Wayland does not report this, so it never arrives there.
-    Minimized(bool),
     /// The player asked to close the window. It stays open until the game quits.
     CloseRequested,
 }
@@ -45,17 +43,18 @@ impl Window {
         }
     }
 
-    /// Sets the title.
+    /// Sets the title, which on the web is the page's title.
     pub fn set_title(&mut self, title: &str) {
         if let Some(raw) = &self.raw {
-            raw.set_title(title);
+            platform::set_title(raw, title);
         }
     }
 
-    /// Enters or leaves fullscreen.
+    /// Enters or leaves fullscreen. On the web, a request the browser refuses is repeated on the
+    /// player's next key or pointer press.
     pub fn set_fullscreen(&mut self, fullscreen: bool) {
         if let Some(raw) = &self.raw {
-            raw.set_fullscreen(fullscreen.then_some(Fullscreen::Borderless(None)));
+            platform::set_fullscreen(raw, fullscreen);
         }
     }
 
