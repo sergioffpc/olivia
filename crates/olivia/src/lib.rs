@@ -6,6 +6,7 @@ pub mod ecs;
 mod r#loop;
 mod modules;
 mod phase;
+mod platform;
 #[cfg(feature = "graphics")]
 mod renderer;
 #[cfg(feature = "physics")]
