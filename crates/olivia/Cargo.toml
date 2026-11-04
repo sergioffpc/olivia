@@ -25,6 +25,15 @@ olivia-math.workspace = true
 olivia-physics = { workspace = true, optional = true }
 olivia-window.workspace = true
 tracing.workspace = true
+web-time.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook.workspace = true
+tracing-subscriber.workspace = true
+tracing-wasm.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

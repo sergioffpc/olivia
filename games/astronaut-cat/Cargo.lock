@@ -38,6 +38,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -140,7 +149,6 @@ name = "astronaut-cat"
 version = "0.1.0"
 dependencies = [
  "olivia",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -173,6 +181,12 @@ name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bit-set"
@@ -333,6 +347,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
+]
+
+[[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1205,6 +1229,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1854,8 +1887,9 @@ dependencies = [
 
 [[package]]
 name = "olivia"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
+ "console_error_panic_hook",
  "hecs",
  "olivia-animation",
  "olivia-audio",
@@ -1866,11 +1900,14 @@ dependencies = [
  "olivia-physics",
  "olivia-window",
  "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "web-time",
 ]
 
 [[package]]
 name = "olivia-animation"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "olivia-filesystem",
  "olivia-graphics",
@@ -1882,26 +1919,33 @@ dependencies = [
 
 [[package]]
 name = "olivia-audio"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "kira",
  "olivia-math",
+ "send_wrapper",
  "thiserror 2.0.21",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
 name = "olivia-filesystem"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
+ "base64",
  "directories",
+ "js-sys",
  "notify",
  "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
 name = "olivia-graphics"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1909,7 +1953,6 @@ dependencies = [
  "lyon",
  "olivia-math",
  "olivia-window",
- "pollster",
  "thiserror 2.0.21",
  "tracing",
  "wgpu",
@@ -1917,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "olivia-input"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "olivia-math",
  "olivia-window",
@@ -1925,14 +1968,14 @@ dependencies = [
 
 [[package]]
 name = "olivia-math"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "glam 0.33.12",
 ]
 
 [[package]]
 name = "olivia-physics"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "olivia-math",
  "rapier2d",
@@ -1940,11 +1983,12 @@ dependencies = [
 
 [[package]]
 name = "olivia-window"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "olivia-math",
  "thiserror 2.0.21",
  "tracing",
+ "web-time",
  "winit",
 ]
 
@@ -2113,12 +2157,6 @@ dependencies = [
  "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
-
-[[package]]
-name = "pollster"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc6355899e1c9462875b6757c79f3caa011a1fdae12bbb1a2e72dd1f234f8336"
 
 [[package]]
 name = "portable-atomic"
@@ -2332,10 +2370,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-automata"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
 name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "renderdoc-sys"
@@ -2972,7 +3027,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -3002,12 +3069,27 @@ version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
+ "matchers",
  "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
  "sharded-slab",
  "smallvec",
  "thread_local",
+ "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-wasm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4575c663a174420fa2d78f4108ff68f65bf2fbb7dd89f33749b6e826b3626e07"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -2,13 +2,13 @@
 
 ## Logging and profiling
 
-Olivia reports through `tracing` and installs no subscriber, so with none there is no output. A game picks one at the top of `main`. To read the logs, add `tracing-subscriber`:
+Olivia reports through `tracing`, and `olivia::run` sets up the logging: at `info`, to the terminal on desktop and to the browser console on the web. On desktop, `RUST_LOG` replaces the filter when set:
 
-```rust
-tracing_subscriber::fmt::init();
+```sh
+RUST_LOG=debug cargo run
 ```
 
-To profile with [Tracy](https://github.com/wolfpld/tracy), add `tracing-subscriber` and `tracing-tracy`, and keep Tracy to the game: no Olivia crate depends on it. A frame shows up as the `update`, `physics` and `draw` spans, followed by `batching` and `submit`. `tessellation` and `text layout` sit inside `draw`.
+A game that wants another subscriber installs it at the top of `main`, before `run`, and Olivia keeps it. To profile with [Tracy](https://github.com/wolfpld/tracy), add `tracing-subscriber` and `tracing-tracy`, and keep Tracy to the game: no Olivia crate depends on it. A frame shows up as the `update`, `physics` and `draw` spans, followed by `batching` and `submit`. `tessellation` and `text layout` sit inside `draw`.
 
 ```rust
 use tracing_subscriber::layer::SubscriberExt;

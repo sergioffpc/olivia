@@ -101,6 +101,10 @@ impl Config {
 
     /// Overrides where the game's assets are read from. The default is `assets/` next to the
     /// executable, or at the project root under `cargo run`.
+    ///
+    /// On the web, `path` is a URL path relative to the page's base URL, `assets/` by default:
+    /// its segments join with `/`, and an absolute path starts at the site root. The manifest
+    /// beside it is named after it, as `assets.txt` is for `assets/`.
     #[must_use]
     pub fn assets(mut self, path: impl Into<PathBuf>) -> Self {
         self.assets = Some(path.into());
@@ -109,7 +113,8 @@ impl Config {
 
     /// Sets whether changing a file of the source restarts the game on the new files, through
     /// [`Game::load`](crate::Game::load). The default is `true` under `cargo run` and `false`
-    /// otherwise, so a shipped game never restarts by itself.
+    /// otherwise, so a shipped game never restarts by itself. The web has no hot reload, and its
+    /// default is `false`.
     #[must_use]
     pub fn hot_reload(mut self, hot_reload: bool) -> Self {
         self.hot_reload = hot_reload;

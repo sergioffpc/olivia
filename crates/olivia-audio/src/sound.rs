@@ -1,13 +1,12 @@
 use std::io::Cursor;
-use std::sync::Arc;
 
 use kira::sound::static_sound::StaticSoundData;
-use kira::sound::streaming::StreamingSoundData;
 use kira::sound::{Region, SoundData};
 use kira::track::{MainTrackHandle, SpatialTrackHandle};
 use kira::{Decibels, PlaySoundError};
 
 use crate::cue::{Cue, Playing, decibels, panning, playback_rate};
+use crate::platform::Stream;
 use crate::{Error, Play};
 
 /// Audio loaded and ready to play. It holds no playing state, so one sound can play many times at
@@ -20,8 +19,7 @@ pub struct Sound {
 #[derive(Clone, Debug)]
 enum Data {
     Decoded(Box<StaticSoundData>),
-    /// The compressed bytes, which each play decodes through a cursor of its own.
-    Streamed(Arc<[u8]>),
+    Streamed(Stream),
 }
 
 /// A `kira` track that sounds can start on.
@@ -60,11 +58,8 @@ impl Sound {
     }
 
     pub(crate) fn streamed(bytes: Vec<u8>) -> Result<Self, Error> {
-        let bytes = Arc::<[u8]>::from(bytes);
-        StreamingSoundData::from_cursor(Cursor::new(Arc::clone(&bytes)))
-            .map_err(Error::undecodable_audio)?;
         Ok(Self {
-            data: Data::Streamed(bytes),
+            data: Data::Streamed(Stream::new(bytes)?),
         })
     }
 
@@ -87,12 +82,13 @@ impl Sound {
                     .loop_region(loop_region);
                 Playing::Decoded(track.play(data)?)
             }
-            Data::Streamed(bytes) => {
+            Data::Streamed(stream) => {
                 // `kira` starts the decoding thread before it refuses a sound, and never ends it.
                 if track.is_full() {
                     return Err(PlaySoundError::<()>::SoundLimitReached.into());
                 }
-                let data = StreamingSoundData::from_cursor(Cursor::new(Arc::clone(bytes)))?
+                let data = stream
+                    .data()?
                     .volume(volume)
                     .panning(panning)
                     .playback_rate(playback_rate)

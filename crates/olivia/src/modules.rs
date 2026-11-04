@@ -32,7 +32,7 @@ pub struct Modules {
     #[cfg(feature = "physics")]
     pub(crate) simulation: Simulation,
     pub(crate) world: ecs::World,
-    #[cfg(feature = "filesystem")]
+    #[cfg(any(feature = "filesystem", feature = "graphics"))]
     pub(crate) config: Config,
 }
 
@@ -69,7 +69,7 @@ impl Modules {
             #[cfg(feature = "physics")]
             simulation: Simulation::new(config.gravity_value()),
             world: ecs::World::new(),
-            #[cfg(feature = "filesystem")]
+            #[cfg(any(feature = "filesystem", feature = "graphics"))]
             config: config.clone(),
         })
     }

@@ -55,7 +55,6 @@ impl Game for Demo {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
     olivia::run::<Demo>(
         Config::new("input")
             .title("Olivia input")

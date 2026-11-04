@@ -10,10 +10,13 @@ sudo chown -R "$(id -u):$(id -g)" \
 # Created as the parent of the target volume; Mesa keeps its shader cache here.
 sudo chown "$(id -u):$(id -g)" "$HOME/.cache"
 
-# Vulkan and GL drivers for wgpu, libraries winit loads at run time, and ALSA
-# routed to the host's sound server for kira.
+# Vulkan and GL drivers for wgpu, libraries winit loads at run time, ALSA
+# routed to the host's sound server for kira, and headless Chromium for the web
+# tests.
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver \
     libasound2-dev \
     libasound2-plugins \
     libegl1 \
@@ -34,6 +37,12 @@ printf 'pcm.!default pulse\nctl.!default pulse\n' >"$HOME/.asoundrc"
 
 git config core.hooksPath .githooks
 rustup toolchain install
+
+# The runner of the web tests, at the wasm-bindgen version in Cargo.lock.
+wasm_bindgen=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+release="wasm-bindgen-$wasm_bindgen-x86_64-unknown-linux-musl"
+curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$wasm_bindgen/$release.tar.gz" |
+    tar -xz -C "$CARGO_HOME/bin" --strip-components=1 "$release/wasm-bindgen-test-runner"
 
 # The devcontainer feature can leave out the native package claude runs from.
 claude --version >/dev/null 2>&1 ||

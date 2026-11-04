@@ -10,10 +10,8 @@ use winit::window::Fullscreen;
 pub enum WindowEvent {
     /// The window has this logical size.
     Resized(Vec2),
-    /// The window gained or lost focus.
+    /// The window gained or lost focus. Losing it is how the game notices the player leaving.
     Focus(bool),
-    /// The window was minimised or restored. Wayland does not report this, so it never arrives there.
-    Minimized(bool),
     /// The player asked to close the window. It stays open until the game quits.
     CloseRequested,
 }
