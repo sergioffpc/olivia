@@ -17,13 +17,15 @@
 
 ## Movements
 
+Every movement is filmed side-on, with the right shoulder towards the camera.
+
 | Card | Who | Does | Repeats | File |
 |---|---|---|---|---|
 | Standing still | the hero | stands waiting | yes, always | `hero/anim_idle.json` |
-| Walking | the hero | walks on the spot, facing the camera | yes, always | `hero/anim_walk.json` |
+| Walking | the hero | walks on the spot | yes, always | `hero/anim_walk.json` |
 | Jumping | the hero | does a jump | no, once | `hero/anim_jump.json` |
 | Extra jump | the hero | does a second jump in the air | no, once | `hero/anim_double_jump.json` |
-| Firing | the hero | fires with the launcher in hand | no, once | `hero/anim_shoot.json` |
+| Firing | the hero | fires with the launcher in the right hand | no, once | `hero/anim_shoot.json` |
 | Getting hurt | the hero | is touched by a baddie | no, once | `hero/anim_hurt.json` |
 | Victory | the hero | celebrates having saved them | no, once | `hero/anim_win.json` |
 | Calling for help | who is held | calls for help while waiting | yes, always | `princess/anim_help.json` |
