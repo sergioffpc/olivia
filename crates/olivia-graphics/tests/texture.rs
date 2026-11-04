@@ -128,3 +128,54 @@ fn a_region_is_bounded_by_the_region_it_is_taken_from() {
     let half = texture().region(Rect::new(1.0, 0.0, 1.0, 2.0));
     let _ = half.region(Rect::new(0.0, 0.0, 2.0, 1.0));
 }
+
+/// A blank RGBA texture of `width` by `height`.
+fn blank(width: u32, height: u32) -> Result<Texture, Error> {
+    let pixels = vec![0; width as usize * height as usize * 4];
+    graphics().texture_rgba(width, height, &pixels)
+}
+
+/// A blank PNG image of `width` by `height`.
+fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = Cursor::new(Vec::new());
+    RgbaImage::new(width, height)
+        .write_to(&mut bytes, ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
+#[test]
+fn a_texture_of_2048_pixels_on_a_side_loads() {
+    let texture = blank(2048, 2048).unwrap();
+    assert_eq!(texture.size(), Vec2::new(2048.0, 2048.0));
+}
+
+#[test]
+#[should_panic(expected = "2048")]
+fn a_texture_rgba_wider_than_2048_pixels_panics() {
+    let _ = blank(2049, 1);
+}
+
+#[test]
+#[should_panic(expected = "2048")]
+fn a_texture_rgba_taller_than_2048_pixels_panics() {
+    let _ = blank(1, 2049);
+}
+
+#[test]
+fn an_image_of_2048_pixels_on_a_side_loads() {
+    let texture = graphics().texture(&png(2048, 2048)).unwrap();
+    assert_eq!(texture.size(), Vec2::new(2048.0, 2048.0));
+}
+
+#[test]
+#[should_panic(expected = "2048")]
+fn an_image_wider_than_2048_pixels_panics() {
+    let _ = graphics().texture(&png(2049, 1));
+}
+
+#[test]
+#[should_panic(expected = "2048")]
+fn an_image_taller_than_2048_pixels_panics() {
+    let _ = graphics().texture(&png(1, 2049));
+}
