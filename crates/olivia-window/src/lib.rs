@@ -1,6 +1,7 @@
 //! The window a game runs in.
 
 mod driver;
+mod platform;
 mod window;
 
 #[doc(hidden)]

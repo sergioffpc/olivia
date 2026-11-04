@@ -8,13 +8,12 @@ use olivia_math::Vec2;
 use tracing::info;
 use web_time::Instant;
 use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
 use winit::event::{StartCause, WindowEvent as WinitEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
-use winit::window::{Fullscreen, WindowId};
+use winit::window::WindowId;
 
 use crate::window::logical_size;
-use crate::{Error, Window, WindowEvent};
+use crate::{Error, Window, WindowEvent, platform};
 
 /// How a window starts.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,7 +45,7 @@ pub enum Next {
 pub type Starting<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
 
 /// What [`run`] drives once the window exists.
-pub trait Driver: Sized {
+pub trait Driver: Sized + 'static {
     /// What [`start`](Self::start) receives from [`run`], and what it yields to
     /// [`load`](Self::load).
     type Seed;
@@ -100,29 +99,30 @@ pub trait Driver: Sized {
 /// Opens a window and drives `D`, started from `seed`, on it until it stops. Must be called on the
 /// main thread, at most once per process.
 ///
+/// On the web it returns at once, and the browser drives `D` from then on.
+///
 /// # Errors
 ///
-/// Returns [`Error::Create`] if the window cannot be created, or the first `Err` from `D`.
+/// Returns [`Error::Create`] if the window cannot be created, or the first `Err` from `D`. On the
+/// web, only a failure to create the event loop comes back; `D` reports the rest through
+/// [`Driver::fail`].
 pub fn run<D: Driver>(attributes: Attributes, seed: D::Seed) -> Result<(), D::Error> {
     let event_loop = EventLoop::with_user_event()
         .build()
         .map_err(Error::create)?;
-    let mut host = Host::<D> {
+    let host = Host::<D> {
         attributes,
         seed: Some(seed),
         state: State::Closed,
         waker: Arc::new(Proxy(event_loop.create_proxy())).into(),
         result: Ok(()),
     };
-    let outcome = event_loop.run_app(&mut host);
-    // The game's own failure comes first: it is what stopped the loop.
-    host.result?;
-    Ok(outcome.map_err(Error::create)?)
+    platform::run(event_loop, host)
 }
 
 /// What the waker sends the event loop, so that the host polls again.
 #[derive(Debug)]
-struct Wake;
+pub(crate) struct Wake;
 
 /// Wakes the host through its event loop.
 struct Proxy(EventLoopProxy<Wake>);
@@ -155,31 +155,20 @@ enum State<D: Driver> {
     },
 }
 
-struct Host<D: Driver> {
+/// What the event loop drives.
+pub(crate) struct Host<D: Driver> {
     attributes: Attributes,
     /// Taken by the first resume; later ones find the window already there.
     seed: Option<D::Seed>,
     state: State<D>,
     waker: Waker,
-    result: Result<(), D::Error>,
+    /// How the driver stopped.
+    pub(crate) result: Result<(), D::Error>,
 }
 
 impl<D: Driver> Host<D> {
     fn open(&self, event_loop: &ActiveEventLoop) -> Result<Window, Error> {
-        let Attributes {
-            title,
-            size,
-            resizable,
-            fullscreen,
-        } = &self.attributes;
-        let attributes = winit::window::Window::default_attributes()
-            .with_title(title)
-            .with_inner_size(LogicalSize::new(size.x, size.y))
-            .with_resizable(*resizable)
-            .with_fullscreen(fullscreen.then_some(Fullscreen::Borderless(None)));
-        let raw = event_loop
-            .create_window(attributes)
-            .map_err(Error::create)?;
+        let raw = platform::open(event_loop, &self.attributes)?;
         info!("window created");
         Ok(Window::new(raw))
     }

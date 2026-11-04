@@ -44,6 +44,10 @@ release="wasm-bindgen-$wasm_bindgen-x86_64-unknown-linux-musl"
 curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$wasm_bindgen/$release.tar.gz" |
     tar -xz -C "$CARGO_HOME/bin" --strip-components=1 "$release/wasm-bindgen-test-runner"
 
+# Trunk, which builds a game for the web.
+curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.22.1/trunk-x86_64-unknown-linux-gnu.tar.gz |
+    tar -xz -C "$CARGO_HOME/bin" trunk
+
 # The devcontainer feature can leave out the native package claude runs from.
 claude --version >/dev/null 2>&1 ||
     sudo env PATH="$PATH" npm install -g @anthropic-ai/claude-code --include=optional

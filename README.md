@@ -40,6 +40,19 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
 CI also runs `cargo-deny` against `deny.toml`.
 
+A game builds for the web with [Trunk](https://trunkrs.dev) 0.22.1, which the devcontainer installs. On macOS, install it with [cargo-binstall](https://github.com/cargo-bins/cargo-binstall):
+
+```sh
+cargo binstall trunk@0.22.1
+```
+
+Then serve a game at `http://127.0.0.1:8080/`, rebuilt and reloaded on every change:
+
+```sh
+cd games/astronaut-cat
+trunk serve
+```
+
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and must be signed. The `commit-msg` hook in `.githooks/` checks them; the devcontainer enables it.
 
 Branches follow git flow, through pull requests: `feature/*` targets `develop`, while `release/*` and `hotfix/*` target `main` and then merge back into `develop`.
