@@ -60,6 +60,16 @@ fn load<G: Game>(window: &mut Window, modules: &mut Modules) -> Result<G> {
     Ok(game)
 }
 
+/// Whether `event` presses a key or a mouse button, which lets audio play on the web.
+#[cfg(feature = "audio")]
+fn is_press(event: &raw::Event) -> bool {
+    match event {
+        raw::Event::KeyboardInput { event, .. } => event.state.is_pressed(),
+        raw::Event::MouseInput { state, .. } => state.is_pressed(),
+        _ => false,
+    }
+}
+
 impl<G: Game> GameLoop<G> {
     /// Loads the game on a window of logical size `size`.
     ///
@@ -232,6 +242,12 @@ impl<G: Game> Driver for GameLoop<G> {
 
     #[cfg_attr(not(feature = "input"), expect(unused_variables))]
     fn raw_event(&mut self, event: &raw::Event, scale_factor: f64) {
+        // The browser lets audio play only from inside the handler of a key or button press,
+        // which is where this runs on the web.
+        #[cfg(feature = "audio")]
+        if is_press(event) {
+            self.modules.audio.resume();
+        }
         #[cfg(feature = "input")]
         self.modules.input.on_event(event, scale_factor);
     }
