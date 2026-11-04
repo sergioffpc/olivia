@@ -1,2 +1,9 @@
 # rustfmt requires LF, including on Windows checkouts.
 * text=auto eol=lf
+
+# The pictures, sounds and fonts of the assets folders are kept in Git LFS. Run
+# `git lfs install --skip-repo` once; the hooks in .githooks/ do the rest.
+**/assets/**/*.png filter=lfs diff=lfs merge=lfs -text
+**/assets/**/*.wav filter=lfs diff=lfs merge=lfs -text
+**/assets/**/*.ogg filter=lfs diff=lfs merge=lfs -text
+**/assets/**/*.ttf filter=lfs diff=lfs merge=lfs -text
