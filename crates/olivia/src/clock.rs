@@ -45,7 +45,7 @@ impl SystemClock {
     }
 
     /// Forgets the frames so far, so the next one starts from zero.
-    fn restart(&mut self) {
+    pub(crate) fn restart(&mut self) {
         *self = Self::default();
     }
 }

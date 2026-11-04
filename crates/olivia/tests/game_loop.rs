@@ -3,10 +3,11 @@
 use std::cell::{Cell, RefCell};
 use std::iter;
 use std::sync::{Arc, Mutex};
+use std::task::{self, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use olivia::math::Vec2;
-use olivia::window::{Next, Window};
+use olivia::window::{Driver, Next, Window};
 use olivia::{Config, Game, GameLoop, Modules, Result, Setup, Update};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Level, Subscriber};
@@ -332,4 +333,18 @@ fn frame_rate_ignores_the_first_frame_when_no_time_has_passed() {
         "{}",
         LAST_FRAME_RATE.get()
     );
+}
+
+#[test]
+fn a_failure_is_logged_as_an_error() {
+    let error = "no GPU".into();
+    let (records, ()) = recorded(|| GameLoop::<Traced<0>>::fail(&error));
+    assert_eq!(records, [(Level::ERROR, "event")]);
+}
+
+#[test]
+fn a_loop_that_awaits_nothing_is_ready_at_once() {
+    let (mut game_loop, _window) = start();
+    let poll = game_loop.poll(&mut task::Context::from_waker(Waker::noop()));
+    assert!(matches!(poll, Poll::Ready(Ok(()))));
 }
