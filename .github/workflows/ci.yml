@@ -28,6 +28,28 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      # The runner of the web tests, at the wasm-bindgen version in Cargo.lock. The runner image
+      # has Chrome and chromedriver.
+      - run: |
+          wasm_bindgen=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          release="wasm-bindgen-$wasm_bindgen-x86_64-unknown-linux-musl"
+          curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$wasm_bindgen/$release.tar.gz" |
+              tar -xz -C "$HOME/.cargo/bin" --strip-components=1 "$release/wasm-bindgen-test-runner"
+      # Until olivia-graphics gets its wasm wgpu features, the crates that build on it are left
+      # out, and olivia is checked without them.
+      - run: >-
+          cargo clippy --locked --target wasm32-unknown-unknown --workspace
+          --exclude olivia --exclude olivia-animation --exclude olivia-graphics -- -D warnings
+      - run: >-
+          cargo clippy --locked --target wasm32-unknown-unknown -p olivia --no-default-features
+          --features audio,filesystem,input,physics -- -D warnings
+      - run: cargo test --locked --target wasm32-unknown-unknown -p olivia-filesystem --test web
+
   deny:
     runs-on: ubuntu-latest
     steps:
