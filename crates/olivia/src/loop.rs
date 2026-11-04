@@ -14,11 +14,15 @@ use tracing::{error, info, warn};
 use tracing::{info_span, trace_span};
 
 use crate::clock::SystemClock;
-use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
+use crate::{Config, Game, Modules, Result, Setup, Timer, Update, platform};
 
 /// Opens a window and runs `G` on it until it quits or a phase fails.
 ///
 /// Must be called on the main thread, at most once per process.
+///
+/// It first sets up logging at `info`, to the terminal on desktop, where `RUST_LOG` replaces the
+/// filter when set, and to the browser console on the web. A `tracing` subscriber the game
+/// installed before is kept instead.
 ///
 /// # Errors
 ///
@@ -27,6 +31,7 @@ use crate::{Config, Game, Modules, Result, Setup, Timer, Update};
 /// no GPU can draw to it, at the start or after the GPU is lost; or the first `Err` from
 /// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
+    platform::init_logging();
     let modules = Modules::new(&config)?;
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
 }
