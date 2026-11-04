@@ -6,7 +6,7 @@ use bytemuck::cast_slice;
 use olivia_math::{Color, Vec2};
 use olivia_window::RawWindow;
 use tracing::{debug, info, trace, trace_span, warn};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, new_instance_with_webgpu_detection};
 use wgpu::{
     BindGroup, BufferUsages, Color as ClearColor, CommandEncoderDescriptor, CurrentSurfaceTexture,
     Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp,
@@ -55,9 +55,12 @@ pub(crate) struct Gpu {
 impl Gpu {
     pub(crate) async fn new(window: &Arc<RawWindow>, config: Config) -> Result<Self, Error> {
         let display = Box::new(Arc::clone(window));
-        let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
-            display,
-        ));
+        // A browser may have WebGPU but no adapter for it, as Chrome on Linux does, so WebGL2 is
+        // the fallback there too.
+        let instance = new_instance_with_webgpu_detection(
+            InstanceDescriptor::new_with_display_handle_from_env(display),
+        )
+        .await;
         let surface = instance
             .create_surface(Arc::clone(window))
             .map_err(Error::no_adapter)?;
