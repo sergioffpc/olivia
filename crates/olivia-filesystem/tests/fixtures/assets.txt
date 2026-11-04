@@ -1,0 +1,3 @@
+hero.txt
+maps/one.txt
+maps/two.txt

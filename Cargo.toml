@@ -16,6 +16,7 @@ olivia-input = { path = "crates/olivia-input" }
 olivia-math = { path = "crates/olivia-math" }
 olivia-physics = { path = "crates/olivia-physics" }
 olivia-window = { path = "crates/olivia-window" }
+base64 = "0.22"
 bytemuck = { version = "1", features = ["derive"] }
 console_error_panic_hook = "0.1"
 # No fontconfig: a font comes only from the bytes a game hands over.
@@ -27,6 +28,7 @@ hecs = "0.11"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 # No cpal-realtime-dbus, so building needs no libdbus-1-dev. Pinned because 0.12.6 moved to glam 0.34,
 # and only one glam is allowed (ADR 0001).
+js-sys = "0.3"
 kira = { version = "=0.12.5", default-features = false, features = [
     "cpal",
     "cpal-realtime",
@@ -48,6 +50,10 @@ thiserror = "2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = "0.3"
 tracing-wasm = "0.2"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+wasm-bindgen-test = "0.3"
+web-sys = "0.3"
 web-time = "1"
 # Vulkan, Metal and DX12 only: no GLES backend, so EGL is never loaded.
 wgpu = { version = "30", default-features = false, features = [

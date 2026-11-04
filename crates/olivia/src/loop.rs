@@ -41,7 +41,8 @@ use crate::{Config, Game, Modules, Result, Setup, Timer, Update, platform};
 ///
 /// Returns an error if the identity is invalid, before any window opens;
 /// [`window::Error`](crate::window::Error) if the window cannot be created; a `graphics::Error` if
-/// no GPU can draw to it, at the start or after the GPU is lost; or the first `Err` from
+/// no GPU can draw to it, at the start or after the GPU is lost; a `filesystem::Error` if the
+/// source cannot be fetched at the start on the web; or the first `Err` from
 /// [`Game::load`] or [`Game::update`]. The window is closed by then.
 pub fn run<G: Game>(config: Config) -> Result<()> {
     platform::init_logging();
@@ -282,12 +283,19 @@ impl<G: Game> Driver for GameLoop<G> {
     type Seed = Modules;
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    /// Sets up the GPU. Every future the game waits for before it loads goes here.
-    #[cfg_attr(not(feature = "graphics"), expect(unused_mut, unused_variables))]
+    /// Preloads the source and sets up the GPU. Every future the game waits for before it loads
+    /// goes here.
+    #[cfg_attr(
+        not(any(feature = "filesystem", feature = "graphics")),
+        expect(unused_mut)
+    )]
+    #[cfg_attr(not(feature = "graphics"), expect(unused_variables))]
     fn start(mut modules: Modules, window: &Window) -> Starting<Modules, Self::Error> {
         #[cfg(feature = "graphics")]
         let raw = Arc::clone(window.raw());
         Box::pin(async move {
+            #[cfg(feature = "filesystem")]
+            modules.filesystem.preload().await?;
             #[cfg(feature = "graphics")]
             modules.graphics.attach(&raw).await?;
             Ok(modules)
