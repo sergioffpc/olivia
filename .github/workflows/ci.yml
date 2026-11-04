@@ -40,15 +40,14 @@ jobs:
           release="wasm-bindgen-$wasm_bindgen-x86_64-unknown-linux-musl"
           curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$wasm_bindgen/$release.tar.gz" |
               tar -xz -C "$HOME/.cargo/bin" --strip-components=1 "$release/wasm-bindgen-test-runner"
-      # Until olivia-graphics gets its wasm wgpu features, the crates that build on it are left
-      # out, and olivia is checked without them.
-      - run: >-
-          cargo clippy --locked --target wasm32-unknown-unknown --workspace
-          --exclude olivia --exclude olivia-animation --exclude olivia-graphics -- -D warnings
-      - run: >-
-          cargo clippy --locked --target wasm32-unknown-unknown -p olivia --no-default-features
-          --features audio,filesystem,input,physics -- -D warnings
+      - run: |
+          curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.22.1/trunk-x86_64-unknown-linux-gnu.tar.gz |
+              tar -xz -C "$HOME/.cargo/bin" trunk
+      - run: cargo clippy --locked --target wasm32-unknown-unknown --workspace -- -D warnings
       - run: cargo test --locked --target wasm32-unknown-unknown -p olivia-filesystem --test web
+      - run: trunk build --release --locked
+        working-directory: games/astronaut-cat
+      - run: ls -l games/astronaut-cat/dist/*.wasm
 
   deny:
     runs-on: ubuntu-latest

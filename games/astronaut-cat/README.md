@@ -11,6 +11,12 @@ cd games/astronaut-cat
 cargo run --release
 ```
 
+Or play it in a browser at `http://127.0.0.1:8080/` with [Trunk](../../README.md#development):
+
+```sh
+trunk serve
+```
+
 Left and Right walk, Space or Up jumps and jumps again in the air, X shoots, Enter starts over after the game ends and Tab shows the colliders.
 
 ## Layout
@@ -29,6 +35,7 @@ src/level.rs       the fixed layout, in metres
 src/game.rs        the rules, the bodies and everything on screen
 tests/game.rs      the whole game, played headless on made-up keys
 tools/             the scripts that made assets/
+index.html         Trunk.toml: the web build, into dist/
 ```
 
 Paths are the labels printed on the sheets and cards, so a finished sheet tells you where its file goes. The exception is `hero/weapon`, which is written as `hero/launcher.png`, the part name in the motion capture spec.
