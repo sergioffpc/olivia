@@ -39,7 +39,6 @@ kira = { version = "=0.12.5", default-features = false, features = [
 ] }
 lyon = "1"
 notify = "8"
-pollster = "1"
 rapier2d = { version = "0.36", features = ["debug-render"] }
 send_wrapper = "0.6"
 serde = { version = "1", features = ["derive"] }

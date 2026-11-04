@@ -1,17 +1,29 @@
 use std::cell::Cell;
+use std::fmt;
+#[cfg(feature = "graphics")]
+use std::future::Future;
+#[cfg(feature = "graphics")]
+use std::mem;
+#[cfg(feature = "graphics")]
+use std::pin::Pin;
+#[cfg(feature = "graphics")]
+use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 #[cfg(feature = "animation")]
 use olivia_animation::Character;
 #[cfg(feature = "filesystem")]
 use olivia_filesystem::Watcher;
+#[cfg(feature = "graphics")]
+use olivia_graphics::Graphics;
 #[cfg(feature = "input")]
 use olivia_input::Input;
 use olivia_math::Vec2;
-use olivia_window::{Driver, Next, Window, WindowEvent, raw};
+use olivia_window::{Driver, Next, Starting, Window, WindowEvent, raw};
+use tracing::{error, info_span, trace_span};
 #[cfg(feature = "filesystem")]
-use tracing::{error, info, warn};
-use tracing::{info_span, trace_span};
+use tracing::{info, warn};
 use web_time::Instant;
 
 use crate::clock::SystemClock;
@@ -37,8 +49,11 @@ pub fn run<G: Game>(config: Config) -> Result<()> {
     olivia_window::run::<GameLoop<G>>(config.window_attributes(), modules)
 }
 
+/// The graphics being brought back after the GPU device was lost.
+#[cfg(feature = "graphics")]
+type Recovery = Pin<Box<dyn Future<Output = Result<Graphics, olivia_graphics::Error>>>>;
+
 /// A game in the middle of being run, one frame at a time.
-#[derive(Debug)]
 pub struct GameLoop<G> {
     game: G,
     modules: Modules,
@@ -55,6 +70,15 @@ pub struct GameLoop<G> {
     /// Present when hot reload is on.
     #[cfg(feature = "filesystem")]
     watcher: Option<Watcher>,
+    /// Present while the GPU device is being brought back, which pauses the game.
+    #[cfg(feature = "graphics")]
+    recovery: Option<Recovery>,
+}
+
+impl<G> fmt::Debug for GameLoop<G> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GameLoop").finish_non_exhaustive()
+    }
 }
 
 /// Runs [`Game::load`] on `modules`, and gives its entities their bodies.
@@ -109,6 +133,8 @@ impl<G: Game> GameLoop<G> {
             size,
             #[cfg(feature = "filesystem")]
             watcher,
+            #[cfg(feature = "graphics")]
+            recovery: None,
         })
     }
 
@@ -137,6 +163,10 @@ impl<G: Game> GameLoop<G> {
         if !self.run_frame(frame_time, window)? {
             return Ok(Next::Stop);
         }
+        #[cfg(feature = "graphics")]
+        if self.recovery.is_some() {
+            return Ok(Next::Await);
+        }
         Ok(self.clock.end_frame(self.presented))
     }
 
@@ -144,8 +174,8 @@ impl<G: Game> GameLoop<G> {
     ///
     /// # Errors
     ///
-    /// Returns the first `Err` from [`Game::update`], or a `graphics::Error` if the GPU is lost and
-    /// cannot be brought back.
+    /// Returns the first `Err` from [`Game::update`], or a `graphics::Error` if the surface is lost
+    /// and cannot be brought back.
     pub fn run_frame(&mut self, frame_time: Duration, window: &mut Window) -> Result<bool> {
         #[cfg(feature = "filesystem")]
         self.reload_if_changed(window);
@@ -199,10 +229,19 @@ impl<G: Game> GameLoop<G> {
         }
     }
 
-    /// Draws the world and returns whether the frame reached the window.
+    /// Draws the world and returns whether the frame reached the window. A lost GPU device starts
+    /// its recovery instead.
     #[cfg(feature = "graphics")]
     fn present(&mut self) -> Result<bool> {
-        self.modules.graphics.recover()?;
+        if self.modules.graphics.is_device_lost() {
+            let placeholder = self.modules.config.graphics();
+            let mut graphics = mem::replace(&mut self.modules.graphics, placeholder);
+            self.recovery = Some(Box::pin(async move {
+                graphics.recover().await.map(|()| graphics)
+            }));
+            return Ok(false);
+        }
+        self.modules.graphics.recreate_lost_surface()?;
         let factor = self.timer.interpolation_factor();
         let target = trace_span!("draw").in_scope(|| self.modules.render(factor));
         Ok(target.present())
@@ -243,10 +282,19 @@ impl<G: Game> Driver for GameLoop<G> {
     type Seed = Modules;
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    #[cfg_attr(not(feature = "graphics"), expect(unused_mut))]
-    fn start(mut modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
+    /// Sets up the GPU. Every future the game waits for before it loads goes here.
+    #[cfg_attr(not(feature = "graphics"), expect(unused_mut, unused_variables))]
+    fn start(mut modules: Modules, window: &Window) -> Starting<Modules, Self::Error> {
         #[cfg(feature = "graphics")]
-        modules.graphics.attach(window)?;
+        let raw = Arc::clone(window.raw());
+        Box::pin(async move {
+            #[cfg(feature = "graphics")]
+            modules.graphics.attach(&raw).await?;
+            Ok(modules)
+        })
+    }
+
+    fn load(modules: Modules, window: &mut Window, size: Vec2) -> Result<Self> {
         Self::new(window, size, modules)
     }
 
@@ -268,5 +316,25 @@ impl<G: Game> Driver for GameLoop<G> {
 
     fn frame(&mut self, window: &mut Window) -> Result<Next> {
         self.run_frame_at(Instant::now(), window)
+    }
+
+    /// Polls the GPU recovery, if one is under way.
+    #[cfg_attr(not(feature = "graphics"), expect(unused_variables))]
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        #[cfg(feature = "graphics")]
+        if let Some(recovery) = &mut self.recovery {
+            let Poll::Ready(graphics) = recovery.as_mut().poll(cx) else {
+                return Poll::Pending;
+            };
+            self.recovery = None;
+            self.modules.graphics = graphics?;
+            // The game was paused, and the pause must not turn into catch-up steps.
+            self.clock.restart();
+        }
+        Poll::Ready(Ok(()))
+    }
+
+    fn fail(error: &Self::Error) {
+        error!(%error, "the game stopped");
     }
 }

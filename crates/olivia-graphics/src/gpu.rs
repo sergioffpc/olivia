@@ -53,7 +53,7 @@ pub(crate) struct Gpu {
 }
 
 impl Gpu {
-    pub(crate) fn new(window: &Arc<RawWindow>, config: Config) -> Result<Self, Error> {
+    pub(crate) async fn new(window: &Arc<RawWindow>, config: Config) -> Result<Self, Error> {
         let display = Box::new(Arc::clone(window));
         let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
             display,
@@ -61,24 +61,29 @@ impl Gpu {
         let surface = instance
             .create_surface(Arc::clone(window))
             .map_err(Error::no_adapter)?;
-        let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..RequestAdapterOptions::default()
-        }))
-        .map_err(Error::no_adapter)?;
+        let adapter = instance
+            .request_adapter(&RequestAdapterOptions {
+                compatible_surface: Some(&surface),
+                ..RequestAdapterOptions::default()
+            })
+            .await
+            .map_err(Error::no_adapter)?;
         info!(adapter = adapter.get_info().name, "adapter chosen");
 
-        let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
-            // Counts above 4 are specific to the adapter and need this.
-            required_features: adapter.features()
-                & Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-            // WebGL2's minimums, so a game behaves the same on every GPU. Only the texture
-            // sizes come from the adapter, for the surface and its targets; game textures are
-            // capped by `Graphics` itself.
-            required_limits: Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
-            ..DeviceDescriptor::default()
-        }))
-        .map_err(|error| Error::NoDevice(error.into()))?;
+        let (device, queue) = adapter
+            .request_device(&DeviceDescriptor {
+                // Counts above 4 are specific to the adapter and need this.
+                required_features: adapter.features()
+                    & Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                // WebGL2's minimums, so a game behaves the same on every GPU. Only the texture
+                // sizes come from the adapter, for the surface and its targets; game textures are
+                // capped by `Graphics` itself.
+                required_limits: Limits::downlevel_webgl2_defaults()
+                    .using_resolution(adapter.limits()),
+                ..DeviceDescriptor::default()
+            })
+            .await
+            .map_err(|error| Error::NoDevice(error.into()))?;
         let device_lost = Arc::new(AtomicBool::new(false));
         let lost = Arc::clone(&device_lost);
         device.set_device_lost_callback(move |_, _| lost.store(true, Ordering::Relaxed));

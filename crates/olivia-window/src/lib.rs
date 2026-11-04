@@ -4,7 +4,7 @@ mod driver;
 mod window;
 
 #[doc(hidden)]
-pub use driver::{Attributes, Driver, Next, run};
+pub use driver::{Attributes, Driver, Next, Starting, run};
 pub use window::{Window, WindowEvent};
 
 /// What `olivia-input` reads from the platform. Unstable: it changes with `winit`.

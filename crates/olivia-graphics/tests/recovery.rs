@@ -1,5 +1,8 @@
 //! What rebuilding the GPU resources does to a game's textures and fonts, on a `Graphics` with no GPU.
 
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
 use olivia_graphics::{Camera, Config, Draw, Font, Graphics, Vertex};
 use olivia_math::{Rect, Vec2};
 
@@ -91,6 +94,19 @@ fn a_clone_keeps_a_texture_tracked() {
 }
 
 #[test]
-fn a_game_with_no_gpu_has_nothing_to_recover() {
-    assert!(graphics().recover().is_ok());
+fn a_game_with_no_gpu_has_no_lost_device() {
+    assert!(!graphics().is_device_lost());
+}
+
+#[test]
+fn a_game_with_no_gpu_recovers_at_once() {
+    let mut graphics = graphics();
+    let recovery = pin!(graphics.recover());
+    let poll = recovery.poll(&mut Context::from_waker(Waker::noop()));
+    assert!(matches!(poll, Poll::Ready(Ok(()))));
+}
+
+#[test]
+fn a_game_with_no_gpu_has_no_surface_to_recreate() {
+    assert!(graphics().recreate_lost_surface().is_ok());
 }
