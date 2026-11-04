@@ -9,6 +9,10 @@ kira.workspace = true
 olivia-math.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+web-time.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+send_wrapper.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

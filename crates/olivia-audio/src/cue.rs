@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use kira::Tween;
+use kira::sound::PlaybackState;
 use kira::sound::static_sound::StaticSoundHandle;
-use kira::sound::streaming::StreamingSoundHandle;
-use kira::sound::{FromFileError, PlaybackState};
 use kira::{Decibels, Panning, PlaybackRate};
+
+use crate::platform::StreamHandle;
 
 /// How long setters and [`Cue::stop`] take, to avoid clicks.
 pub(crate) const TRANSITION: Tween = tween(Duration::from_millis(10));
@@ -47,7 +48,7 @@ pub struct Cue {
 #[derive(Debug)]
 pub(crate) enum Playing {
     Decoded(StaticSoundHandle),
-    Streamed(StreamingSoundHandle<FromFileError>),
+    Streamed(StreamHandle),
 }
 
 /// Runs `$call` on the `kira` handle of `$cue`, whichever kind it is, if it has one.
@@ -114,6 +115,10 @@ impl Cue {
     /// Whether the sound is being heard: `false` while paused and once it has ended.
     #[must_use]
     pub fn is_playing(&self) -> bool {
+        #[allow(
+            clippy::match_same_arms,
+            reason = "the handles are of one type only on the web"
+        )]
         let state = match &self.playing {
             Some(Playing::Decoded(handle)) => handle.state(),
             Some(Playing::Streamed(handle)) => handle.state(),
