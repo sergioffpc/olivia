@@ -9,8 +9,8 @@ use tracing::{debug, info, trace, trace_span, warn};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BufferUsages, Color as ClearColor, CommandEncoderDescriptor, CurrentSurfaceTexture,
-    Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, LoadOp, Operations,
-    PollType, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp,
+    Operations, PollType, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
     RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
     TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
@@ -72,7 +72,10 @@ impl Gpu {
             // Counts above 4 are specific to the adapter and need this.
             required_features: adapter.features()
                 & Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-            required_limits: adapter.limits(),
+            // WebGL2's minimums, so a game behaves the same on every GPU. Only the texture
+            // sizes come from the adapter, for the surface and its targets; game textures are
+            // capped by `Graphics` itself.
+            required_limits: Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
             ..DeviceDescriptor::default()
         }))
         .map_err(|error| Error::NoDevice(error.into()))?;
