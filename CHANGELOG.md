@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-04
+
+### Added
+
+- Web target: games run in the browser, drawing with WebGPU and falling back to WebGL2, with sound, a source preloaded before the game starts and saves kept in `localStorage` ([#139]).
+- A progress bar while the game loads on the web, and a failure screen when it cannot start ([#147]).
+- Astronaut Cat is published to GitHub Pages ([#145]).
+- Sound, picture and preview pages under one tools page ([#140]), and the class's cards, sheets and Portuguese tools ([#141]).
+
+### Changed
+
+- **Breaking:** `Game` and `Driver` must be `'static` ([#139]).
+- **Breaking:** the hidden `Driver` trait gains `load`, `poll` and `fail`, and `start` returns a future; `Graphics::attach` and `Graphics::recover` are async ([#139]).
+- **Breaking:** `WindowEvent::Minimized` is removed; `Focus(false)` tells a game the player left. A window that is not redrawn pauses the game ([#139]).
+- **Breaking:** images wider or taller than 2048 pixels panic, as every platform gets WebGL2's limits ([#139]).
+- Frames run on redraw and leave the pace to vsync ([#139]).
+- The assets' pictures, sounds and fonts live in Git LFS ([#144]).
+
 ## [1.0.0] - 2026-11-03
 
 First release.
@@ -32,7 +50,8 @@ First release.
 
 - `olivia-window`: show the window title on Wayland ([#55]).
 
-[Unreleased]: https://github.com/sergioffpc/olivia/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sergioffpc/olivia/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/sergioffpc/olivia/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/sergioffpc/olivia/releases/tag/v1.0.0
 [#44]: https://github.com/sergioffpc/olivia/pull/44
 [#48]: https://github.com/sergioffpc/olivia/pull/48
@@ -58,3 +77,9 @@ First release.
 [#96]: https://github.com/sergioffpc/olivia/pull/96
 [#99]: https://github.com/sergioffpc/olivia/pull/99
 [#100]: https://github.com/sergioffpc/olivia/pull/100
+[#139]: https://github.com/sergioffpc/olivia/pull/139
+[#140]: https://github.com/sergioffpc/olivia/pull/140
+[#141]: https://github.com/sergioffpc/olivia/pull/141
+[#144]: https://github.com/sergioffpc/olivia/pull/144
+[#145]: https://github.com/sergioffpc/olivia/pull/145
+[#147]: https://github.com/sergioffpc/olivia/pull/147
