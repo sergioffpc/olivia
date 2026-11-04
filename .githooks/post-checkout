@@ -1,0 +1,4 @@
+#!/bin/sh
+# Git LFS: keeps the pictures, sounds and fonts of the assets folders, see .gitattributes.
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path.\nInstall it, then run 'git lfs install --skip-repo'.\n"; exit 2; }
+git lfs post-checkout "$@"

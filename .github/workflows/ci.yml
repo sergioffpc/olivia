@@ -17,6 +17,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tests build the fonts and sounds of crates/olivia/assets in.
+          lfs: true
       - run: rustup toolchain install
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
@@ -32,6 +35,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tests build the fonts and sounds of crates/olivia/assets in.
+          lfs: true
       - run: rustup toolchain install
       # The runner of the web tests, at the wasm-bindgen version in Cargo.lock. The runner image
       # has Chrome and chromedriver.

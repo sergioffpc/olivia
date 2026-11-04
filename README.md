@@ -22,9 +22,10 @@ tracing::subscriber::set_global_default(
 
 On Linux, the toolchain lives only in the devcontainer; nothing needs installing on the host beyond VS Code with Dev Containers and podman or Docker. Open the folder in VS Code and run **Dev Containers: Reopen in Container**. The VS Code setting `dev.containers.dockerPath` must point at `podman` on podman hosts.
 
-On macOS, develop and run natively: a container there reaches no GPU, sound or camera. Install [rustup](https://rustup.rs); `rust-toolchain.toml` picks the Rust version. Then enable the commit hook:
+On macOS, develop and run natively: a container there reaches no GPU, sound or camera. Install [rustup](https://rustup.rs); `rust-toolchain.toml` picks the Rust version. Then install [Git LFS](https://git-lfs.com), such as with `brew install git-lfs`, which keeps the pictures, sounds and fonts of the assets folders, and enable the hooks:
 
 ```sh
+git lfs install --skip-repo
 git config core.hooksPath .githooks
 ```
 

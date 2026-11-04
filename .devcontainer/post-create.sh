@@ -12,11 +12,12 @@ sudo chown "$(id -u):$(id -g)" "$HOME/.cache"
 
 # Vulkan and GL drivers for wgpu, libraries winit loads at run time, ALSA
 # routed to the host's sound server for kira, and headless Chromium for the web
-# tests.
+# tests, and Git LFS for the assets folders.
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
     chromium \
     chromium-driver \
+    git-lfs \
     libasound2-dev \
     libasound2-plugins \
     libegl1 \
@@ -36,6 +37,8 @@ sudo apt-get install -y --no-install-recommends \
 printf 'pcm.!default pulse\nctl.!default pulse\n' >"$HOME/.asoundrc"
 
 git config core.hooksPath .githooks
+# The LFS filters only: the hooks are in .githooks/.
+git lfs install --skip-repo
 rustup toolchain install
 
 # The runner of the web tests, at the wasm-bindgen version in Cargo.lock.
