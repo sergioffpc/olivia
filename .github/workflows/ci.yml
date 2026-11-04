@@ -30,6 +30,9 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v7
       - run: rustup toolchain install
@@ -45,9 +48,37 @@ jobs:
               tar -xz -C "$HOME/.cargo/bin" trunk
       - run: cargo clippy --locked --target wasm32-unknown-unknown --workspace -- -D warnings
       - run: cargo test --locked --target wasm32-unknown-unknown -p olivia-filesystem --test web
-      - run: trunk build --release --locked
+      # The site's base path, /olivia for this repository.
+      - id: pages
+        uses: actions/configure-pages@v6
+      # The site root stays empty; each game lives in its own folder.
+      - run: >-
+          trunk build --release --locked --dist ../../dist/astronaut-cat
+          --public-url "${{ steps.pages.outputs.base_path }}/astronaut-cat/"
         working-directory: games/astronaut-cat
-      - run: ls -l games/astronaut-cat/dist/*.wasm
+      - run: ls -l dist/astronaut-cat/*.wasm
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  # Publishes the site from a push to main only; pull requests and develop build it but stop
+  # there.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}astronaut-cat/
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
 
   deny:
     runs-on: ubuntu-latest

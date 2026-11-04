@@ -17,6 +17,8 @@ Or play it in a browser at `http://127.0.0.1:8080/` with [Trunk](../../README.md
 trunk serve
 ```
 
+Every push to `main` publishes it at <https://sergioffpc.github.io/olivia/astronaut-cat/>.
+
 Left and Right walk, Space or Up jumps and jumps again in the air, X shoots, Enter starts over after the game ends and Tab shows the colliders.
 
 ## Layout
