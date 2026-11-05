@@ -5,18 +5,22 @@ use olivia::{
 };
 
 use super::{fallback::no_texture, read};
-use crate::random::Random;
 
 #[derive(Debug)]
 pub(crate) struct Textures {
     pub(crate) background: Texture,
     pub(crate) platform: Texture,
     pub(crate) life: Texture,
+    #[expect(dead_code, reason = "shown once the HUD follows the lives")]
     pub(crate) life_lost: Texture,
+    /// The digits 0 to 9, each at its own index.
     pub(crate) digits: [Texture; 10],
+    #[expect(dead_code, reason = "shown once the hero shoots")]
     pub(crate) projectile: Texture,
+    #[expect(dead_code, reason = "shown once the hero double jumps")]
     pub(crate) fart: Texture,
     pub(crate) coin: Texture,
+    #[expect(dead_code, reason = "shown once the level has the princess")]
     pub(crate) goal: Texture,
     pub(crate) crawl: Texture,
     pub(crate) roll: Texture,
@@ -24,12 +28,8 @@ pub(crate) struct Textures {
 }
 
 impl Textures {
-    pub(crate) fn load(
-        filesystem: &Filesystem,
-        graphics: &mut Graphics,
-        random: &mut Random,
-    ) -> Result<Self> {
-        let mut named = |name: &str| texture(filesystem, graphics, random, &path(name));
+    pub(crate) fn load(filesystem: &Filesystem, graphics: &mut Graphics) -> Result<Self> {
+        let mut named = |name: &str| texture(filesystem, graphics, &path(name));
         Ok(Self {
             background: named("background")?,
             platform: named("platform")?,
@@ -63,15 +63,14 @@ pub(super) fn path(name: &str) -> String {
     format!("textures/{name}.png")
 }
 
-/// The texture at `path`, or a square of a random colour if it is not there yet.
+/// The texture at `path`, or a square of a colour of its own if it is not there yet.
 pub(super) fn texture(
     filesystem: &Filesystem,
     graphics: &mut Graphics,
-    random: &mut Random,
     path: &str,
 ) -> Result<Texture> {
     match read(filesystem, path)? {
         Some(bytes) => Ok(graphics.texture(&bytes)?),
-        None => no_texture(graphics, random),
+        None => no_texture(graphics, path),
     }
 }

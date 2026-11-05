@@ -1,41 +1,41 @@
-//! The one level: its backdrop, what the hero stands on, and who and what is on it.
+//! The one level: its background, what the hero stands on, and who and what is on it.
 
-mod backdrop;
+mod background;
 mod coins;
 mod enemies;
+mod layout;
+mod player;
 mod terrain;
 
 use olivia::{
-    ecs::{ColliderBuilder, Entity, RigidBodyBuilder, World},
-    graphics::depth,
+    ecs::{ColliderBuilder, RigidBodyBuilder, World},
     math::Vec2,
 };
 
-use crate::assets::Textures;
-
-/// The height of the ground's top.
-const GROUND: f32 = 6.0;
-/// Where the level ends.
-const WIDTH: f32 = 44.0;
-/// How deep the things on the level are drawn.
-const THING_DEPTH: f32 = depth::PLAYFIELD + 10.0;
+use crate::assets::{Characters, Textures};
 
 /// What a new game replaces.
 struct CActor;
 
 #[derive(Debug)]
-pub(crate) struct LevelManager {
-    backgrounds: Vec<(Entity, f32)>,
+#[expect(
+    dead_code,
+    reason = "read once the update phase scrolls and moves the hero"
+)]
+pub(crate) struct Level {
+    background: Vec<background::Tile>,
+    player: player::Player,
 }
 
-impl LevelManager {
-    pub(crate) fn load(textures: &Textures, world: &mut World) -> Self {
-        let backgrounds = backdrop::spawn(world, &textures.background);
+impl Level {
+    pub(crate) fn spawn(world: &mut World, characters: &Characters, textures: &Textures) -> Self {
+        let background = background::spawn(world, &textures.background);
         terrain::spawn(world, &textures.platform);
         enemies::spawn(world, textures);
         coins::spawn(world, &textures.coin);
+        let player = player::spawn(world, characters);
 
-        Self { backgrounds }
+        Self { background, player }
     }
 }
 

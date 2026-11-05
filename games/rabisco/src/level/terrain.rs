@@ -1,32 +1,19 @@
 use olivia::{
     ecs::{CSprite, CTransform, ColliderBuilder, World},
-    graphics::{Draw, Texture, depth},
+    graphics::{Draw, Texture},
     math::{Rect, Vec2},
 };
 
-use super::{GROUND, WIDTH, zone};
-use crate::game::VIEW;
+use super::{
+    layout::{PIT, PLATFORMS, WIDTH},
+    zone,
+};
+use crate::{camera::VIEW, depth};
 
-/// Where a fall begins to cost a life.
-const PIT: f32 = 8.4;
+/// The narrowest a platform's last tile is drawn, in metres: anything less is rounding.
+const MIN_TILE: f32 = 1e-3;
 
-/// What the hero stands on. They are solid, so anything over a walkway leaves room for the hero's
-/// head, and the ones that do need the extra jump to reach.
-const PLATFORMS: [Rect; 10] = [
-    Rect::new(0.0, GROUND, 13.0, 1.2),
-    Rect::new(15.0, GROUND, 9.0, 1.2),
-    Rect::new(25.8, GROUND, 5.0, 1.2),
-    Rect::new(32.6, GROUND, 11.4, 1.2),
-    Rect::new(6.4, 3.8, 2.8, 0.34),
-    Rect::new(10.2, 2.6, 2.6, 0.34),
-    Rect::new(17.2, 3.8, 3.0, 0.34),
-    Rect::new(21.4, 2.6, 2.6, 0.34),
-    Rect::new(27.0, 3.8, 2.4, 0.34),
-    Rect::new(34.4, 3.8, 3.0, 0.34),
-];
-const PLATFORM_DEPTH: f32 = depth::PLAYFIELD + 1.0;
-
-/// A collider that stops shots.
+/// A collider nothing passes through, shots included.
 struct CSolid;
 /// What swallows a falling hero.
 struct CPit;
@@ -52,10 +39,10 @@ fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
     let tile = platform.size().x * scale;
     let end = rect.pos.x + rect.size.x;
     let mut x = rect.pos.x;
-    while x < end {
+    while end - x > MIN_TILE {
         let width = (end - x).min(tile);
         let cut = platform.region(Rect::new(0.0, 0.0, width / scale, platform.size().y));
-        let draw = Draw::new().scale(Vec2::splat(scale)).depth(PLATFORM_DEPTH);
+        let draw = Draw::new().scale(Vec2::splat(scale)).depth(depth::PLATFORM);
         world.spawn((CTransform::at(x, rect.pos.y), CSprite::new(cut).draw(draw)));
         x += tile;
     }
@@ -69,6 +56,7 @@ fn spawn_walls(world: &mut World) {
     }
 }
 
+/// A sensor along the whole level, from [`PIT`] down.
 fn spawn_pit(world: &mut World) {
     let pit = zone(Vec2::new(WIDTH, 1.0));
     world.spawn((CPit, CTransform::at(WIDTH / 2.0, PIT + 0.5), pit));

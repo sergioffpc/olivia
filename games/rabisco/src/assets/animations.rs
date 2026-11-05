@@ -2,31 +2,54 @@ use olivia::{Result, animation::Animation, filesystem::Filesystem};
 
 use super::{fallback::NO_ANIMATION, read};
 
+/// The animations of every character, `animations/{character}_{name}.json`.
 #[derive(Debug)]
+#[expect(
+    dead_code,
+    reason = "played once the update phase animates the characters"
+)]
 pub(crate) struct Animations {
-    idle: Animation,
-    walk: Animation,
-    jump: Animation,
-    double_jump: Animation,
-    shoot: Animation,
-    hurt: Animation,
-    win: Animation,
-    calling: Animation,
-    freed: Animation,
+    pub(crate) hero: HeroAnimations,
+    pub(crate) princess: PrincessAnimations,
+}
+
+#[derive(Debug)]
+#[expect(dead_code, reason = "played once the update phase animates the hero")]
+pub(crate) struct HeroAnimations {
+    pub(crate) idle: Animation,
+    pub(crate) walk: Animation,
+    pub(crate) jump: Animation,
+    pub(crate) double_jump: Animation,
+    pub(crate) shoot: Animation,
+    pub(crate) hurt: Animation,
+    pub(crate) win: Animation,
+}
+
+#[derive(Debug)]
+#[expect(dead_code, reason = "played once the level has the princess")]
+pub(crate) struct PrincessAnimations {
+    pub(crate) calling: Animation,
+    pub(crate) freed: Animation,
 }
 
 impl Animations {
     pub(crate) fn load(filesystem: &Filesystem) -> Result<Self> {
+        let hero = |name: &str| animation(filesystem, &format!("hero_{name}"));
+        let princess = |name: &str| animation(filesystem, &format!("princess_{name}"));
         Ok(Self {
-            idle: animation(filesystem, "hero_idle")?,
-            walk: animation(filesystem, "hero_walk")?,
-            jump: animation(filesystem, "hero_jump")?,
-            double_jump: animation(filesystem, "hero_double_jump")?,
-            shoot: animation(filesystem, "hero_shoot")?,
-            hurt: animation(filesystem, "hero_hurt")?,
-            win: animation(filesystem, "hero_win")?,
-            calling: animation(filesystem, "princess_calling")?,
-            freed: animation(filesystem, "princess_freed")?,
+            hero: HeroAnimations {
+                idle: hero("idle")?,
+                walk: hero("walk")?,
+                jump: hero("jump")?,
+                double_jump: hero("double_jump")?,
+                shoot: hero("shoot")?,
+                hurt: hero("hurt")?,
+                win: hero("win")?,
+            },
+            princess: PrincessAnimations {
+                calling: princess("calling")?,
+                freed: princess("freed")?,
+            },
         })
     }
 }

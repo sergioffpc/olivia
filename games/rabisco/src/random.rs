@@ -1,19 +1,21 @@
 /// A small generator of numbers that only look random, enough to vary what the game plays:
-/// xorshift64*, seeded from the clock.
+/// xorshift64*.
 #[derive(Debug)]
 pub(crate) struct Random(u64);
 
 impl Random {
+    /// Seeded from the clock, so that every game differs.
     pub(crate) fn from_clock() -> Self {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        // `web_time`, as `std::time` panics on the web.
+        let nanos = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos());
         #[allow(clippy::cast_possible_truncation)] // the low bits vary the most
-        Self::new(nanos as u64)
+        Self::from_seed(nanos as u64)
     }
 
     /// The same numbers for the same seed.
-    fn new(seed: u64) -> Self {
+    pub(crate) const fn from_seed(seed: u64) -> Self {
         // Zero would give only zeros.
         Self(seed | 1)
     }

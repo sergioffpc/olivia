@@ -9,7 +9,7 @@ mod sounds;
 mod textures;
 
 pub(crate) use animations::Animations;
-pub(crate) use characters::Characters;
+pub(crate) use characters::{Characters, HERO_ROOT_HEIGHT};
 pub(crate) use musics::Musics;
 pub(crate) use sounds::Sounds;
 pub(crate) use textures::Textures;
@@ -32,11 +32,20 @@ fn read(filesystem: &Filesystem, path: &str) -> Result<Option<Vec<u8>>> {
     }
 }
 
-/// The files in the folder `path`, or none if the folder is not there yet.
+/// The files in the folder `path`, or none if the folder is not there yet. The caller warns when
+/// it finds nothing it can use.
 fn list(filesystem: &Filesystem, path: &str) -> Result<Vec<String>> {
     match filesystem.list(path) {
         Ok(files) => Ok(files),
         Err(filesystem::Error::NotFound(_)) => Ok(Vec::new()),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Whether `extension` names a kind of audio file the game can play, sound or music.
+fn is_audio(extension: &str) -> bool {
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "wav" | "ogg" | "mp3" | "flac"
+    )
 }

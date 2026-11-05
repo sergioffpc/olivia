@@ -1,27 +1,27 @@
 use olivia::{
     Game, Result, Setup, Update,
-    ecs::{CClear, Camera, Entity},
+    audio::Cue,
+    ecs::CClear,
     math::{Color, Vec2},
     window::WindowEvent,
 };
 
 use crate::{
     assets::{Animations, Characters, Musics, Sounds, Textures},
-    hud::HudManager,
-    level::LevelManager,
+    camera::Camera,
+    hud::Hud,
+    level::Level,
     random::Random,
+    status,
 };
 
 /// The size of the window, in logical pixels.
 pub(crate) const WINDOW: Vec2 = Vec2::new(1280.0, 720.0);
-/// How much the camera sees.
-pub(crate) const VIEW: Vec2 = Vec2::new(12.8, 7.2);
-/// How many logical pixels a metre takes.
-const PIXELS_PER_METRE: f32 = 100.0;
 /// The gravity, in metres per second squared.
 const GRAVITY: f32 = 9.81;
 
 #[derive(Debug)]
+#[expect(dead_code, reason = "read once the update phase plays the game")]
 pub struct Rabisco {
     random: Random,
 
@@ -29,10 +29,11 @@ pub struct Rabisco {
     characters: Characters,
     sounds: Sounds,
     textures: Textures,
+    music: Cue,
 
-    camera: Entity,
-    level: LevelManager,
-    hud: HudManager,
+    camera: Camera,
+    level: Level,
+    hud: Hud,
 }
 
 impl Rabisco {
@@ -51,22 +52,16 @@ impl Game for Rabisco {
         let mut random = Random::from_clock();
 
         let animations = Animations::load(s.filesystem)?;
-        let characters = Characters::load(s.filesystem, s.graphics, &mut random)?;
+        let characters = Characters::load(s.filesystem, s.graphics)?;
         let sounds = Sounds::load(s.filesystem, s.audio)?;
-        let textures = Textures::load(s.filesystem, s.graphics, &mut random)?;
-
-        let musics = Musics::load(s.filesystem, s.audio)?;
-        musics.play(s.audio, &mut random);
+        let textures = Textures::load(s.filesystem, s.graphics)?;
+        let music = Musics::load(s.filesystem)?.play(s.filesystem, s.audio, &mut random)?;
 
         s.world.spawn((CClear(Color::BLUE),));
-        let camera = s.world.spawn((Camera {
-            position: VIEW / 2.0,
-            zoom: PIXELS_PER_METRE,
-            rotation: 0.0,
-        },));
-
-        let level = LevelManager::load(&textures, s.world);
-        let hud = HudManager::load(&textures, s.world);
+        let camera = Camera::spawn(s.world);
+        let level = Level::spawn(s.world, &characters, &textures);
+        let status = status::spawn(s.world);
+        let hud = Hud::spawn(s.world, &textures, status);
 
         Ok(Self {
             random,
@@ -74,6 +69,7 @@ impl Game for Rabisco {
             characters,
             sounds,
             textures,
+            music,
             camera,
             level,
             hud,

@@ -4,32 +4,17 @@ use olivia::{
     math::Vec2,
 };
 
-use super::{CActor, THING_DEPTH, moved};
-use crate::sprite::sized;
+use super::{CActor, layout::COINS, moved};
+use crate::{depth, sprite::sized};
 
-/// Where the things to pick up are.
-const COINS: [Vec2; 14] = [
-    Vec2::new(3.0, 5.4),
-    Vec2::new(4.2, 5.4),
-    Vec2::new(7.2, 3.2),
-    Vec2::new(8.4, 3.2),
-    Vec2::new(11.5, 2.0),
-    Vec2::new(14.0, 4.2),
-    Vec2::new(18.0, 3.2),
-    Vec2::new(19.4, 3.2),
-    Vec2::new(22.7, 2.0),
-    Vec2::new(24.9, 4.2),
-    Vec2::new(28.2, 3.2),
-    Vec2::new(31.7, 4.2),
-    Vec2::new(35.2, 3.2),
-    Vec2::new(36.6, 3.2),
-];
+/// The size of a coin, as drawn and as touched.
+const COIN_SIZE: Vec2 = Vec2::splat(1.0);
 
 /// Every coin, each showing `coin`.
 pub(super) fn spawn(world: &mut World, coin: &Texture) {
     for pos in COINS {
-        let draw = sized(coin, Vec2::splat(1.0)).depth(THING_DEPTH);
-        let (body, collider) = moved(Vec2::splat(1.0));
+        let draw = sized(coin, COIN_SIZE).depth(depth::THING);
+        let (body, collider) = moved(COIN_SIZE);
         let sprite = CSprite::new(coin.clone()).draw(draw);
         world.spawn((CActor, CTransform::at(pos.x, pos.y), body, collider, sprite));
     }

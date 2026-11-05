@@ -3,12 +3,16 @@ use olivia::{
     math::Vec2,
 };
 
-use super::{CActor, GROUND, THING_DEPTH, moved};
-use crate::{assets::Textures, sprite::sized};
+use super::{
+    CActor,
+    layout::{ENEMIES, GROUND},
+    moved,
+};
+use crate::{assets::Textures, depth, sprite::sized};
 
 /// How an enemy moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
+pub(super) enum Kind {
     /// Long and low, slowly along the ground.
     Crawl,
     /// Round, quickly along the ground, turning as it goes.
@@ -28,6 +32,7 @@ impl Kind {
     }
 
     /// How fast it goes, in metres per second.
+    #[expect(dead_code, reason = "used once the update phase moves the enemies")]
     const fn speed(self) -> f32 {
         match self {
             Self::Crawl => 0.7,
@@ -37,51 +42,87 @@ impl Kind {
     }
 }
 
-/// `(kind, left end of its walk, right end, height of its centre)`.
-const ENEMIES: [(Kind, f32, f32, f32); 7] = [
-    (Kind::Crawl, 5.0, 12.0, GROUND - 0.435),
-    (Kind::Float, 10.4, 14.6, 4.0),
-    (Kind::Roll, 16.0, 23.4, GROUND - 0.45),
-    (Kind::Crawl, 19.5, 23.5, GROUND - 0.435),
-    (Kind::Float, 26.4, 32.0, 4.0),
-    (Kind::Roll, 33.2, 38.0, GROUND - 0.45),
-    (Kind::Crawl, 35.0, 38.8, GROUND - 0.435),
-];
+/// The height an enemy walks at.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Lane {
+    /// Standing on the ground.
+    Ground,
+    /// In the air, its centre at this y.
+    Air(f32),
+}
+
+/// The stretch an enemy walks, from its left end to its right one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Span {
+    pub(super) left: f32,
+    pub(super) right: f32,
+}
+
+/// Which way an enemy walks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Direction {
+    Left,
+    #[expect(
+        dead_code,
+        reason = "turned to once the update phase moves the enemies"
+    )]
+    Right,
+}
+
+/// Where an enemy of a kind walks.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Patrol {
+    kind: Kind,
+    span: Span,
+    lane: Lane,
+}
+
+impl Patrol {
+    pub(super) const fn new(kind: Kind, left: f32, right: f32, lane: Lane) -> Self {
+        Self {
+            kind,
+            span: Span { left, right },
+            lane,
+        }
+    }
+
+    /// The y of its centre.
+    fn y(self) -> f32 {
+        match self.lane {
+            Lane::Ground => GROUND - self.kind.size().y / 2.0,
+            Lane::Air(y) => y,
+        }
+    }
+}
 
 /// An enemy walking its stretch.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct CEnemy {
     kind: Kind,
-    span: (f32, f32),
-    direction: f32,
+    span: Span,
+    direction: Direction,
     time: f32,
 }
 
-/// Every enemy, each at the right end of its walk.
+/// Every enemy, each at the right end of its walk, walking left.
 pub(super) fn spawn(world: &mut World, textures: &Textures) {
-    for &(kind, left, right, height) in &ENEMIES {
-        spawn_enemy(world, textures, kind, left, right, height);
+    for patrol in ENEMIES {
+        spawn_enemy(world, textures, patrol);
     }
 }
 
-fn spawn_enemy(
-    world: &mut World,
-    textures: &Textures,
-    kind: Kind,
-    left: f32,
-    right: f32,
-    height: f32,
-) {
+fn spawn_enemy(world: &mut World, textures: &Textures, patrol: Patrol) {
+    let Patrol { kind, span, .. } = patrol;
     let texture = match kind {
         Kind::Crawl => &textures.crawl,
         Kind::Roll => &textures.roll,
         Kind::Float => &textures.float,
     };
-    let draw = sized(texture, kind.size()).depth(THING_DEPTH);
+    let draw = sized(texture, kind.size()).depth(depth::THING);
     let enemy = CEnemy {
         kind,
-        span: (left, right),
-        direction: -1.0,
+        span,
+        direction: Direction::Left,
         time: 0.0,
     };
     let (body, collider) = moved(kind.size());
@@ -89,7 +130,7 @@ fn spawn_enemy(
     world.spawn((
         CActor,
         enemy,
-        CTransform::at(right, height),
+        CTransform::at(span.right, patrol.y()),
         body,
         collider,
         sprite,

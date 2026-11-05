@@ -1,14 +1,18 @@
+use olivia::ecs::{Entity, World};
+
 /// The most lives the hero has.
 pub(crate) const LIVES: u32 = 3;
 
-/// How the game stands.
+/// How the game ends, or that it has not yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Phase {
+pub(crate) enum Outcome {
     /// Still running.
     Playing,
-    /// Saved.
+    /// The princess saved.
+    #[expect(dead_code, reason = "reached once the level has the princess")]
     Won,
     /// No lives left.
+    #[expect(dead_code, reason = "reached once the hero can lose lives")]
     Lost,
 }
 
@@ -17,11 +21,11 @@ pub(crate) enum Phase {
 pub(crate) struct CStatus {
     /// Lives left.
     pub(crate) lives: u32,
-    /// Things picked up.
+    /// Coins picked up.
     pub(crate) score: u32,
     /// How it stands.
-    pub(crate) phase: Phase,
-    /// Whether who is held has called for help.
+    pub(crate) outcome: Outcome,
+    /// Whether the princess has called for help.
     pub(crate) has_called: bool,
 }
 
@@ -31,8 +35,13 @@ impl CStatus {
         Self {
             lives: LIVES,
             score: 0,
-            phase: Phase::Playing,
+            outcome: Outcome::Playing,
             has_called: false,
         }
     }
+}
+
+/// The entity holding the status of a new game.
+pub(crate) fn spawn(world: &mut World) -> Entity {
+    world.spawn((CStatus::new(),))
 }

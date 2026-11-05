@@ -1,44 +1,49 @@
 use olivia::{
     Result,
-    audio::{Audio, Cue, Play, Sound},
+    audio::{Audio, Cue, Play},
     filesystem::Filesystem,
 };
 
-use super::{fallback::silence, list};
+use super::{fallback::silence, is_audio, list};
 use crate::random::Random;
 
 /// The music in `musics/`, every file of a kind the game can play, of which one plays at a time.
+/// Only the one that plays is read.
 #[derive(Debug)]
-pub(crate) struct Musics(Vec<Sound>);
+pub(crate) struct Musics(Vec<String>);
 
 impl Musics {
-    pub(crate) fn load(filesystem: &Filesystem, audio: &mut Audio) -> Result<Self> {
-        let mut musics = Vec::new();
-        for path in list(filesystem, "musics")?
-            .iter()
+    pub(crate) fn load(filesystem: &Filesystem) -> Result<Self> {
+        let musics: Vec<String> = list(filesystem, "musics")?
+            .into_iter()
             .filter(|path| is_music(path))
-        {
-            // Streamed, as a long track would take long to decode up front.
-            musics.push(audio.stream(filesystem.read(path)?)?);
-        }
+            .collect();
         if musics.is_empty() {
             tracing::warn!(path = "musics/", "no music, using silence");
-            musics.push(audio.stream(silence())?);
         }
         Ok(Self(musics))
     }
 
     /// Plays one of the musics, at random, over and over until the returned cue stops it.
-    pub(crate) fn play(&self, audio: &mut Audio, random: &mut Random) -> Cue {
-        let music = &self.0[random.below(self.0.len())];
-        audio.play_with(music, Play::new().volume(0.5).looping(true))
+    pub(crate) fn play(
+        &self,
+        filesystem: &Filesystem,
+        audio: &mut Audio,
+        random: &mut Random,
+    ) -> Result<Cue> {
+        let bytes = if self.0.is_empty() {
+            silence()
+        } else {
+            filesystem.read(&self.0[random.below(self.0.len())])?
+        };
+        // Streamed, as a long track would take long to decode up front.
+        let music = audio.stream(bytes)?;
+        Ok(audio.play_with(&music, Play::new().volume(0.5).looping(true)))
     }
 }
 
 /// Whether `path` is a kind of file the game can play as music, by its extension.
 fn is_music(path: &str) -> bool {
-    let extension = path
-        .rsplit_once('.')
-        .map(|(_, extension)| extension.to_ascii_lowercase());
-    matches!(extension.as_deref(), Some("wav" | "ogg" | "mp3" | "flac"))
+    path.rsplit_once('.')
+        .is_some_and(|(_, extension)| is_audio(extension))
 }
