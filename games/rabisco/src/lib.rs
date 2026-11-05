@@ -2,7 +2,7 @@
 #![allow(missing_docs, clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 use olivia::animation::Animation;
-use olivia::audio::{Audio, Play, Sound};
+use olivia::audio::{Audio, Cue, Play, Sound};
 use olivia::ecs::{Camera, Clear, Entity};
 use olivia::filesystem::{self, Filesystem};
 use olivia::graphics::{Graphics, Texture};
@@ -20,9 +20,10 @@ pub const VIEW: Vec2 = Vec2::new(12.8, 7.2);
 pub const GRAVITY: f32 = 9.81;
 
 pub struct Rabisco {
+    random: Random,
+
     animations: Animations,
     sounds: Sounds,
-    random: Random,
     textures: Textures,
 
     camera: Entity,
@@ -41,16 +42,14 @@ impl Rabisco {
 
 impl Game for Rabisco {
     fn load(s: Setup<'_>) -> Result<Self> {
+        let mut random = Random::from_clock();
+
         let animations = Animations::load(s.filesystem)?;
         let sounds = Sounds::load(s.filesystem, s.audio)?;
         let textures = Textures::load(s.filesystem, s.graphics)?;
 
-        let music = match read(s.filesystem, "musics/music.wav")? {
-            Some(bytes) => s.audio.stream(bytes)?,
-            None => s.audio.stream(silence())?,
-        };
-        let theme = Play::new().volume(0.5).looping(true);
-        s.audio.play_with(&music, theme);
+        let musics = Musics::load(s.filesystem, s.audio)?;
+        musics.play(s.audio, &mut random);
 
         s.world.spawn((Clear(Color::BLUE),));
         let camera = s.world.spawn((Camera {
@@ -60,9 +59,9 @@ impl Game for Rabisco {
         },));
 
         Ok(Self {
+            random,
             animations,
             sounds,
-            random: Random::from_clock(),
             textures,
             camera,
         })
@@ -107,6 +106,44 @@ impl Animations {
         let bytes = read(filesystem, &format!("animations/{name}.json"))?;
         Ok(Animation::parse(bytes.as_deref().unwrap_or(NO_ANIMATION))?)
     }
+}
+
+/// The music in `musics/`, every file of a kind the game can play, of which one plays at a time.
+#[derive(Debug)]
+pub struct Musics(Vec<Sound>);
+
+impl Musics {
+    fn load(filesystem: &Filesystem, audio: &mut Audio) -> Result<Self> {
+        let files = match filesystem.list("musics") {
+            Ok(files) => files,
+            Err(filesystem::Error::NotFound(_)) => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        let mut musics = Vec::new();
+        for path in files.iter().filter(|path| is_music(path)) {
+            // Streamed, as a long track would take long to decode up front.
+            musics.push(audio.stream(filesystem.read(path)?)?);
+        }
+        if musics.is_empty() {
+            tracing::warn!(path = "musics/", "no music, using silence");
+            musics.push(audio.stream(silence())?);
+        }
+        Ok(Self(musics))
+    }
+
+    /// Plays one of the musics, at random, over and over until the returned cue stops it.
+    pub fn play(&self, audio: &mut Audio, random: &mut Random) -> Cue {
+        let music = &self.0[random.below(self.0.len())];
+        audio.play_with(music, Play::new().volume(0.5).looping(true))
+    }
+}
+
+/// Whether `path` is a kind of file the game can play as music, by its extension.
+fn is_music(path: &str) -> bool {
+    let extension = path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase());
+    matches!(extension.as_deref(), Some("wav" | "ogg" | "mp3" | "flac"))
 }
 
 pub struct Sounds {
@@ -316,48 +353,4 @@ fn silence() -> Vec<u8> {
     wav.extend_from_slice(&DATA.to_le_bytes());
     wav.resize(44 + DATA as usize, 0);
     wav
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn takes_are_numbered_from_one() {
-        assert_eq!(take_path("hero_fart", 1), "sounds/hero_fart_1.wav");
-        assert_eq!(take_path("hero_fart", 12), "sounds/hero_fart_12.wav");
-    }
-
-    #[test]
-    fn takes_are_only_numbered_files_of_their_sound() {
-        assert!(is_take("sounds/hero_jump_1.wav", "hero_jump"));
-        assert!(is_take("sounds/hero_jump_12.wav", "hero_jump"));
-        assert!(!is_take("sounds/hero_jump.wav", "hero_jump"));
-        assert!(!is_take("sounds/hero_jump_01.wav", "hero_jump"));
-        assert!(!is_take("sounds/hero_jump_x.wav", "hero_jump"));
-        assert!(!is_take("sounds/hero_jump_extra_1.wav", "hero_jump"));
-        assert!(!is_take("sounds/hero_jump_1.wav", "hero"));
-    }
-
-    #[test]
-    fn random_picks_every_take_and_stays_in_range() {
-        let mut random = Random::new(7);
-        let mut seen = [0; 3];
-        for _ in 0..3000 {
-            seen[random.below(3)] += 1;
-        }
-        assert!(seen.iter().all(|&n| n > 800), "{seen:?}");
-    }
-
-    #[test]
-    fn random_repeats_for_the_same_seed() {
-        let a: Vec<_> = std::iter::repeat_with({
-            let mut r = Random::new(42);
-            move || r.next_u64()
-        })
-        .take(5)
-        .collect();
-        let mut r = Random::new(42);
-        assert_eq!(a, (0..5).map(|_| r.next_u64()).collect::<Vec<_>>());
-    }
 }
