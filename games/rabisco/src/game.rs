@@ -68,17 +68,18 @@ impl Game for Rabisco {
         })
     }
 
-    fn update(&mut self, u: Update<'_>) -> Result<()> {
+    fn update(&mut self, mut u: Update<'_>) -> Result<()> {
         if u.events.contains(&WindowEvent::CloseRequested) {
             u.quit();
         }
-        let Some(_status) =
-            self.level
-                .ready_to_play(u.world, u.input, &self.assets, self.status)?
+        let Some(status) = self
+            .level
+            .ready_to_play(u.world, u.input, &self.assets, self.status)?
         else {
             return Ok(());
         };
-        Level::update_enemies(u.world, u.physics, u.timer.dt());
+        self.level
+            .update(&mut u, &self.assets, &mut self.random, status)?;
 
         Ok(())
     }

@@ -15,9 +15,7 @@ pub(crate) struct Textures {
     pub(crate) life_lost: Texture,
     /// The digits 0 to 9, each at its own index.
     pub(crate) digits: [Texture; 10],
-    #[expect(dead_code, reason = "shown once the hero shoots")]
     pub(crate) projectile: Texture,
-    #[expect(dead_code, reason = "shown once the hero double jumps")]
     pub(crate) fart: Texture,
     pub(crate) coin: Texture,
     pub(crate) goal: Texture,

@@ -4,10 +4,6 @@ use super::{fallback::NO_ANIMATION, read};
 
 /// The animations of every character, `animations/{character}_{name}.json`.
 #[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "played once the update phase animates the characters"
-)]
 pub(crate) struct Animations {
     pub(crate) hero: HeroAnimations,
     pub(crate) princess: PrincessAnimations,

@@ -83,7 +83,6 @@ impl Takes {
     }
 
     /// One of the recordings, at random.
-    #[expect(dead_code, reason = "played once the update phase plays the game")]
     pub(crate) fn pick(&self, random: &mut Random) -> &Sound {
         &self.0[random.below(self.0.len())]
     }

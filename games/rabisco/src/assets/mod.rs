@@ -27,7 +27,6 @@ use olivia::{
 pub(crate) struct Assets {
     pub(crate) animations: Animations,
     pub(crate) characters: Characters,
-    #[expect(dead_code, reason = "played once the update phase plays the game")]
     pub(crate) sounds: Sounds,
     pub(crate) textures: Textures,
 }

@@ -14,7 +14,7 @@ use crate::{camera::VIEW, depth};
 const MIN_TILE: f32 = 1e-3;
 
 /// A collider nothing passes through, shots included.
-struct CSolid;
+pub(super) struct CSolid;
 /// What swallows a falling hero.
 struct CPit;
 

@@ -9,15 +9,15 @@ mod player;
 mod terrain;
 
 use olivia::{
-    Result,
+    Result, Update,
     ecs::{CBody, ColliderBuilder, Entity, RigidBodyBuilder, World},
     input::{Input, Key},
     math::Vec2,
-    physics,
 };
 
 use crate::{
     assets::Assets,
+    random::Random,
     status::{CStatus, Outcome},
 };
 
@@ -62,9 +62,17 @@ impl Level {
         Ok(())
     }
 
-    /// Moves every enemy one fixed step of `dt` seconds, back and forth along its span.
-    pub(crate) fn update_enemies(world: &mut World, physics: &mut physics::World, dt: f32) {
-        enemies::update(world, physics, dt);
+    /// Plays the level one fixed step: the enemies walk their spans and the hero does as the keys
+    /// say.
+    pub(crate) fn update(
+        &self,
+        u: &mut Update<'_>,
+        assets: &Assets,
+        random: &mut Random,
+        status: CStatus,
+    ) -> Result<()> {
+        enemies::update(u.world, u.physics, u.timer.dt());
+        player::update(u, &self.player, assets, random, status)
     }
 
     /// The status to play this update on, or `None` while there is nothing to play yet. When the
