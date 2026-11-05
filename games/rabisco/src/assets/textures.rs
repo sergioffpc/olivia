@@ -11,7 +11,6 @@ pub(crate) struct Textures {
     pub(crate) background: Texture,
     pub(crate) platform: Texture,
     pub(crate) life: Texture,
-    #[expect(dead_code, reason = "shown once the HUD follows the lives")]
     pub(crate) life_lost: Texture,
     /// The digits 0 to 9, each at its own index.
     pub(crate) digits: [Texture; 10],

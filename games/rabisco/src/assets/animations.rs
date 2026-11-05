@@ -10,7 +10,6 @@ pub(crate) struct Animations {
 }
 
 #[derive(Debug)]
-#[expect(dead_code, reason = "played once the update phase animates the hero")]
 pub(crate) struct HeroAnimations {
     pub(crate) idle: Animation,
     pub(crate) walk: Animation,
@@ -22,7 +21,6 @@ pub(crate) struct HeroAnimations {
 }
 
 #[derive(Debug)]
-#[expect(dead_code, reason = "played once the level has the princess")]
 pub(crate) struct PrincessAnimations {
     pub(crate) calling: Animation,
     pub(crate) freed: Animation,

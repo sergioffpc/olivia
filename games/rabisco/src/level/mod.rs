@@ -27,7 +27,6 @@ use crate::{
 struct CActor;
 
 #[derive(Debug)]
-#[expect(dead_code, reason = "read once the update phase plays the level")]
 pub(crate) struct Level {
     background: Vec<background::Tile>,
     player: player::Player,
@@ -38,18 +37,12 @@ impl Level {
     /// Where the level ends.
     pub(crate) const WIDTH: f32 = layout::WIDTH;
 
+    /// The level as a game starts: what stays for good, the background and the terrain, and the
+    /// actors a new game replaces.
     pub(crate) fn spawn(world: &mut World, assets: &Assets) -> Result<Self> {
-        let Assets {
-            characters,
-            textures,
-            ..
-        } = assets;
-        let background = background::spawn(world, &textures.background);
-        terrain::spawn(world, &textures.platform);
-        enemies::spawn(world, textures);
-        coins::spawn(world, &textures.coin);
-        let goal = goal::spawn(world, assets)?;
-        let player = player::spawn(world, characters);
+        let background = background::spawn(world, &assets.textures.background);
+        terrain::spawn(world, &assets.textures.platform);
+        let (player, goal) = spawn_actors(world, assets)?;
 
         Ok(Self {
             background,
@@ -58,18 +51,19 @@ impl Level {
         })
     }
 
+    /// Starts a new game: every actor, shots and clouds too, makes way for those of a new one.
     pub(crate) fn restart(&mut self, world: &mut World, assets: &Assets) -> Result<()> {
         let actors: Vec<Entity> = world.query::<Entity>().with::<&CActor>().iter().collect();
         for actor in actors {
             world.despawn(actor)?;
         }
-        self.player = player::spawn(world, &assets.characters);
+        (self.player, self.goal) = spawn_actors(world, assets)?;
         Ok(())
     }
 
     /// Plays the level one fixed step: the enemies walk their spans and the hero does as the keys
     /// say. While the game is playing, the shots land and the hero meets what it touches, which
-    /// changes `status`.
+    /// changes `status`. Then everyone shows as they now stand.
     pub(crate) fn update(
         &self,
         u: &mut Update<'_>,
@@ -83,7 +77,10 @@ impl Level {
             shots::update(u, assets, random)?;
             player::meet(u, &self.player, assets, random, status)?;
         }
-        Ok(())
+        // Only after what the hero met, so that it shows this step's hurt or win.
+        player::act(u, &self.player, assets, *status)?;
+        player::thin_farts(u)?;
+        goal::update(u.world, &self.goal, assets, *status)
     }
 
     /// The hero's entity.
@@ -117,6 +114,16 @@ impl Level {
         }
         Ok(Some(current))
     }
+}
+
+/// The actors of a new game, all marked with [`CActor`]: the enemies, the coins, the goal with the
+/// princess, and the hero.
+fn spawn_actors(world: &mut World, assets: &Assets) -> Result<(player::Player, goal::Goal)> {
+    enemies::spawn(world, &assets.textures);
+    coins::spawn(world, &assets.textures.coin);
+    let goal = goal::spawn(world, assets)?;
+    let player = player::spawn(world, &assets.characters);
+    Ok((player, goal))
 }
 
 /// A sensor box that sits still: what it touches passes through.

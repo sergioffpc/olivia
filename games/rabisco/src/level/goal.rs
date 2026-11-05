@@ -1,6 +1,6 @@
 use olivia::{
     Result,
-    animation::Play,
+    animation::{Character, Play},
     ecs::{CSprite, CTransform, Entity, World},
     math::Vec2,
 };
@@ -15,8 +15,11 @@ use crate::{
     camera::VIEW,
     depth,
     sprite::sized,
+    status::{CStatus, Outcome},
 };
 
+/// How long her calling takes to give way to her freed animation.
+const CROSSFADE: f32 = 0.1;
 /// The size of the cage the princess is held in.
 const GOAL_SIZE: Vec2 = Vec2::new(2.2, 3.0);
 
@@ -29,7 +32,6 @@ struct CPrincess;
 
 #[derive(Debug)]
 pub(super) struct Goal {
-    #[expect(dead_code, reason = "read once the update phase frees the princess")]
     princess: Entity,
 }
 
@@ -72,4 +74,19 @@ pub(super) fn spawn(world: &mut World, assets: &Assets) -> Result<Goal> {
     ));
 
     Ok(Goal { princess })
+}
+
+/// Frees the princess once the game is won: she plays her freed animation, once.
+pub(super) fn update(
+    world: &mut World,
+    goal: &Goal,
+    assets: &Assets,
+    status: CStatus,
+) -> Result<()> {
+    if status.outcome == Outcome::Won {
+        let freed = Play::new().crossfade(CROSSFADE);
+        let mut princess = world.get::<&mut Character>(goal.princess)?;
+        princess.play(&assets.animations.princess.freed, freed)?;
+    }
+    Ok(())
 }

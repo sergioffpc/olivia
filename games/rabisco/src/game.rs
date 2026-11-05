@@ -82,6 +82,7 @@ impl Game for Rabisco {
             .update(&mut u, &self.assets, &mut self.random, &mut status)?;
         self.camera.update(u.world, &self.level)?;
         *u.world.get::<&mut CStatus>(self.status)? = status;
+        self.hud.update(u.world, &self.assets.textures)?;
 
         Ok(())
     }

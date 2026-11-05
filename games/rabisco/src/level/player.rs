@@ -5,7 +5,7 @@ use olivia::{
         CBody, CSprite, CTransform, ColliderBuilder, Entity, RigidBodyBuilder, World, entity_of,
     },
     input::Key,
-    math::Vec2,
+    math::{Color, Vec2},
     physics::{self, Cuboid, LockedAxes},
 };
 
@@ -20,7 +20,7 @@ use super::{
     touching,
 };
 use crate::{
-    assets::{Assets, Characters, ROOT_HEIGHT},
+    assets::{Assets, Characters, PART_SCALE, ROOT_HEIGHT},
     depth,
     random::Random,
     sprite::sized,
@@ -51,6 +51,10 @@ const MUZZLE: f32 = 0.6;
 const FART_SIZE: f32 = 1.5;
 /// How long the cloud lasts.
 const FART_TIME: f32 = 0.9;
+/// How long one animation takes to give way to the next.
+const CROSSFADE: f32 = 0.1;
+/// How many times a second the hero blinks while nothing can hurt it.
+const BLINKS_PER_SECOND: f64 = 8.0;
 /// How long the hero shows it is hurt.
 const HURT: f32 = 0.7;
 /// How long after being hurt nothing can hurt the hero again, so that one touch costs one life.
@@ -311,6 +315,83 @@ fn lose_life(
         u.audio.play(assets.sounds.gameover.pick(random));
     } else {
         u.audio.play(assets.sounds.hero.hurt.pick(random));
+    }
+    Ok(())
+}
+
+/// Shows the hero as it stands: the animation of what it does, facing where it looks, blinking
+/// while nothing can hurt it.
+pub(super) fn act(
+    u: &mut Update<'_>,
+    player: &Player,
+    assets: &Assets,
+    status: CStatus,
+) -> Result<()> {
+    let moves = &assets.animations.hero;
+    let hero = *u.world.get::<&CHero>(player.entity)?;
+    let body = u.world.get::<&CBody>(player.entity)?.0;
+    let is_moving = u.physics.body(body).linvel().x != 0.0;
+    // The first that holds wins: how the game ended, then being hurt, the extra jump's spin, being
+    // in the air, and last walking or standing, the only ones that loop.
+    let (chosen, looping) = if status.outcome == Outcome::Won {
+        (&moves.win, false)
+    } else if status.outcome == Outcome::Lost || hero.hurt > 0.0 {
+        (&moves.hurt, false)
+    } else if hero.spin > 0.0 {
+        (&moves.double_jump, false)
+    } else if !hero.is_grounded {
+        (&moves.jump, false)
+    } else if is_moving {
+        (&moves.walk, true)
+    } else {
+        (&moves.idle, true)
+    };
+    let mut character = u.world.get::<&mut Character>(player.entity)?;
+    // Asking for what already plays does nothing, so this can run every step.
+    character.play(chosen, Play::new().looping(looping).crossfade(CROSSFADE))?;
+    // The shot's arm comes down once its animation is over.
+    if character.finished(&moves.shoot) {
+        character.remove_overlay(&moves.shoot, OVERLAY_FADE);
+    }
+
+    let scale = if hero.is_facing_left {
+        Vec2::new(-PART_SCALE, PART_SCALE)
+    } else {
+        Vec2::splat(PART_SCALE)
+    };
+    // Shown and hidden by turns, on the game's whole time, only while the game is playing.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // time is never negative
+    let is_blinking = hero.invulnerable > 0.0
+        && status.outcome == Outcome::Playing
+        && ((u.timer.elapsed() * BLINKS_PER_SECOND) as u64).is_multiple_of(2);
+    let alpha = if is_blinking { 0.0 } else { 1.0 };
+    character.draw = character
+        .draw
+        .scale(scale)
+        .color(Color::new(1.0, 1.0, 1.0, alpha));
+    Ok(())
+}
+
+/// Clouds grow to twice their size, thin out and go.
+pub(super) fn thin_farts(u: &mut Update<'_>) -> Result<()> {
+    let dt = u.timer.dt();
+    // Gathered first, as nothing can go while the query runs.
+    let mut gone = Vec::new();
+    for (entity, CFart(left), sprite) in u.world.query_mut::<(Entity, &mut CFart, &mut CSprite)>() {
+        *left -= dt;
+        let life = (*left / FART_TIME).max(0.0);
+        let size = FART_SIZE * (2.0 - life);
+        let scale = Vec2::splat(size) / sprite.texture.size();
+        sprite.draw = sprite
+            .draw
+            .scale(scale)
+            .color(Color::new(1.0, 1.0, 1.0, life));
+        if *left <= 0.0 {
+            gone.push(entity);
+        }
+    }
+    for entity in gone {
+        u.world.despawn(entity)?;
     }
     Ok(())
 }

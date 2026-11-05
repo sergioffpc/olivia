@@ -9,7 +9,7 @@ mod sounds;
 mod textures;
 
 pub(crate) use animations::Animations;
-pub(crate) use characters::{Characters, ROOT_HEIGHT};
+pub(crate) use characters::{Characters, PART_SCALE, ROOT_HEIGHT};
 pub(crate) use musics::Musics;
 pub(crate) use sounds::Sounds;
 pub(crate) use textures::Textures;

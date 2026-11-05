@@ -1,10 +1,16 @@
 use olivia::{
+    Result,
     ecs::{CHud, CSprite, CTransform, Entity, World},
     graphics::Texture,
     math::Vec2,
 };
 
-use crate::{assets::Textures, game::WINDOW, sprite::sized, status::LIVES};
+use crate::{
+    assets::Textures,
+    game::WINDOW,
+    sprite::sized,
+    status::{CStatus, LIVES},
+};
 
 /// How many digits the score shows.
 const DIGITS: usize = 3;
@@ -19,7 +25,6 @@ const ROW_Y: f32 = HUD_MARGIN + HUD_SIZE / 2.0;
 
 /// The lives at the top left and the score at the top right, showing the status they follow.
 #[derive(Debug)]
-#[expect(dead_code, reason = "read once the HUD follows the game")]
 pub(crate) struct Hud {
     /// The lives, from the left.
     lives: Vec<Entity>,
@@ -43,6 +48,26 @@ impl Hud {
             digits,
             status,
         }
+    }
+
+    /// Shows the status as it now stands: the lives lost crossed out, and the score.
+    pub(crate) fn update(&self, world: &World, textures: &Textures) -> Result<()> {
+        let status = *world.get::<&CStatus>(self.status)?;
+        for (index, entity) in (0u32..).zip(&self.lives) {
+            let life = if index < status.lives {
+                &textures.life
+            } else {
+                &textures.life_lost
+            };
+            world.get::<&mut CSprite>(*entity)?.texture = life.clone();
+        }
+        // From the units, the last digit, leftwards.
+        let mut score = status.score as usize;
+        for entity in self.digits.iter().rev() {
+            world.get::<&mut CSprite>(*entity)?.texture = textures.digits[score % 10].clone();
+            score /= 10;
+        }
+        Ok(())
     }
 }
 

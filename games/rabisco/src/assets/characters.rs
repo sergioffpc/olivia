@@ -14,7 +14,7 @@ use super::{
 use crate::depth;
 
 /// Parts are 8 pixels per millimetre of sheet: this turns them into metres.
-const PART_SCALE: f32 = 0.0011;
+pub(crate) const PART_SCALE: f32 = 0.0011;
 /// How far the feet of a character standing as drawn are under its root joint, in metres. Every
 /// character follows the same body sheet, `tools/make_sheets.py`, so they share it: measured on
 /// `skeletons/hero.json` at [`PART_SCALE`], and so to measure again when either changes.
