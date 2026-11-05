@@ -11,7 +11,7 @@ use super::{
     zone,
 };
 use crate::{
-    assets::{Animations, Characters, ROOT_HEIGHT, Textures},
+    assets::{Assets, ROOT_HEIGHT},
     camera::VIEW,
     depth,
     sprite::sized,
@@ -35,12 +35,13 @@ pub(super) struct Goal {
 
 /// The cage standing on the ground at [`GOAL`], the princess in it calling for help, and the
 /// stretch from which the hero hears her.
-pub(super) fn spawn(
-    world: &mut World,
-    animations: &Animations,
-    characters: &Characters,
-    textures: &Textures,
-) -> Result<Goal> {
+pub(super) fn spawn(world: &mut World, assets: &Assets) -> Result<Goal> {
+    let Assets {
+        animations,
+        characters,
+        textures,
+        ..
+    } = assets;
     let centre = GROUND - GOAL_SIZE.y / 2.0;
     let draw = sized(&textures.goal, GOAL_SIZE).depth(depth::GOAL);
     let sprite = CSprite::new(textures.goal.clone()).draw(draw);

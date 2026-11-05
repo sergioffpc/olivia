@@ -7,7 +7,7 @@ use olivia::{
 };
 
 use crate::{
-    assets::{Animations, Characters, Musics, Sounds, Textures},
+    assets::{Assets, Musics},
     camera::Camera,
     hud::Hud,
     level::Level,
@@ -24,13 +24,8 @@ const GRAVITY: f32 = 9.81;
 #[expect(dead_code, reason = "read once the update phase plays the game")]
 pub struct Rabisco {
     random: Random,
-
-    animations: Animations,
-    characters: Characters,
-    sounds: Sounds,
-    textures: Textures,
+    assets: Assets,
     music: Cue,
-
     camera: Camera,
     level: Level,
     hud: Hud,
@@ -51,24 +46,18 @@ impl Game for Rabisco {
     fn load(s: Setup<'_>) -> Result<Self> {
         let mut random = Random::from_clock();
 
-        let animations = Animations::load(s.filesystem)?;
-        let characters = Characters::load(s.filesystem, s.graphics)?;
-        let sounds = Sounds::load(s.filesystem, s.audio)?;
-        let textures = Textures::load(s.filesystem, s.graphics)?;
+        let assets = Assets::load(s.filesystem, s.graphics, s.audio)?;
         let music = Musics::load(s.filesystem)?.play(s.filesystem, s.audio, &mut random)?;
 
         s.world.spawn((CClear(Color::BLUE),));
         let camera = Camera::spawn(s.world);
-        let level = Level::spawn(s.world, &animations, &characters, &textures)?;
+        let level = Level::spawn(s.world, &assets)?;
         let status = status::spawn(s.world);
-        let hud = Hud::spawn(s.world, &textures, status);
+        let hud = Hud::spawn(s.world, &assets.textures, status);
 
         Ok(Self {
             random,
-            animations,
-            characters,
-            sounds,
-            textures,
+            assets,
             music,
             camera,
             level,

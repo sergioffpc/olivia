@@ -16,8 +16,36 @@ pub(crate) use textures::Textures;
 
 use olivia::{
     Result,
+    audio::Audio,
     filesystem::{self, Filesystem},
+    graphics::Graphics,
 };
+
+/// Every asset the game plays with, loaded once and lent to whatever spawns or plays from them.
+/// The music is not among them: it is what plays, not what plays from.
+#[derive(Debug)]
+pub(crate) struct Assets {
+    pub(crate) animations: Animations,
+    pub(crate) characters: Characters,
+    #[expect(dead_code, reason = "played once the update phase plays the game")]
+    pub(crate) sounds: Sounds,
+    pub(crate) textures: Textures,
+}
+
+impl Assets {
+    pub(crate) fn load(
+        filesystem: &Filesystem,
+        graphics: &mut Graphics,
+        audio: &mut Audio,
+    ) -> Result<Self> {
+        Ok(Self {
+            animations: Animations::load(filesystem)?,
+            characters: Characters::load(filesystem, graphics)?,
+            sounds: Sounds::load(filesystem, audio)?,
+            textures: Textures::load(filesystem, graphics)?,
+        })
+    }
+}
 
 /// Reads an asset, or warns and gives `None` if it is not there yet, so that a default can stand
 /// in for it. An asset that is there but cannot be read is still an error.

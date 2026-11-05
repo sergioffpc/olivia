@@ -14,7 +14,7 @@ use olivia::{
     math::Vec2,
 };
 
-use crate::assets::{Animations, Characters, Textures};
+use crate::assets::Assets;
 
 /// What a new game replaces.
 struct CActor;
@@ -28,17 +28,17 @@ pub(crate) struct Level {
 }
 
 impl Level {
-    pub(crate) fn spawn(
-        world: &mut World,
-        animations: &Animations,
-        characters: &Characters,
-        textures: &Textures,
-    ) -> Result<Self> {
+    pub(crate) fn spawn(world: &mut World, assets: &Assets) -> Result<Self> {
+        let Assets {
+            characters,
+            textures,
+            ..
+        } = assets;
         let background = background::spawn(world, &textures.background);
         terrain::spawn(world, &textures.platform);
         enemies::spawn(world, textures);
         coins::spawn(world, &textures.coin);
-        let goal = goal::spawn(world, animations, characters, textures)?;
+        let goal = goal::spawn(world, assets)?;
         let player = player::spawn(world, characters);
 
         Ok(Self {
