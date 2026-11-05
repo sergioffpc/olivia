@@ -5,7 +5,7 @@
 //!
 //! Run it with `cargo run --example draw_options`.
 
-use olivia::ecs::{Clear, Hud, Sprite, Transform, World};
+use olivia::ecs::{CClear, CHud, CSprite, CTransform, World};
 use olivia::graphics::{Blend, Draw, Filter, Texture};
 use olivia::math::{Color, Vec2};
 use olivia::window::WindowEvent;
@@ -18,8 +18,8 @@ const BLUE: Color = Color::new(0.2, 0.2, 1.0, 0.8);
 struct Demo;
 
 fn sprite(world: &mut World, texture: &Texture, x: f32, y: f32, draw: Draw) {
-    let sprite = Sprite::new(texture.clone()).draw(draw);
-    world.spawn((Hud, Transform::at(x, y), sprite));
+    let sprite = CSprite::new(texture.clone()).draw(draw);
+    world.spawn((CHud, CTransform::at(x, y), sprite));
 }
 
 /// Three overlapping squares of `draw`, red, green then blue from `(x, y)`.
@@ -39,7 +39,7 @@ impl Game for Demo {
             30, 30, 30, 255,      255, 255, 255, 255,
         ])?;
         let world = s.world;
-        world.spawn((Clear(Color::rgb(0.1, 0.1, 0.12)),));
+        world.spawn((CClear(Color::rgb(0.1, 0.1, 0.12)),));
 
         // Spawned red first, yet red ends on top.
         let square = Draw::new().scale(Vec2::splat(80.0));

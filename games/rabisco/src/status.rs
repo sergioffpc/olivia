@@ -14,7 +14,7 @@ pub(crate) enum Phase {
 
 /// What a game has come to, on an entity of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Status {
+pub(crate) struct CStatus {
     /// Lives left.
     pub(crate) lives: u32,
     /// Things picked up.
@@ -25,7 +25,7 @@ pub(crate) struct Status {
     pub(crate) has_called: bool,
 }
 
-impl Status {
+impl CStatus {
     /// How a new game starts.
     pub(crate) const fn new() -> Self {
         Self {

@@ -1,5 +1,5 @@
 use olivia::{
-    ecs::{Entity, Hud, Sprite, Transform, World},
+    ecs::{CHud, CSprite, CTransform, Entity, World},
     graphics::Texture,
     math::Vec2,
 };
@@ -8,7 +8,7 @@ use crate::{
     assets::Textures,
     game::WINDOW,
     sprite::sized,
-    status::{LIVES, Status},
+    status::{CStatus, LIVES},
 };
 
 const POINTS: usize = 3;
@@ -28,7 +28,7 @@ impl HudManager {
         let lives = spawn_row(world, LIVES as usize, first, HUD_SIZE + 6.0, &textures.life);
         let last = WINDOW.x - first;
         let digits = spawn_row(world, POINTS, last, -HUD_SIZE, &textures.digits[0]);
-        let status = world.spawn((Status::new(),));
+        let status = world.spawn((CStatus::new(),));
 
         Self {
             lives,
@@ -52,9 +52,9 @@ fn spawn_row(
     for _ in 0..count {
         let draw = sized(texture, Vec2::splat(HUD_SIZE));
         row.push(world.spawn((
-            Hud,
-            Transform::at(x, y),
-            Sprite::new(texture.clone()).draw(draw),
+            CHud,
+            CTransform::at(x, y),
+            CSprite::new(texture.clone()).draw(draw),
         )));
         x += step;
     }

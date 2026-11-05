@@ -1,5 +1,5 @@
 use olivia::{
-    ecs::{ColliderBuilder, Sprite, Transform, World},
+    ecs::{CSprite, CTransform, ColliderBuilder, World},
     graphics::{Draw, Texture, depth},
     math::{Rect, Vec2},
 };
@@ -27,9 +27,9 @@ const PLATFORMS: [Rect; 10] = [
 const PLATFORM_DEPTH: f32 = depth::PLAYFIELD + 1.0;
 
 /// A collider that stops shots.
-struct Solid;
+struct CSolid;
 /// What swallows a falling hero.
-struct Pit;
+struct CPit;
 
 /// The platforms, the walls at the ends and the pit under it all.
 pub(super) fn spawn(world: &mut World, platform: &Texture) {
@@ -44,8 +44,8 @@ pub(super) fn spawn(world: &mut World, platform: &Texture) {
 fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
     let centre = rect.pos + rect.size / 2.0;
     world.spawn((
-        Solid,
-        Transform::at(centre.x, centre.y),
+        CSolid,
+        CTransform::at(centre.x, centre.y),
         ColliderBuilder::cuboid(rect.size.x / 2.0, rect.size.y / 2.0).friction(0.0),
     ));
     let scale = rect.size.y / platform.size().y;
@@ -56,7 +56,7 @@ fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
         let width = (end - x).min(tile);
         let cut = platform.region(Rect::new(0.0, 0.0, width / scale, platform.size().y));
         let draw = Draw::new().scale(Vec2::splat(scale)).depth(PLATFORM_DEPTH);
-        world.spawn((Transform::at(x, rect.pos.y), Sprite::new(cut).draw(draw)));
+        world.spawn((CTransform::at(x, rect.pos.y), CSprite::new(cut).draw(draw)));
         x += tile;
     }
 }
@@ -65,11 +65,11 @@ fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
 fn spawn_walls(world: &mut World) {
     for x in [-0.5, WIDTH + 0.5] {
         let wall = ColliderBuilder::cuboid(0.5, VIEW.y * 2.0).friction(0.0);
-        world.spawn((Solid, Transform::at(x, VIEW.y / 2.0), wall));
+        world.spawn((CSolid, CTransform::at(x, VIEW.y / 2.0), wall));
     }
 }
 
 fn spawn_pit(world: &mut World) {
     let pit = zone(Vec2::new(WIDTH, 1.0));
-    world.spawn((Pit, Transform::at(WIDTH / 2.0, PIT + 0.5), pit));
+    world.spawn((CPit, CTransform::at(WIDTH / 2.0, PIT + 0.5), pit));
 }

@@ -21,7 +21,7 @@ const WIDTH: f32 = 44.0;
 const THING_DEPTH: f32 = depth::PLAYFIELD + 10.0;
 
 /// What a new game replaces.
-struct Actor;
+struct CActor;
 
 #[derive(Debug)]
 pub(crate) struct LevelManager {

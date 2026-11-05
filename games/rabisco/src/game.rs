@@ -1,6 +1,6 @@
 use olivia::{
     Game, Result, Setup, Update,
-    ecs::{Camera, Clear, Entity},
+    ecs::{CClear, Camera, Entity},
     math::{Color, Vec2},
     window::WindowEvent,
 };
@@ -58,7 +58,7 @@ impl Game for Rabisco {
         let musics = Musics::load(s.filesystem, s.audio)?;
         musics.play(s.audio, &mut random);
 
-        s.world.spawn((Clear(Color::BLUE),));
+        s.world.spawn((CClear(Color::BLUE),));
         let camera = s.world.spawn((Camera {
             position: VIEW / 2.0,
             zoom: PIXELS_PER_METRE,

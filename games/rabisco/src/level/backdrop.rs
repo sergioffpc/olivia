@@ -1,5 +1,5 @@
 use olivia::{
-    ecs::{Entity, Sprite, Transform, World},
+    ecs::{CSprite, CTransform, Entity, World},
     graphics::{Texture, depth},
     math::Vec2,
 };
@@ -19,8 +19,8 @@ pub(super) fn spawn(world: &mut World, backdrop: &Texture) -> Vec<(Entity, f32)>
     let mut home = 0.0;
     while home < WIDTH * PARALLAX + VIEW.x + width {
         let draw = sized(backdrop, size).depth(depth::BACKDROP);
-        let sprite = Sprite::new(backdrop.clone()).draw(draw);
-        let tile = world.spawn((Transform::at(home, VIEW.y / 2.0), sprite));
+        let sprite = CSprite::new(backdrop.clone()).draw(draw);
+        let tile = world.spawn((CTransform::at(home, VIEW.y / 2.0), sprite));
         tiles.push((tile, home));
         home += width;
     }

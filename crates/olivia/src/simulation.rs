@@ -3,7 +3,7 @@ use std::fmt;
 use olivia_math::Vec2;
 use olivia_physics::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World};
 
-use crate::ecs::{self, Body, Entity, Transform};
+use crate::ecs::{self, CBody, CTransform, Entity};
 
 /// The physics world, kept in step with the entities that have a body.
 pub(crate) struct Simulation {
@@ -24,7 +24,7 @@ impl Simulation {
     pub(crate) fn sync(&mut self, world: &mut ecs::World) {
         let physics = &mut self.physics;
         self.bodies.retain(|&(entity, handle)| {
-            let exists = world.satisfies::<&Body>(entity);
+            let exists = world.satisfies::<&CBody>(entity);
             if !exists {
                 physics.remove_body(handle);
             }
@@ -52,7 +52,7 @@ impl Simulation {
         let mut body = world
             .remove_one::<RigidBodyBuilder>(entity)
             .unwrap_or_else(|_| RigidBodyBuilder::fixed());
-        if let Ok(transform) = world.get::<&Transform>(entity) {
+        if let Ok(transform) = world.get::<&CTransform>(entity) {
             body = body
                 .translation(transform.position)
                 .rotation(transform.rotation);
@@ -63,7 +63,7 @@ impl Simulation {
             self.physics.insert_collider(collider, Some(handle));
         }
         world
-            .insert_one(entity, Body(handle))
+            .insert_one(entity, CBody(handle))
             .expect("the entity was just queried");
         self.bodies.push((entity, handle));
     }
@@ -72,7 +72,7 @@ impl Simulation {
     pub(crate) fn step(&mut self, world: &mut ecs::World) {
         self.sync(world);
         self.physics.step();
-        for (Body(body), transform) in world.query_mut::<(&Body, &mut Transform)>() {
+        for (CBody(body), transform) in world.query_mut::<(&CBody, &mut CTransform)>() {
             let body = self.physics.body(*body);
             transform.position = body.translation();
             transform.rotation = body.rotation().angle();

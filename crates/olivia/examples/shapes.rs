@@ -6,7 +6,7 @@
 //!
 //! Run it with `cargo run --example shapes`.
 
-use olivia::ecs::{Clear, Geometry, Hud, Shape, Sprite, Transform, World};
+use olivia::ecs::{CClear, CHud, CShape, CSprite, CTransform, Geometry, World};
 use olivia::graphics::Draw;
 use olivia::math::{Color, Vec2};
 use olivia::window::WindowEvent;
@@ -26,25 +26,25 @@ const ARROW: [Vec2; 4] = [
 ];
 
 /// A shape that turns with the clock.
-struct Turning;
+struct CTurning;
 
 struct Demo;
 
 fn still(world: &mut World, x: f32, y: f32, geometry: Geometry, draw: Draw) {
-    let shape = Shape::new(geometry).draw(draw);
-    world.spawn((Hud, Transform::at(x, y), shape));
+    let shape = CShape::new(geometry).draw(draw);
+    world.spawn((CHud, CTransform::at(x, y), shape));
 }
 
 fn turning(world: &mut World, x: f32, y: f32, geometry: Geometry, draw: Draw) {
-    let shape = Shape::new(geometry).draw(draw);
-    world.spawn((Hud, Turning, Transform::at(x, y), shape));
+    let shape = CShape::new(geometry).draw(draw);
+    world.spawn((CHud, CTurning, CTransform::at(x, y), shape));
 }
 
 impl Game for Demo {
     fn load(s: Setup<'_>) -> Result<Self> {
         let pixel = s.graphics.texture_rgba(1, 1, &[255; 4])?;
         let world = s.world;
-        world.spawn((Clear(Color::rgb(0.1, 0.1, 0.12)),));
+        world.spawn((CClear(Color::rgb(0.1, 0.1, 0.12)),));
 
         // Spawned top first, yet depth puts the sprite between the rectangles.
         let square = Geometry::Rect(Vec2::splat(60.0));
@@ -57,9 +57,9 @@ impl Game for Demo {
         );
         let sprite = Draw::new().color(YELLOW).scale(Vec2::splat(60.0));
         world.spawn((
-            Hud,
-            Transform::at(30.0, 90.0),
-            Sprite::new(pixel).draw(sprite),
+            CHud,
+            CTransform::at(30.0, 90.0),
+            CSprite::new(pixel).draw(sprite),
         ));
         still(
             world,
@@ -100,7 +100,7 @@ impl Game for Demo {
         if u.events.contains(&WindowEvent::CloseRequested) {
             u.quit();
         }
-        for (_, transform) in u.world.query_mut::<(&Turning, &mut Transform)>() {
+        for (_, transform) in u.world.query_mut::<(&CTurning, &mut CTransform)>() {
             transform.rotation += 0.01;
         }
         Ok(())

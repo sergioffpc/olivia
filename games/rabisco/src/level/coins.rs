@@ -1,10 +1,10 @@
 use olivia::{
-    ecs::{Sprite, Transform, World},
+    ecs::{CSprite, CTransform, World},
     graphics::Texture,
     math::Vec2,
 };
 
-use super::{Actor, THING_DEPTH, moved};
+use super::{CActor, THING_DEPTH, moved};
 use crate::sprite::sized;
 
 /// Where the things to pick up are.
@@ -30,7 +30,7 @@ pub(super) fn spawn(world: &mut World, coin: &Texture) {
     for pos in COINS {
         let draw = sized(coin, Vec2::splat(1.0)).depth(THING_DEPTH);
         let (body, collider) = moved(Vec2::splat(1.0));
-        let sprite = Sprite::new(coin.clone()).draw(draw);
-        world.spawn((Actor, Transform::at(pos.x, pos.y), body, collider, sprite));
+        let sprite = CSprite::new(coin.clone()).draw(draw);
+        world.spawn((CActor, CTransform::at(pos.x, pos.y), body, collider, sprite));
     }
 }

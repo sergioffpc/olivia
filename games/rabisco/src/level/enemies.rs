@@ -1,9 +1,9 @@
 use olivia::{
-    ecs::{Sprite, Transform, World},
+    ecs::{CSprite, CTransform, World},
     math::Vec2,
 };
 
-use super::{Actor, GROUND, THING_DEPTH, moved};
+use super::{CActor, GROUND, THING_DEPTH, moved};
 use crate::{assets::Textures, sprite::sized};
 
 /// How an enemy moves.
@@ -50,7 +50,7 @@ const ENEMIES: [(Kind, f32, f32, f32); 7] = [
 
 /// An enemy walking its stretch.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Enemy {
+struct CEnemy {
     kind: Kind,
     span: (f32, f32),
     direction: f32,
@@ -78,18 +78,18 @@ fn spawn_enemy(
         Kind::Float => &textures.float,
     };
     let draw = sized(texture, kind.size()).depth(THING_DEPTH);
-    let enemy = Enemy {
+    let enemy = CEnemy {
         kind,
         span: (left, right),
         direction: -1.0,
         time: 0.0,
     };
     let (body, collider) = moved(kind.size());
-    let sprite = Sprite::new(texture.clone()).draw(draw);
+    let sprite = CSprite::new(texture.clone()).draw(draw);
     world.spawn((
-        Actor,
+        CActor,
         enemy,
-        Transform::at(right, height),
+        CTransform::at(right, height),
         body,
         collider,
         sprite,

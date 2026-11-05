@@ -8,7 +8,7 @@
 use std::env;
 
 use olivia::animation::{Animation, Character, Play};
-use olivia::ecs::{Camera, Clear, Entity, Sprite, Transform};
+use olivia::ecs::{CClear, CSprite, CTransform, Camera, Entity};
 use olivia::graphics::Draw;
 use olivia::math::{Color, Vec2};
 use olivia::window::WindowEvent;
@@ -30,7 +30,7 @@ impl Game for Demo {
         let file = args.next().ok_or(USAGE)?;
         let overlay = args.next();
 
-        s.world.spawn((Clear(Color::rgb(0.1, 0.15, 0.2)),));
+        s.world.spawn((CClear(Color::rgb(0.1, 0.15, 0.2)),));
         s.world.spawn((Camera {
             position: Vec2::ZERO,
             zoom: 0.4,
@@ -38,7 +38,7 @@ impl Game for Demo {
         },));
 
         let character = Character::load(s.filesystem, s.graphics, &folder)?;
-        let hero = s.world.spawn((Transform::default(), character));
+        let hero = s.world.spawn((CTransform::default(), character));
         let animation = Animation::parse(&s.filesystem.read(&file)?)?;
         let overlay = overlay
             .map(|file| Animation::parse(&s.filesystem.read(&file)?))
@@ -51,7 +51,7 @@ impl Game for Demo {
             .depth(-1.0);
         let marker = s
             .world
-            .spawn((Transform::default(), Sprite::new(dot).draw(draw)));
+            .spawn((CTransform::default(), CSprite::new(dot).draw(draw)));
         Ok(Self {
             hero,
             marker,
@@ -70,7 +70,7 @@ impl Game for Demo {
             hero.overlay(overlay, Play::new().looping(true).crossfade(0.15))?;
         }
         if let Some(hand) = hero.joint("hand_right") {
-            u.world.get::<&mut Transform>(self.marker)?.position = hand.offset;
+            u.world.get::<&mut CTransform>(self.marker)?.position = hand.offset;
         }
         Ok(())
     }

@@ -22,7 +22,7 @@ thread_local! {
 }
 
 /// A marker on the entity each load spawns.
-struct Loaded;
+struct CLoaded;
 
 /// Holds the text of `one.txt`, and refuses to load if it says `broken`.
 struct Text {
@@ -36,7 +36,7 @@ impl Game for Text {
         if text == "broken" {
             return Err("broken".into());
         }
-        s.world.spawn((Loaded,));
+        s.world.spawn((CLoaded,));
         Ok(Self { text })
     }
 
@@ -105,7 +105,7 @@ impl Running {
     }
 
     fn loaded(&mut self) -> usize {
-        self.game_loop.world().query::<&Loaded>().iter().count()
+        self.game_loop.world().query::<&CLoaded>().iter().count()
     }
 
     fn text(&self) -> &str {
