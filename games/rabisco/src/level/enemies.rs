@@ -1,6 +1,7 @@
 use olivia::{
-    ecs::{CSprite, CTransform, World},
+    ecs::{CBody, CSprite, CTransform, World},
     math::Vec2,
+    physics,
 };
 
 use super::{
@@ -10,6 +11,11 @@ use super::{
 };
 use crate::{assets::Textures, depth, sprite::sized};
 
+/// How fast a floating enemy sways up and down, in radians per second.
+const SWAY_SPEED: f32 = 2.5;
+/// How far a floating enemy sways above and below where it started, in metres.
+const SWAY_HEIGHT: f32 = 0.5;
+
 /// How an enemy moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -17,7 +23,7 @@ pub(super) enum Kind {
     Crawl,
     /// Round, quickly along the ground, turning as it goes.
     Roll,
-    /// Through the air, bobbing.
+    /// Through the air, swaying up and down.
     Float,
 }
 
@@ -32,7 +38,6 @@ impl Kind {
     }
 
     /// How fast it goes, in metres per second.
-    #[expect(dead_code, reason = "used once the update phase moves the enemies")]
     const fn speed(self) -> f32 {
         match self {
             Self::Crawl => 0.7,
@@ -62,11 +67,17 @@ pub(super) struct Span {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Direction {
     Left,
-    #[expect(
-        dead_code,
-        reason = "turned to once the update phase moves the enemies"
-    )]
     Right,
+}
+
+impl Direction {
+    /// The sign of its x: -1 for left, 1 for right.
+    const fn sign(self) -> f32 {
+        match self {
+            Self::Left => -1.0,
+            Self::Right => 1.0,
+        }
+    }
 }
 
 /// Where an enemy of a kind walks.
@@ -135,4 +146,46 @@ fn spawn_enemy(world: &mut World, textures: &Textures, patrol: Patrol) {
         collider,
         sprite,
     ));
+}
+
+/// Moves every enemy one fixed step of `dt` seconds, back and forth along its span.
+pub(super) fn update(world: &mut World, physics: &mut physics::World, dt: f32) {
+    for (CBody(body), transform, enemy, sprite) in
+        world.query_mut::<(&CBody, &CTransform, &mut CEnemy, &mut CSprite)>()
+    {
+        // Its own clock, which only the floater's sway reads.
+        enemy.time += dt;
+        // It turns round only once past an end, and keeps on as it was in between, so it always
+        // walks back and forth within its span.
+        if transform.position.x < enemy.span.left {
+            enemy.direction = Direction::Right;
+        } else if transform.position.x > enemy.span.right {
+            enemy.direction = Direction::Left;
+        }
+        let sign = enemy.direction.sign();
+        let speed = enemy.kind.speed();
+        // The derivative of `sin(t · SWAY_SPEED) · SWAY_HEIGHT`, so that the floater's height
+        // swings smoothly by `SWAY_HEIGHT` either way.
+        let sway = match enemy.kind {
+            Kind::Float => (enemy.time * SWAY_SPEED).cos() * SWAY_SPEED * SWAY_HEIGHT,
+            Kind::Crawl | Kind::Roll => 0.0,
+        };
+        // Its body is kinematic and moved by velocity, so the game sets it every step.
+        let body = physics.body_mut(*body);
+        body.set_linvel(Vec2::new(sign * speed, sway), true);
+        match enemy.kind {
+            // At `v / r` it rolls without slipping, backwards when it goes left.
+            Kind::Roll => {
+                let radius = enemy.kind.size().x / 2.0;
+                body.set_angvel(sign * speed / radius, true);
+            }
+            // The only one with a front and a back: it mirrors around its centre to face where it
+            // goes.
+            Kind::Crawl => {
+                let scale = enemy.kind.size() / sprite.texture.size();
+                sprite.draw = sprite.draw.scale(scale * Vec2::new(sign, 1.0));
+            }
+            Kind::Float => {}
+        }
+    }
 }

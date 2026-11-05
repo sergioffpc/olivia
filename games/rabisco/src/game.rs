@@ -78,6 +78,7 @@ impl Game for Rabisco {
         else {
             return Ok(());
         };
+        Level::update_enemies(u.world, u.physics, u.timer.dt());
 
         Ok(())
     }

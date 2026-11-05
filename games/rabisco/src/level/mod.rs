@@ -13,6 +13,7 @@ use olivia::{
     ecs::{CBody, ColliderBuilder, Entity, RigidBodyBuilder, World},
     input::{Input, Key},
     math::Vec2,
+    physics,
 };
 
 use crate::{
@@ -59,6 +60,11 @@ impl Level {
         }
         self.player = player::spawn(world, &assets.characters);
         Ok(())
+    }
+
+    /// Moves every enemy one fixed step of `dt` seconds, back and forth along its span.
+    pub(crate) fn update_enemies(world: &mut World, physics: &mut physics::World, dt: f32) {
+        enemies::update(world, physics, dt);
     }
 
     /// The status to play this update on, or `None` while there is nothing to play yet. When the
