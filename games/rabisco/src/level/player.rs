@@ -31,9 +31,14 @@ use crate::{
 const HERO_SIZE: Vec2 = Vec2::new(0.7, 1.6);
 /// How fast the hero runs, in metres per second.
 const RUN_SPEED: f32 = 3.4;
-/// How fast the hero leaves the ground on a jump, in metres per second.
-const JUMP_SPEED: f32 = 9.0;
-/// How fast the hero goes up on the extra jump, in the air, in metres per second.
+/// How much harder gravity pulls the hero than anything else: a jump as high as the level needs,
+/// but quick, so that it does not float as on the moon.
+const HERO_GRAVITY: f32 = 2.5;
+/// How fast the hero leaves the ground on a jump, in metres per second: about 2.6 m up, over the
+/// low platforms, 2.2 m above the ground, but short of the high ones, 3.4 m above it.
+const JUMP_SPEED: f32 = 11.3;
+/// How fast the hero goes up on the extra jump, in the air, in metres per second: about 1.3 m more,
+/// enough for the high platforms.
 const EXTRA_JUMP_SPEED: f32 = 8.0;
 /// How long the extra jump's spin lasts: its animation.
 const SPIN: f32 = 0.6;
@@ -103,6 +108,7 @@ pub(super) struct Player {
 /// The hero, standing on the ground at the first checkpoint.
 pub(super) fn spawn(world: &mut World, characters: &Characters) -> Player {
     let body = RigidBodyBuilder::dynamic()
+        .gravity_scale(HERO_GRAVITY)
         .locked_axes(LockedAxes::ROTATION_LOCKED)
         .can_sleep(false);
     // The root joint is the entity's position, and the box must end at the feet.
