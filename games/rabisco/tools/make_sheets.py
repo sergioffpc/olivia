@@ -34,26 +34,26 @@ FILL = "Enche a caixa toda e pinta!"
 SINGLES = [
     ("O lançador do herói",
      "Desenha com que o herói dispara, deitado como na caixa. A mão segura-o no ponto preto. Pinta-o!",
-     "hero/weapon", WEAPON, WEAPON_DOT, "P"),
+     "textures/hero_weapon", WEAPON, WEAPON_DOT, "P"),
     ("O que o herói dispara", f"Desenha a coisa que o herói dispara. {FILL}",
-     "fx/projectile", (130.0, 130.0), None, "P"),
+     "textures/projectile", (130.0, 130.0), None, "P"),
     ("A nuvem do pum", f"Desenha a nuvem que sai quando o herói dá o salto extra. {FILL}",
-     "fx/fart", (150.0, 150.0), None, "P"),
+     "textures/fart", (150.0, 150.0), None, "P"),
     ("Um mau que rasteja", f"Desenha um mau comprido e baixinho, que anda a rastejar. {FILL}",
-     "enemy_crawl", (190.0, 110.0), None, "P"),
+     "textures/enemy_crawl", (190.0, 110.0), None, "P"),
     ("Um mau que rebola", f"Desenha um mau redondo, que vai girar enquanto rebola. {FILL}",
-     "enemy_roll", (170.0, 170.0), None, "P"),
+     "textures/enemy_roll", (170.0, 170.0), None, "P"),
     ("Um mau que flutua", f"Desenha um mau que anda pelo ar. {FILL}",
-     "enemy_float", (150.0, 205.0), None, "P"),
+     "textures/enemy_float", (150.0, 205.0), None, "P"),
     ("O cenário", "Desenha o que se vê ao longe, atrás do herói. Não desenhes o chão. Pinta tudo!",
-     "level/background", (277.0, 161.0), None, "L"),
+     "textures/background", (277.0, 161.0), None, "L"),
     ("O chão", "Desenha o chão onde o herói anda e salta. Pinta a tira toda, de uma ponta à outra!",
-     "level/platform", (277.0, 62.0), None, "L"),
+     "textures/platform", (277.0, 62.0), None, "L"),
     ("O que o herói apanha", f"Desenha a coisa que o herói apanha pelo caminho. {FILL}",
-     "level/coin", (130.0, 130.0), None, "P"),
+     "textures/coin", (130.0, 130.0), None, "P"),
     ("Onde está preso",
      "Desenha o sítio onde está preso quem o herói vai salvar. Só o sítio, sem a personagem. Pinta-o!",
-     "level/goal", (150.0, 205.0), None, "P"),
+     "textures/goal", (150.0, 205.0), None, "P"),
 ]
 
 INK = (30, 30, 30)
@@ -148,14 +148,14 @@ def main():
     pdf = FPDF(format="A4")
     pdf.set_title("Folhas para desenhar")
     pdf.set_auto_page_break(False)
-    body_sheet(pdf, "O herói", "hero")
-    body_sheet(pdf, "Quem é salvo", "princess")
+    body_sheet(pdf, "O herói", "textures/hero_*")
+    body_sheet(pdf, "Quem é salvo", "textures/princess_*")
     for sheet in SINGLES:
         single_sheet(pdf, *sheet)
     grid_sheet(pdf, "Os números", "Escreve o número de cada caixa, bem grande, e enfeita-o. Depois pinta-o!",
-               "hud/digit_0..9", [str(n) for n in range(10)], (52.0, 52.0), 3, 16)
+               "textures/hud_digit_0..9", [str(n) for n in range(10)], (52.0, 52.0), 3, 16)
     grid_sheet(pdf, "As vidas", "Desenha o símbolo das vidas do herói: uma vida que ainda tem e uma que já "
-               "perdeu. Pinta-as!", "hud/life, hud/life_lost", ["uma vida", "uma vida perdida"], (80.0, 80.0), 2)
+               "perdeu. Pinta-as!", "textures/hud_life, textures/hud_life_lost", ["uma vida", "uma vida perdida"], (80.0, 80.0), 2)
     pdf.output(OUT)
     print(f"wrote {OUT}")
 

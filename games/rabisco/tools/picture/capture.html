@@ -191,31 +191,31 @@ const WHITE = [250, 250, 245];
 // games/astronaut-cat/tools/make_art.py; single drawings are saved at their file's size, whose
 // shape the sheet's box keeps.
 const CARDS = [];
-for (const [folder, who] of [["hero", "O herói"], ["princess", "Quem é salvo"]]) {
+for (const [folder, who] of [["textures/hero", "O herói"], ["textures/princess", "Quem é salvo"]]) {
   CARDS.push(
-    { name: `${who}: cabeça`, file: `${folder}/head.png`, size: [511, 456] },
-    { name: `${who}: tronco`, file: `${folder}/torso.png`, size: [484, 654] },
+    { name: `${who}: cabeça`, file: `${folder}_head.png`, size: [511, 456] },
+    { name: `${who}: tronco`, file: `${folder}_torso.png`, size: [484, 654] },
     { name: `${who}: braço`, size: [325, 654], limb: { folder, part: "arm", joint: "elbow", tick: 347 } },
     { name: `${who}: perna`, size: [383, 570], limb: { folder, part: "leg", joint: "knee", tick: 307 } },
   );
 }
 CARDS.push(
   // Shrunk and turned to lie along the forearm when saved, as games/astronaut-cat/tools/make_art.py does.
-  { name: "O lançador do herói", file: "hero/weapon.png", size: [1333, 740], weapon: { scale: 0.45 } },
-  { name: "O que o herói dispara", file: "fx/projectile.png", size: [256, 256] },
-  { name: "A nuvem do pum", file: "fx/fart.png", size: [384, 384] },
-  { name: "Um mau que rasteja", file: "enemy_crawl.png", size: [860, 500] },
-  { name: "Um mau que rebola", file: "enemy_roll.png", size: [512, 512] },
-  { name: "Um mau que flutua", file: "enemy_float.png", size: [440, 600] },
-  { name: "O cenário", file: "level/background.png", size: [1920, 1114], paper: false },
-  { name: "O chão", file: "level/platform.png", size: [1024, 230], paper: false },
-  { name: "O que o herói apanha", file: "level/coin.png", size: [256, 256] },
+  { name: "O lançador do herói", file: "textures/hero_weapon.png", size: [1333, 740], weapon: { scale: 0.45 } },
+  { name: "O que o herói dispara", file: "textures/projectile.png", size: [256, 256] },
+  { name: "A nuvem do pum", file: "textures/fart.png", size: [384, 384] },
+  { name: "Um mau que rasteja", file: "textures/enemy_crawl.png", size: [860, 500] },
+  { name: "Um mau que rebola", file: "textures/enemy_roll.png", size: [512, 512] },
+  { name: "Um mau que flutua", file: "textures/enemy_float.png", size: [440, 600] },
+  { name: "O cenário", file: "textures/background.png", size: [1920, 1114], paper: false },
+  { name: "O chão", file: "textures/platform.png", size: [1024, 230], paper: false },
+  { name: "O que o herói apanha", file: "textures/coin.png", size: [256, 256] },
   // The bars of a cage leave gaps that must stay see-through.
-  { name: "Onde está preso", file: "level/goal.png", size: [440, 600], holes: false },
+  { name: "Onde está preso", file: "textures/goal.png", size: [440, 600], holes: false },
   // The middle of a 0, 6, 8 or 9 is a hole too.
-  ...Array.from({ length: 10 }, (_, d) => ({ name: `Os números: ${d}`, file: `hud/digit_${d}.png`, size: [256, 256], holes: false })),
-  { name: "As vidas: uma vida", file: "hud/life.png", size: [256, 256] },
-  { name: "As vidas: uma vida perdida", file: "hud/life_lost.png", size: [256, 256] },
+  ...Array.from({ length: 10 }, (_, d) => ({ name: `Os números: ${d}`, file: `textures/hud_digit_${d}.png`, size: [256, 256], holes: false })),
+  { name: "As vidas: uma vida", file: "textures/hud_life.png", size: [256, 256] },
+  { name: "As vidas: uma vida perdida", file: "textures/hud_life_lost.png", size: [256, 256] },
 );
 
 // The joints a limb bends at, as the page names them.
@@ -237,8 +237,8 @@ function files(c) {
   if (!c.limb) return [c.file];
   const { folder, part } = c.limb;
   return [
-    ...["upper", "lower"].flatMap((half) => ["left", "right"].map((side) => `${folder}/${half}_${part}_${side}.png`)),
-    `${folder}/skeleton.json`,
+    ...["upper", "lower"].flatMap((half) => ["left", "right"].map((side) => `${folder}_${half}_${part}_${side}.png`)),
+    `${folder}_skeleton.json`,
   ];
 }
 
@@ -885,7 +885,7 @@ function roundCut(limb, tick) {
   return { upper, lower, joint: [middle, tick], lowerJoint: [middle, tick - top] };
 }
 
-/** The files to write: [path, canvas] pairs, and the joints of skeleton.json that move. */
+/** The files to write: [path, canvas] pairs, and the joints of the character's skeleton that move. */
 function outputs(c, picture) {
   if (c.weapon) {
     const [w, h] = c.size.map((v) => Math.round(v * c.weapon.scale));
@@ -904,7 +904,7 @@ function outputs(c, picture) {
   const joints = {};
   for (const side of ["left", "right"]) {
     const cut = roundCut(side === "right" ? flipped(picture) : picture, tick);
-    pictures.push([`${folder}/upper_${part}_${side}.png`, cut.upper], [`${folder}/lower_${part}_${side}.png`, cut.lower]);
+    pictures.push([`${folder}_upper_${part}_${side}.png`, cut.upper], [`${folder}_lower_${part}_${side}.png`, cut.lower]);
     joints[`${joint}_${side}`] = { parent_point: cut.joint, point: cut.lowerJoint };
     if (part === "arm" && side === "right") joints.hand_right = { parent_point: [cut.lowerJoint[0], cut.lower.height - 40] };
   }
@@ -936,7 +936,7 @@ const card = () => CARDS[$("card").value];
 // Browsers without folder access, such as Firefox and Safari, download the files instead.
 const canWrite = "showDirectoryPicker" in window;
 
-for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.limb ? `${c.limb.folder}/*_${c.limb.part}_*` : c.file})`, i));
+for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.limb ? `${c.limb.folder}_*_${c.limb.part}_*` : c.file})`, i));
 
 function showCard() {
   const c = card();
@@ -1257,7 +1257,7 @@ $("saveButton").addEventListener("click", async () => {
       link.click();
     }
     const moved = pictures.map(([path]) => `assets/${path}`).join(", ");
-    const warning = c.limb ? ` O skeleton.json não foi atualizado, por isso os ${JOINT_NAMES[c.limb.joint]}s podem ficar um pouco fora do sítio.` : "";
+    const warning = c.limb ? ` O ${c.limb.folder}_skeleton.json não foi atualizado, por isso os ${JOINT_NAMES[c.limb.joint]}s podem ficar um pouco fora do sítio.` : "";
     return status("saveStatus", `Descarregado: move-os para ${moved}, no jogo.${warning}`, !!c.limb);
   }
   if (!folder) return status("saveStatus", "Escolhe primeiro a pasta assets, lá em cima.", true);
@@ -1271,7 +1271,7 @@ $("saveButton").addEventListener("click", async () => {
     const written = pictures.map(([path]) => path);
     if (c.limb) {
       // The joints follow where the limb was cut, so the halves meet.
-      const path = `${c.limb.folder}/skeleton.json`;
+      const path = `${c.limb.folder}_skeleton.json`;
       const skeleton = JSON.parse(await (await (await fileIn(path, false)).getFile()).text());
       for (const entry of skeleton.joints) Object.assign(entry, joints[entry.name] ?? {});
       await write(path, `${JSON.stringify(skeleton, null, 2)}\n`);

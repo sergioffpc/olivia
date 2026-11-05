@@ -89,15 +89,15 @@ pub struct Animations {
 impl Animations {
     fn load(filesystem: &Filesystem) -> Result<Self> {
         Ok(Self {
-            idle: Animations::read(filesystem, "idle")?,
-            walk: Animations::read(filesystem, "walk")?,
-            jump: Animations::read(filesystem, "jump")?,
-            double_jump: Animations::read(filesystem, "double_jump")?,
-            shoot: Animations::read(filesystem, "shoot")?,
-            hurt: Animations::read(filesystem, "hurt")?,
-            win: Animations::read(filesystem, "win")?,
-            calling: Animations::read(filesystem, "calling")?,
-            freed: Animations::read(filesystem, "freed")?,
+            idle: Animations::read(filesystem, "hero_idle")?,
+            walk: Animations::read(filesystem, "hero_walk")?,
+            jump: Animations::read(filesystem, "hero_jump")?,
+            double_jump: Animations::read(filesystem, "hero_double_jump")?,
+            shoot: Animations::read(filesystem, "hero_shoot")?,
+            hurt: Animations::read(filesystem, "hero_hurt")?,
+            win: Animations::read(filesystem, "hero_win")?,
+            calling: Animations::read(filesystem, "princess_calling")?,
+            freed: Animations::read(filesystem, "princess_freed")?,
         })
     }
 
@@ -122,15 +122,15 @@ pub struct Sounds {
 impl Sounds {
     fn load(filesystem: &Filesystem, audio: &mut Audio) -> Result<Self> {
         Ok(Self {
-            jump: Sounds::read(filesystem, audio, "jump")?,
-            fart: Sounds::read(filesystem, audio, "fart")?,
-            shoot: Sounds::read(filesystem, audio, "shoot")?,
+            jump: Sounds::read(filesystem, audio, "hero_jump")?,
+            fart: Sounds::read(filesystem, audio, "hero_fart")?,
+            shoot: Sounds::read(filesystem, audio, "hero_shoot")?,
             hit: Sounds::read(filesystem, audio, "hit")?,
             pickup: Sounds::read(filesystem, audio, "pickup")?,
-            hurt: Sounds::read(filesystem, audio, "hurt")?,
+            hurt: Sounds::read(filesystem, audio, "hero_hurt")?,
             gameover: Sounds::read(filesystem, audio, "gameover")?,
-            help: Sounds::read(filesystem, audio, "help")?,
-            win: Sounds::read(filesystem, audio, "win")?,
+            help: Sounds::read(filesystem, audio, "princess_help")?,
+            win: Sounds::read(filesystem, audio, "hero_win")?,
         })
     }
 
@@ -156,27 +156,27 @@ pub struct Textures {
 impl Textures {
     fn load(filesystem: &Filesystem, graphics: &mut Graphics) -> Result<Self> {
         Ok(Self {
-            life: Textures::read(filesystem, graphics, "life")?,
-            life_lost: Textures::read(filesystem, graphics, "life_lost")?,
+            life: Textures::read(filesystem, graphics, "hud_life")?,
+            life_lost: Textures::read(filesystem, graphics, "hud_life_lost")?,
             digits: [
-                Textures::read(filesystem, graphics, "digit_0")?,
-                Textures::read(filesystem, graphics, "digit_1")?,
-                Textures::read(filesystem, graphics, "digit_2")?,
-                Textures::read(filesystem, graphics, "digit_3")?,
-                Textures::read(filesystem, graphics, "digit_4")?,
-                Textures::read(filesystem, graphics, "digit_5")?,
-                Textures::read(filesystem, graphics, "digit_6")?,
-                Textures::read(filesystem, graphics, "digit_7")?,
-                Textures::read(filesystem, graphics, "digit_8")?,
-                Textures::read(filesystem, graphics, "digit_9")?,
+                Textures::read(filesystem, graphics, "hud_digit_0")?,
+                Textures::read(filesystem, graphics, "hud_digit_1")?,
+                Textures::read(filesystem, graphics, "hud_digit_2")?,
+                Textures::read(filesystem, graphics, "hud_digit_3")?,
+                Textures::read(filesystem, graphics, "hud_digit_4")?,
+                Textures::read(filesystem, graphics, "hud_digit_5")?,
+                Textures::read(filesystem, graphics, "hud_digit_6")?,
+                Textures::read(filesystem, graphics, "hud_digit_7")?,
+                Textures::read(filesystem, graphics, "hud_digit_8")?,
+                Textures::read(filesystem, graphics, "hud_digit_9")?,
             ],
             projectile: Textures::read(filesystem, graphics, "projectile")?,
             fart: Textures::read(filesystem, graphics, "fart")?,
             coin: Textures::read(filesystem, graphics, "coin")?,
             goal: Textures::read(filesystem, graphics, "goal")?,
-            crawl: Textures::read(filesystem, graphics, "crawl")?,
-            roll: Textures::read(filesystem, graphics, "roll")?,
-            float: Textures::read(filesystem, graphics, "float")?,
+            crawl: Textures::read(filesystem, graphics, "enemy_crawl")?,
+            roll: Textures::read(filesystem, graphics, "enemy_roll")?,
+            float: Textures::read(filesystem, graphics, "enemy_float")?,
         })
     }
 

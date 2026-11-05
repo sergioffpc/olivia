@@ -113,15 +113,15 @@ const COUNTDOWN = 3;
 
 // The movement cards M1 to M9 of tools/make_cards.py, named as printed.
 const CARDS = [
-  { name: "M1 Parado", who: "o herói", does: "fica parado, à espera", loops: true, file: "hero/anim_idle.json" },
-  { name: "M2 A andar", who: "o herói", does: "anda sem sair do sítio", loops: true, file: "hero/anim_walk.json" },
-  { name: "M3 Saltar", who: "o herói", does: "dá um salto", loops: false, file: "hero/anim_jump.json" },
-  { name: "M4 Salto extra", who: "o herói", does: "dá outro salto, como se já estivesse no ar", loops: false, file: "hero/anim_double_jump.json" },
-  { name: "M5 Disparar", who: "o herói", does: "dispara com o lançador na mão direita", loops: false, file: "hero/anim_shoot.json" },
-  { name: "M6 Magoar-se", who: "o herói", does: "faz de conta que um mau lhe tocou", loops: false, file: "hero/anim_hurt.json" },
-  { name: "M7 Vitória", who: "o herói", does: "festeja ter salvado quem estava preso", loops: false, file: "hero/anim_win.json" },
-  { name: "M8 Socorro!", who: "quem está preso", does: "pede ajuda enquanto espera", loops: true, file: "princess/anim_help.json" },
-  { name: "M9 Livre!", who: "quem estava preso", does: "festeja estar livre", loops: false, file: "princess/anim_win.json" },
+  { name: "M1 Parado", who: "o herói", does: "fica parado, à espera", loops: true, file: "animations/hero_idle.json" },
+  { name: "M2 A andar", who: "o herói", does: "anda sem sair do sítio", loops: true, file: "animations/hero_walk.json" },
+  { name: "M3 Saltar", who: "o herói", does: "dá um salto", loops: false, file: "animations/hero_jump.json" },
+  { name: "M4 Salto extra", who: "o herói", does: "dá outro salto, como se já estivesse no ar", loops: false, file: "animations/hero_double_jump.json" },
+  { name: "M5 Disparar", who: "o herói", does: "dispara com o lançador na mão direita", loops: false, file: "animations/hero_shoot.json" },
+  { name: "M6 Magoar-se", who: "o herói", does: "faz de conta que um mau lhe tocou", loops: false, file: "animations/hero_hurt.json" },
+  { name: "M7 Vitória", who: "o herói", does: "festeja ter salvado quem estava preso", loops: false, file: "animations/hero_win.json" },
+  { name: "M8 Socorro!", who: "quem está preso", does: "pede ajuda enquanto espera", loops: true, file: "animations/princess_calling.json" },
+  { name: "M9 Livre!", who: "quem estava preso", does: "festeja estar livre", loops: false, file: "animations/princess_freed.json" },
 ];
 
 const JOINTS = [
@@ -141,7 +141,7 @@ const BONES = [[11, 12], [23, 24], [11, 23], [12, 24], [11, 13], [13, 15], [12, 
   [23, 25], [25, 27], [24, 26], [26, 28], [7, 8]];
 const NEEDED = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
-// The stick figure, measured on the hero's skeleton.json: each part's children from its joint,
+// The stick figure, measured on the hero's skeleton, textures/hero_skeleton.json: each part's children from its joint,
 // in pixels of the sheet, as drawn.
 const FIGURE = {
   root: { neck: [0, -293], shoulder_left: [-198, -231], shoulder_right: [198, -231], hip_left: [-95, 277], hip_right: [95, 277] },

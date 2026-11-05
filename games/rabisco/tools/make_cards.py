@@ -22,43 +22,43 @@ SAVED = "quem é salvo"
 
 # (question, hint, label)
 STORY = [
-    ("Quem é o herói?", "Tem 2 braços e 2 pernas.", "hero"),
-    ("Quem tem de ser salvo?", "Tem 2 braços e 2 pernas.", "princess"),
-    ("Que mau anda a rastejar?", "É comprido e baixinho.", "enemy_crawl"),
-    ("Que mau anda a rebolar?", "É redondo, porque vai girar.", "enemy_roll"),
-    ("Que mau anda pelo ar?", "Flutua sem tocar no chão.", "enemy_float"),
-    ("Onde acontece a história?", "O sítio onde o herói anda e salta.", "level/background"),
-    ("Onde está preso quem é salvo?", "O sítio onde está fechado.", "level/goal"),
-    ("O que apanha o herói pelo caminho?", "Há muitos espalhados pelo jogo.", "level/coin"),
-    ("Com que dispara o herói?", "Segura-o na mão direita.", "hero/weapon"),
-    ("O que sai quando dispara?", "Voa até acertar num mau.", "fx/projectile"),
+    ("Quem é o herói?", "Tem 2 braços e 2 pernas.", "textures/hero_*"),
+    ("Quem tem de ser salvo?", "Tem 2 braços e 2 pernas.", "textures/princess_*"),
+    ("Que mau anda a rastejar?", "É comprido e baixinho.", "textures/enemy_crawl"),
+    ("Que mau anda a rebolar?", "É redondo, porque vai girar.", "textures/enemy_roll"),
+    ("Que mau anda pelo ar?", "Flutua sem tocar no chão.", "textures/enemy_float"),
+    ("Onde acontece a história?", "O sítio onde o herói anda e salta.", "textures/background"),
+    ("Onde está preso quem é salvo?", "O sítio onde está fechado.", "textures/goal"),
+    ("O que apanha o herói pelo caminho?", "Há muitos espalhados pelo jogo.", "textures/coin"),
+    ("Com que dispara o herói?", "Segura-o na mão direita.", "textures/hero_weapon"),
+    ("O que sai quando dispara?", "Voa até acertar num mau.", "textures/projectile"),
 ]
 
 # (title, task, label)
 SOUNDS = [
-    ("O herói salta", "Faz o som do herói a dar um salto.", "sfx/jump"),
-    ("O salto extra", "Faz o som do salto extra, lá no ar. É o salto do pum!", "sfx/fart"),
-    ("O herói dispara", "Faz o som do herói a disparar.", "sfx/shoot"),
-    ("Acertou num mau", "Faz o som do tiro a acertar num mau.", "sfx/hit"),
-    ("Apanhou uma coisa", "Faz o som do herói a apanhar uma coisa pelo caminho.", "sfx/pickup"),
-    ("O herói magoa-se", "Faz o som do herói quando um mau lhe toca e ele perde uma vida.", "sfx/hurt"),
-    ("Fim do jogo", "Faz o som de quando o herói perde a última vida.", "sfx/gameover"),
-    ("Socorro!", "Faz o som de quem está preso a pedir ajuda ao herói.", "sfx/help"),
-    ("Vitória", "Faz o som do herói a salvar quem estava preso.", "sfx/win"),
-    ("A música", "Inventa a música que toca durante o jogo todo.", "sfx/music"),
+    ("O herói salta", "Faz o som do herói a dar um salto.", "sounds/hero_jump"),
+    ("O salto extra", "Faz o som do salto extra, lá no ar. É o salto do pum!", "sounds/hero_fart"),
+    ("O herói dispara", "Faz o som do herói a disparar.", "sounds/hero_shoot"),
+    ("Acertou num mau", "Faz o som do tiro a acertar num mau.", "sounds/hit"),
+    ("Apanhou uma coisa", "Faz o som do herói a apanhar uma coisa pelo caminho.", "sounds/pickup"),
+    ("O herói magoa-se", "Faz o som do herói quando um mau lhe toca e ele perde uma vida.", "sounds/hero_hurt"),
+    ("Fim do jogo", "Faz o som de quando o herói perde a última vida.", "sounds/gameover"),
+    ("Socorro!", "Faz o som de quem está preso a pedir ajuda ao herói.", "sounds/princess_help"),
+    ("Vitória", "Faz o som do herói a salvar quem estava preso.", "sounds/hero_win"),
+    ("A música", "Inventa a música que toca durante o jogo todo.", "musics/music"),
 ]
 
 # (title, who, task, label)
 MOVES = [
-    ("Parado", HERO, "Fica parado, à espera.", "hero/anim_idle"),
-    ("A andar", HERO, "Anda sem sair do sítio.", "hero/anim_walk"),
-    ("Saltar", HERO, "Dá um salto.", "hero/anim_jump"),
-    ("Salto extra", HERO, "Dá outro salto, como se já estivesses no ar.", "hero/anim_double_jump"),
-    ("Disparar", HERO, "Dispara com o lançador na mão direita.", "hero/anim_shoot"),
-    ("Magoar-se", HERO, "Faz de conta que um mau te tocou.", "hero/anim_hurt"),
-    ("Vitória", HERO, "Festeja: salvaste quem estava preso!", "hero/anim_win"),
-    ("Socorro!", SAVED, "Pede ajuda enquanto esperas que te venham salvar.", "princess/anim_help"),
-    ("Livre!", SAVED, "Festeja: já estás livre!", "princess/anim_win"),
+    ("Parado", HERO, "Fica parado, à espera.", "animations/hero_idle"),
+    ("A andar", HERO, "Anda sem sair do sítio.", "animations/hero_walk"),
+    ("Saltar", HERO, "Dá um salto.", "animations/hero_jump"),
+    ("Salto extra", HERO, "Dá outro salto, como se já estivesses no ar.", "animations/hero_double_jump"),
+    ("Disparar", HERO, "Dispara com o lançador na mão direita.", "animations/hero_shoot"),
+    ("Magoar-se", HERO, "Faz de conta que um mau te tocou.", "animations/hero_hurt"),
+    ("Vitória", HERO, "Festeja: salvaste quem estava preso!", "animations/hero_win"),
+    ("Socorro!", SAVED, "Pede ajuda enquanto esperas que te venham salvar.", "animations/princess_calling"),
+    ("Livre!", SAVED, "Festeja: já estás livre!", "animations/princess_freed"),
 ]
 
 STORY_COLOUR = (60, 160, 80)

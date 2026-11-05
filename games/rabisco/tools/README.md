@@ -1,146 +1,155 @@
-# Tools
+# Ferramentas
 
-`make_cards.py` and `make_sheets.py` write the class's cards and drawing sheets into `../docs`; see each script.
+`make_cards.py` e `make_sheets.py` escrevem em `../docs` os cartões e as folhas de desenho da turma; vê cada script.
 
-`index.html` opens the pages that make the game's files from them and check them, with tabs to move between them: **Movimentos**, **Sons**, **Desenhos** and **Pré-visualização**. A page keeps what was done on it while another is shown. The pages speak Portuguese, the language of the class; this file names their buttons and settings as they show them.
+`index.html` abre as páginas que fazem os ficheiros do jogo a partir deles e os verificam, com separadores para passar de uma para outra: **Movimentos**, **Sons**, **Desenhos** e **Pré-visualização**. Uma página guarda o que lá foi feito enquanto outra está à vista.
 
-## Run it
+## Abrir
 
-Serve the folder from localhost, where the browser allows the camera and the microphone:
+Serve a pasta a partir de localhost, onde o browser deixa usar a câmara e o microfone:
 
 ```sh
 python3 -m http.server 8000 --directory games/rabisco/tools
 ```
 
-Open <http://localhost:8000/> in Chrome or Edge, not in VS Code's Simple Browser, which cannot show the folder picker. In the devcontainer, VS Code forwards the port to the host. Each page also opens on its own address, such as <http://localhost:8000/#sound>.
+Abre <http://localhost:8000/> no Chrome ou no Edge, e não no Simple Browser do VS Code, que não consegue mostrar a escolha de pasta. No devcontainer, o VS Code reencaminha a porta para o anfitrião. Cada página também abre no seu próprio endereço, como <http://localhost:8000/#sound>.
 
-## Assets folder
+## Pasta assets
 
-First choose `games/rabisco/assets` at the top: every page uses it. The page checks it holds `hero/` and `princess/`, with their `skeleton.json`, and keeps it until it is reloaded. Each page saves its files under the name and folder the card or sheet prints at its bottom or top right, and makes the folder, such as `sfx/`, if it is not there yet. Recording, taking a photo and saving wait for it. The preview only reads it, and watches it: whatever the other pages save there shows straight away.
+Primeiro escolhe `games/rabisco/assets` lá em cima: todas as páginas a usam. A página verifica que tem as pastas do jogo, `animations/`, `musics/`, `sounds/` e `textures/`, e guarda-a até ser recarregada. Cada página guarda os ficheiros com o nome e a pasta que o cartão ou a folha imprime em baixo ou no canto superior direito:
 
-Browsers without folder access, such as Firefox and Safari, skip it for the capture pages, which download the files instead. The preview then takes the folder from a file picker, and needs it chosen again to see a change.
-
-## Motion capture
-
-**Movimentos**, `mocap/capture.html`, records a movement card from the webcam and saves it as an animation file for the game. It fetches MediaPipe and its pose model from the network as it opens; the other pages need no network.
-
-### Record
-
-1. Pick the movement card, M1 to M9, from `docs/cartoes_sons_e_movimentos.pdf`. The card sets the file and whether it loops.
-2. Stand side-on to the camera, facing either way, far enough back that the whole body, feet included, is in view. The side nearer the camera becomes the parts named right, the far side the parts named left.
-3. Press **Gravar**, wait for the 3 s countdown, do the movement and press **Parar**. A recording stops on its own after 20 s.
-
-### Review
-
-The left view replays the camera with the detected pose. The right one is a stick figure posed only by the saved rows, so it shows what the game will play.
-
-| Setting | What it does |
+| Pasta | O que tem |
 |---|---|
-| Início, Fim | Cuts the recording |
-| Suavizar | Removes jitter; too much softens fast moves |
-| Velocidade | Plays faster or slower, still at 30 fps |
-| Repete | Fades the end into the start, over the seam blend, so the loop has no jump |
-| Trocar esquerda e direita | Fixes a recording where the wrong side was taken as the near one |
-| Articulações guardadas | Leave some out to make an overlay, such as arms only for firing |
+| `animations/` | Os movimentos, como `animations/hero_walk.json` |
+| `sounds/` | Os sons, como `sounds/hero_jump.wav` |
+| `musics/` | A música, `musics/music.wav` |
+| `textures/` | Os desenhos, como `textures/coin.png`, e as personagens, com o nome da personagem à frente: `textures/hero_head.png`, `textures/hero_skeleton.json` |
 
-### Save
+Gravar, tirar uma foto e guardar esperam pela pasta. A pré-visualização só a lê, e acompanha-a: o que as outras páginas lá guardam aparece logo.
 
-**Guardar** writes the card's file inside the assets folder, such as `hero/anim_walk.json`. A running game picks it up through hot reload. Browsers without folder access, such as Firefox and Safari, download the file instead; move it to the same place by hand.
+Os browsers sem acesso a pastas, como o Firefox e o Safari, passam sem ela nas páginas de captura, que descarregam os ficheiros. A pré-visualização recebe então a pasta através de uma escolha de ficheiros, e é preciso escolhê-la outra vez para ver uma mudança.
 
-## Sound capture
+## Captura de movimentos
 
-**Sons**, `sound/capture.html`, records a sound card from the microphone and saves it as a sound file for the game: mono, 16-bit, 22 050 Hz, like the other files of `assets/sfx/`.
+**Movimentos**, `mocap/capture.html`, grava um cartão de movimento a partir da webcam e guarda-o como um ficheiro de animação para o jogo. Vai buscar o MediaPipe e o seu modelo de pose à rede quando abre; as outras páginas não precisam de rede.
 
-### Record
+### Gravar
 
-1. Pick the sound card, S1 to S10, from `docs/cartoes_sons_e_movimentos.pdf`. The card sets the file and whether it loops.
-2. Pick the microphone and make the sound once to check the level: the bar turns red when it is too loud and would distort.
-3. Press **Gravar**, stay quiet for the 3 s countdown, make the sound and press **Parar**. The countdown is how the page learns the room's noise. A recording stops on its own after 30 s.
+1. Escolhe o cartão de movimento, de M1 a M9, de `docs/cartoes_sons_e_movimentos.pdf`. O cartão define o ficheiro e se o movimento se repete.
+2. Põe-te de lado para a câmara, virado para qualquer um dos lados, longe o suficiente para que o corpo todo, pés incluídos, apareça. O lado mais perto da câmara passa a ser as partes chamadas direitas, o lado mais longe as partes chamadas esquerdas.
+3. Carrega em **Gravar**, espera pela contagem de 3 s, faz o movimento e carrega em **Parar**. Uma gravação para sozinha ao fim de 20 s.
 
-### Review
+### Rever
 
-The top view is the recording, with the cut parts shaded; the bottom one is the result the game gets. **Tocar** and **Tocar original** compare them. A looping sound plays round, so the seam can be heard.
+A vista da esquerda repete a câmara com a pose detetada. A da direita é um boneco de palitos posto só pelas linhas guardadas, por isso mostra o que o jogo vai tocar.
 
-| Setting | What it does |
+| Definição | O que faz |
 |---|---|
-| Tirar o ruído de fundo | Turns down hiss, fans and hum heard in the countdown; too much makes the voice sound watery |
-| Tirar o ronco | Cuts the deep sounds below 80 Hz: traffic, desk knocks, breath on the microphone |
-| Início, Fim | Cuts the recording; set on their own around the sound, **Cortar o silêncio nas pontas** sets them again |
-| Tom | Higher is smaller and faster, lower is bigger and slower, in semitones |
-| Volume | How loud the loudest moment is; 100% is the most without distorting |
-| Entrada suave, Saída suave | A short fade stops clicks at the ends |
-| Repete | Fades the end into the start, over the seam blend, so the repeat has no jump |
+| Início, Fim | Corta a gravação |
+| Suavizar | Tira os tremores; demasiado amolece os movimentos rápidos |
+| Velocidade | Toca mais depressa ou mais devagar, sempre a 30 fps |
+| Repete | Funde o fim no início, ao longo da mistura da junção, para a repetição não dar um salto |
+| Trocar esquerda e direita | Corrige uma gravação em que o lado errado foi tomado como o mais perto |
+| Articulações guardadas | Deixa algumas de fora para fazer um movimento por cima, como só os braços para disparar |
 
-### Save
+### Guardar
 
-**Guardar** writes the card's file inside the assets folder, such as `sfx/jump.wav`, over the sound that was there. Browsers without folder access download the file instead.
+**Guardar** escreve o ficheiro do cartão dentro da pasta assets, como `animations/hero_walk.json`. Um jogo a correr apanha-o através do hot reload. Os browsers sem acesso a pastas, como o Firefox e o Safari, descarregam o ficheiro; move-o à mão para o mesmo sítio.
 
-## Picture capture
+## Captura de sons
 
-**Desenhos**, `picture/capture.html`, photographs a box of a drawing sheet, cuts the drawing out of the paper and saves it as the game's picture, at the size of the file it replaces.
+**Sons**, `sound/capture.html`, grava um cartão de som a partir do microfone e guarda-o como um ficheiro de som para o jogo: mono, 16 bits, 22 050 Hz, como os outros ficheiros de `assets/sounds/`.
 
-### Photograph
+### Gravar
 
-1. Pick the drawing from the sheets of `docs/folhas_para_desenhar.pdf`, named as their titles. An arm or a leg is one drawing that the page cuts into the four parts, left and right.
-2. Hold the sheet flat in front of the camera with only that drawing's box in view, and a little paper around it. The page draws the box in green once it finds its printed border.
-3. Press **Tirar foto**. A photo taken with a phone works too: **Abrir uma foto**, or drop it on the page.
+1. Escolhe o cartão de som, de S1 a S10, de `docs/cartoes_sons_e_movimentos.pdf`. O cartão define o ficheiro e se o som se repete.
+2. Escolhe o microfone e faz o som uma vez para verificar o nível: a barra fica vermelha quando está alto demais e iria distorcer.
+3. Carrega em **Gravar**, fica em silêncio durante a contagem de 3 s, faz o som e carrega em **Parar**. É pela contagem que a página conhece o ruído da sala. Uma gravação para sozinha ao fim de 30 s.
 
-### Review
+### Rever
 
-The left view is the photo: drag the corners onto the box's corners when the page missed them, and **Procurar a caixa outra vez** to start over. The right one is the picture the game gets, on a checkerboard where it is see-through. On an arm or a leg, a dashed line marks where it bends.
+A vista de cima é a gravação, com as partes cortadas sombreadas; a de baixo é o resultado que o jogo recebe. **Tocar** e **Tocar original** comparam-nos. Um som que se repete toca em volta, para se ouvir a junção.
 
-The looks set the colour and style settings in one go: **Como desenhado**, **Colorido**, **Desenho animado**, **Pixel art** and **Autocolante**.
-
-| Setting | What it does |
+| Definição | O que faz |
 |---|---|
-| Igualar a luz | Makes the paper white all over, from the paper seen just outside the box, even under a shadow or a yellow lamp |
-| Tirar o papel | Makes the paper see-through; off for the scenery and the ground, which fill their box |
-| Quanto conta como papel | Higher also removes pale colours and pencil marks |
-| Manter o branco dentro do desenho | White inside the outline, such as the eyes, stays white; off for the numbers and the cage, whose holes stay see-through |
-| Tirar pintinhas | Drops dust and stray dots around the drawing |
-| Colorido, Brilho, Contraste | Brings out crayon colours that came out pale |
-| Mudar as cores | Turns every colour round the rainbow |
-| Alisar o lápis de cera | Evens out the scribbles inside each colour |
-| Cores | Fewer colours give flat patches, like a cartoon |
-| Tamanho do pixel | Big pixels, like an old console game |
-| Contorno | A black or white line round the whole drawing, so it stands out on any scenery |
+| Tirar o ruído de fundo | Baixa o chiado, as ventoinhas e o zumbido ouvidos na contagem; demasiado faz a voz soar aguada |
+| Tirar o ronco | Corta os sons graves abaixo de 80 Hz: trânsito, pancadas na mesa, o sopro no microfone |
+| Início, Fim | Cortam a gravação; ficam sozinhos à volta do som, e **Cortar o silêncio nas pontas** volta a pô-los |
+| Tom | Mais agudo é mais pequeno e mais rápido, mais grave é maior e mais lento, em meios-tons |
+| Volume | O volume do momento mais alto; 100% é o máximo sem distorcer |
+| Entrada suave, Saída suave | Um desvanecimento curto evita estalidos nas pontas |
+| Repete | Funde o fim no início, ao longo da mistura da junção, para a repetição não dar um salto |
 
-The page saves each drawing at its file's size, so a box should have the same shape as the file; the character boxes are the sizes measured in `games/astronaut-cat/tools/make_art.py`, which `make_sheets.py` draws.
+### Guardar
 
-### Save
+**Guardar** escreve o ficheiro do cartão dentro da pasta assets, como `sounds/hero_jump.wav`, por cima do som que lá estava. A música vai para `musics/music.wav`. Os browsers sem acesso a pastas descarregam o ficheiro.
 
-**Guardar** writes the drawing's files inside the assets folder, over the ones there. An arm or a leg writes its four parts and moves the elbows or knees in the character's `skeleton.json` to where the drawing was cut; the hero's weapon, `hero/weapon.png`, is shrunk and turned to lie along the forearm, as `games/astronaut-cat/tools/make_art.py` does the launcher. A running game picks them up through hot reload. Browsers without folder access download the pictures instead, and cannot update `skeleton.json`.
+## Captura de desenhos
 
-## Preview
+**Desenhos**, `picture/capture.html`, fotografa uma caixa de uma folha de desenho, recorta o desenho do papel e guarda-o como a imagem do jogo, ao tamanho do ficheiro que substitui.
 
-**Pré-visualização**, `preview/preview.html`, plays a character's pictures with a movement and a sound, as the game shows them, to check that what the other pages saved fits together.
+### Fotografar
 
-### Choose
+1. Escolhe o desenho das folhas de `docs/folhas_para_desenhar.pdf`, com os nomes dos seus títulos. Um braço ou uma perna é um só desenho que a página corta nas quatro partes, esquerda e direita.
+2. Segura a folha direita à frente da câmara, com só a caixa desse desenho à vista e um pouco de papel à volta. A página desenha a caixa a verde quando encontra o seu contorno impresso.
+3. Carrega em **Tirar foto**. Uma foto tirada com um telemóvel também serve: **Abrir uma foto**, ou larga-a na página.
 
-1. Pick the movement. It brings its character's pictures, the sound its card plays as it starts, and whether it loops; each can be changed, so the princess's pictures can try the hero's walk.
-2. **Por cima** is a movement played once on top, on its own key, as the game fires while walking or jumping. It plays only on the joints it has, with its own sound.
+### Rever
 
-### Play
+A vista da esquerda é a foto: arrasta os cantos para os cantos da caixa quando a página não os acertou, e **Procurar a caixa outra vez** para recomeçar. A da direita é a imagem que o jogo recebe, sobre um xadrez onde é transparente. Num braço ou numa perna, uma linha tracejada marca onde dobra.
 
-The stage stands the pictures on the ground, and the timeline below shows the movement, one tick a row, and the sound under it. Drag the sound along the timeline to make it start earlier or later; click or drag anywhere else to move through the movement.
+Os estilos definem as cores e o aspeto de uma só vez: **Como desenhado**, **Colorido**, **Desenho animado**, **Pixel art** e **Autocolante**.
 
-| Key | What it does |
+| Definição | O que faz |
 |---|---|
-| Espaço | Plays or pauses |
-| R | Plays from the start, with the sound |
-| F | Plays the movement chosen to go over it |
-| ← → | Steps one row back or forward |
+| Igualar a luz | Torna o papel branco por todo o lado, a partir do papel visto mesmo fora da caixa, mesmo debaixo de uma sombra ou de uma lâmpada amarela |
+| Tirar o papel | Torna o papel transparente; desligado para o cenário e o chão, que enchem a caixa |
+| Quanto conta como papel | Mais alto também tira as cores claras e os traços de lápis |
+| Manter o branco dentro do desenho | O branco dentro do contorno, como os olhos, fica branco; desligado para os números e a jaula, cujos buracos ficam transparentes |
+| Tirar pintinhas | Tira o pó e os pontos soltos à volta do desenho |
+| Colorido, Brilho, Contraste | Realçam as cores de lápis de cera que saíram pálidas |
+| Mudar as cores | Roda todas as cores à volta do arco-íris |
+| Alisar o lápis de cera | Iguala os rabiscos dentro de cada cor |
+| Cores | Menos cores dão manchas lisas, como num desenho animado |
+| Tamanho do pixel | Pixels grandes, como num jogo de consola antigo |
+| Contorno | Uma linha preta ou branca à volta de todo o desenho, para se destacar em qualquer cenário |
 
-| Setting | What it does |
+A página guarda cada desenho ao tamanho do seu ficheiro, por isso uma caixa deve ter a mesma forma do ficheiro; as caixas das personagens têm os tamanhos medidos em `games/astronaut-cat/tools/make_art.py`, que o `make_sheets.py` desenha.
+
+### Guardar
+
+**Guardar** escreve os ficheiros do desenho dentro da pasta assets, por cima dos que lá estão. As partes de uma personagem levam o seu nome à frente, como `textures/hero_head.png` ou `textures/princess_torso.png`. Um braço ou uma perna escreve as suas quatro partes e muda os cotovelos ou os joelhos no esqueleto da personagem, `textures/hero_skeleton.json` ou `textures/princess_skeleton.json`, para onde o desenho foi cortado; o lançador do herói, `textures/hero_weapon.png`, é encolhido e rodado para ficar ao longo do antebraço, como o `games/astronaut-cat/tools/make_art.py` faz ao lançador. Um jogo a correr apanha-os através do hot reload. Os browsers sem acesso a pastas descarregam as imagens, e não conseguem atualizar o esqueleto.
+
+## Pré-visualização
+
+**Pré-visualização**, `preview/preview.html`, toca as imagens de uma personagem com um movimento e um som, como o jogo os mostra, para verificar que o que as outras páginas guardaram encaixa.
+
+### Escolher
+
+1. Escolhe o movimento. Traz as imagens da sua personagem, o som que o seu cartão toca quando começa, e se se repete; cada um pode ser mudado, por isso as imagens da princesa podem experimentar o andar do herói.
+2. **Por cima** é um movimento tocado uma vez por cima, na sua própria tecla, como o jogo dispara enquanto anda ou salta. Só toca nas articulações que tem, com o seu próprio som.
+
+### Tocar
+
+O palco põe as imagens de pé no chão, e a linha do tempo em baixo mostra o movimento, um traço por linha, e o som por baixo. Arrasta o som ao longo da linha do tempo para ele começar mais cedo ou mais tarde; clica ou arrasta em qualquer outro sítio para andar pelo movimento.
+
+| Tecla | O que faz |
 |---|---|
-| Velocidade | Slow motion or faster; the sound follows, so its pitch changes too |
-| Repete | Plays round; off, it stops on the last row and, if chosen, plays again after a second |
-| Passagem do movimento anterior | How long a newly picked movement takes to take over, as the game blends one into the next |
-| O som começa | Before or after the movement starts |
-| Volume do som, Música por trás | The music plays as in the game, at 40% |
-| Som em cada volta | Plays the sound again each time a looping movement starts over |
-| Tamanho, Virado para a esquerda, Atrás | How the character is shown: the game turns it round to face left |
-| Mostrar as articulações | Marks each joint; the faded ones are left out of the movement and stay as drawn |
-| Mostrar as linhas antes e depois | Faint copies a few rows behind and ahead, to see how far each part moves |
+| Espaço | Toca ou pausa |
+| R | Toca desde o início, com o som |
+| F | Toca o movimento escolhido para ir por cima |
+| ← → | Anda uma linha para trás ou para a frente |
 
-Nothing here is saved: the settings are for looking, and the files are changed on the other pages.
+| Definição | O que faz |
+|---|---|
+| Velocidade | Câmara lenta ou mais depressa; o som acompanha, por isso o tom também muda |
+| Repete | Toca em volta; desligado, para na última linha e, se escolhido, volta a tocar ao fim de um segundo |
+| Passagem do movimento anterior | Quanto tempo um movimento acabado de escolher demora a tomar o lugar do anterior, como o jogo funde um no seguinte |
+| O som começa | Antes ou depois de o movimento começar |
+| Volume do som, Música por trás | A música toca como no jogo, a 40% |
+| Som em cada volta | Toca o som outra vez sempre que um movimento que se repete recomeça |
+| Tamanho, Virado para a esquerda, Atrás | Como a personagem é mostrada: o jogo vira-a para olhar para a esquerda |
+| Mostrar as articulações | Marca cada articulação; as esbatidas ficam de fora do movimento e ficam como desenhadas |
+| Mostrar as linhas antes e depois | Cópias ténues algumas linhas atrás e à frente, para ver quanto se mexe cada parte |
+
+Aqui nada é guardado: as definições são para ver, e os ficheiros mudam-se nas outras páginas.

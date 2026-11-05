@@ -65,8 +65,8 @@ const PAGES = {
   picture: "picture/capture.html",
   preview: "preview/preview.html",
 };
-// The folders under assets that hold the characters; the pages make the others as they save.
-const FOLDERS = ["hero", "princess"];
+// The folders under assets, as the game reads them.
+const FOLDERS = ["animations", "musics", "sounds", "textures"];
 // Browsers without folder access, such as Firefox and Safari, save by downloading, and the preview
 // plays the files chosen with a file picker.
 const canPick = "showDirectoryPicker" in window;
@@ -155,8 +155,8 @@ $("pickFolder").addEventListener("click", async () => {
 $("pickFiles").addEventListener("change", () => {
   // Each path starts with the chosen folder's name.
   const files = [...$("pickFiles").files].map((file) => [file.webkitRelativePath.split("/").slice(1).join("/"), file]);
-  if (!files.some(([path]) => path.endsWith("/skeleton.json"))) {
-    return status("Essa não é a pasta assets: nenhuma das suas pastas tem um skeleton.json.", true);
+  if (!files.some(([path]) => FOLDERS.includes(path.split("/")[0]))) {
+    return status(`Essa não é a pasta assets: não tem nenhuma das pastas ${FOLDERS.join("/, ")}/.`, true);
   }
   use({ files }, "A pré-visualização mostra a pasta escolhida. Escolhe-a outra vez para ver uma mudança.");
 });
