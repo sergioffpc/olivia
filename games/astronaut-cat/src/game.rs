@@ -1,14 +1,14 @@
 use olivia::animation::{Animation, Character, Play};
 use olivia::audio::{Audio, Play as PlaySound, Sound};
 use olivia::ecs::{
-    CBody, Camera, CClear, ColliderBuilder, CColliderLines, Entity, CHud, RigidBodyBuilder, CSprite,
-    CTransform, World, entity_of,
+    CBody, CClear, CColliderLines, CHud, CSprite, CTransform, Camera, ColliderBuilder, Entity,
+    RigidBodyBuilder, World, entity_of,
 };
 use olivia::filesystem::Filesystem;
 use olivia::graphics::{Draw, Graphics, Texture, depth};
 use olivia::input::Key;
 use olivia::math::{Color, Rect, Vec2};
-use olivia::physics::{self, Ball, Cuboid, LockedAxes, Pose, CShape};
+use olivia::physics::{self, Ball, Cuboid, LockedAxes, Pose, Shape};
 use olivia::window::WindowEvent;
 use olivia::{Config, Game, Result, Setup, Update};
 
@@ -416,7 +416,13 @@ impl Platformer {
             let draw = sized(&textures.coin, Vec2::splat(COIN_SIZE)).depth(THING_DEPTH);
             let sprite = CSprite::new(textures.coin.clone()).draw(draw);
             let collider = zone(Vec2::splat(COIN_SIZE));
-            world.spawn((CActor, CCoin, CTransform::at(coin.x, coin.y), collider, sprite));
+            world.spawn((
+                CActor,
+                CCoin,
+                CTransform::at(coin.x, coin.y),
+                collider,
+                sprite,
+            ));
         }
 
         let draw = sized(&textures.goal, GOAL_SIZE).depth(GOAL_DEPTH);
@@ -429,7 +435,12 @@ impl Platformer {
             sprite,
         ));
         let earshot = zone(Vec2::new(HELP_DISTANCE * 2.0, VIEW.y));
-        world.spawn((CActor, CEarshot, CTransform::at(GOAL.x, VIEW.y / 2.0), earshot));
+        world.spawn((
+            CActor,
+            CEarshot,
+            CTransform::at(GOAL.x, VIEW.y / 2.0),
+            earshot,
+        ));
 
         let mut captive = self.captive_character.clone();
         // A character made a moment ago has nothing playing, so this cannot name a missing joint.
@@ -616,7 +627,7 @@ impl Platformer {
     }
 
     /// The entities with a collider touching `shape` at `position`.
-    fn touching(u: &Update<'_>, shape: &dyn CShape, position: Vec2) -> Vec<Entity> {
+    fn touching(u: &Update<'_>, shape: &dyn Shape, position: Vec2) -> Vec<Entity> {
         u.physics
             .overlap_shape(shape, Pose::from_translation(position))
             .into_iter()
@@ -752,7 +763,8 @@ impl Platformer {
     fn thin_farts(u: &mut Update<'_>) -> Result<()> {
         let dt = u.timer.dt();
         let mut gone = Vec::new();
-        for (entity, CFart(left), sprite) in u.world.query_mut::<(Entity, &mut CFart, &mut CSprite)>()
+        for (entity, CFart(left), sprite) in
+            u.world.query_mut::<(Entity, &mut CFart, &mut CSprite)>()
         {
             *left -= dt;
             let life = (*left / FART_TIME).max(0.0);

@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronaut_cat::level::{CHECKPOINTS, GROUND, PLATFORMS, ROOT_HEIGHT};
-use astronaut_cat::{CEnemy, CHero, Phase, Platformer, CStar, CStatus};
+use astronaut_cat::{CEnemy, CHero, CStar, CStatus, Phase, Platformer};
 use olivia::ecs::CTransform;
 use olivia::math::Vec2;
 use olivia::window::Window;
@@ -85,7 +85,11 @@ fn shooting_stars_fall_now_and_then_and_go() {
     // Twenty seconds.
     for _ in 0..1200 {
         play.run(1);
-        let star = play.game.world().query_mut::<&CTransform>().with::<&CStar>();
+        let star = play
+            .game
+            .world()
+            .query_mut::<&CTransform>()
+            .with::<&CStar>();
         let height = star
             .into_iter()
             .next()
