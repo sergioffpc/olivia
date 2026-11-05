@@ -1,5 +1,8 @@
-//! What the game loads from its folders, each with a default standing in for it while it is
-//! missing.
+//! Os desenhos, os sons e os movimentos que o jogo vai buscar às pastas.
+//!
+//! A turma vai pondo os seus trabalhos nas pastas aos poucos. Enquanto um ainda não está lá, o
+//! jogo usa outra coisa no lugar dele, para poder funcionar na mesma: um quadrado de uma cor, um
+//! som calado, ou um boneco que não se mexe.
 
 mod animations;
 mod characters;
@@ -8,7 +11,7 @@ mod musics;
 mod sounds;
 mod textures;
 
-pub(crate) use animations::Animations;
+pub(crate) use animations::{Animations, HeroAnimations};
 pub(crate) use characters::{Characters, PART_SCALE, ROOT_HEIGHT};
 pub(crate) use musics::Musics;
 pub(crate) use sounds::Sounds;
@@ -21,17 +24,24 @@ use olivia::{
     graphics::Graphics,
 };
 
-/// Every asset the game plays with, loaded once and lent to whatever spawns or plays from them.
-/// The music is not among them: it is what plays, not what plays from.
+/// Tudo o que o jogo carregou das pastas, guardado junto como numa mochila.
+///
+/// Carrega-se uma vez só, no começo, e depois empresta-se a quem precisar. A música não está cá
+/// dentro: ela é o que está a tocar, não uma coisa que se vai buscar de vez em quando.
 #[derive(Debug)]
 pub(crate) struct Assets {
+    /// Os movimentos das personagens.
     pub(crate) animations: Animations,
+    /// As personagens, feitas de partes desenhadas.
     pub(crate) characters: Characters,
+    /// Os sons gravados pela turma.
     pub(crate) sounds: Sounds,
+    /// Os desenhos.
     pub(crate) textures: Textures,
 }
 
 impl Assets {
+    /// Vai buscar às pastas tudo o que o jogo precisa.
     pub(crate) fn load(
         filesystem: &Filesystem,
         graphics: &mut Graphics,
@@ -46,8 +56,8 @@ impl Assets {
     }
 }
 
-/// Reads an asset, or warns and gives `None` if it is not there yet, so that a default can stand
-/// in for it. An asset that is there but cannot be read is still an error.
+/// Lê o ficheiro `path`, ou avisa e não dá nada se ele ainda não estiver na pasta, para se usar
+/// outra coisa no lugar dele. Um ficheiro que está lá mas não se consegue ler é um erro a sério.
 fn read(filesystem: &Filesystem, path: &str) -> Result<Option<Vec<u8>>> {
     match filesystem.read(path) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -59,8 +69,8 @@ fn read(filesystem: &Filesystem, path: &str) -> Result<Option<Vec<u8>>> {
     }
 }
 
-/// The files in the folder `path`, or none if the folder is not there yet. The caller warns when
-/// it finds nothing it can use.
+/// Os ficheiros que há na pasta `path`, ou nenhum se a pasta ainda não existir. Quem pede é que
+/// avisa, se não encontrar nada que sirva.
 fn list(filesystem: &Filesystem, path: &str) -> Result<Vec<String>> {
     match filesystem.list(path) {
         Ok(files) => Ok(files),
@@ -69,7 +79,7 @@ fn list(filesystem: &Filesystem, path: &str) -> Result<Vec<String>> {
     }
 }
 
-/// Whether `extension` names a kind of audio file the game can play, sound or music.
+/// Se a terminação `extension` é de um ficheiro de som que o jogo sabe tocar.
 fn is_audio(extension: &str) -> bool {
     matches!(
         extension.to_ascii_lowercase().as_str(),

@@ -1,3 +1,5 @@
+//! As músicas que tocam por trás do jogo.
+
 use olivia::{
     Result,
     audio::{Audio, Cue, Play},
@@ -7,12 +9,14 @@ use olivia::{
 use super::{fallback::silence, is_audio, list};
 use crate::random::Random;
 
-/// The music in `musics/`, every file of a kind the game can play, of which one plays at a time.
-/// Only the one that plays is read.
+/// As músicas da pasta `musics/`: toca uma de cada vez, escolhida à sorte.
+///
+/// Só se guarda o nome de cada ficheiro: a música só se lê quando for escolhida para tocar.
 #[derive(Debug)]
 pub(crate) struct Musics(Vec<String>);
 
 impl Musics {
+    /// Vê que músicas há na pasta `musics/`.
     pub(crate) fn load(filesystem: &Filesystem) -> Result<Self> {
         let musics: Vec<String> = list(filesystem, "musics")?
             .into_iter()
@@ -24,25 +28,26 @@ impl Musics {
         Ok(Self(musics))
     }
 
-    /// Plays one of the musics, at random, over and over until the returned cue stops it.
+    /// Toca uma das músicas, à sorte, sempre outra vez do princípio, até alguém a parar.
     pub(crate) fn play(
         &self,
         filesystem: &Filesystem,
         audio: &mut Audio,
         random: &mut Random,
     ) -> Result<Cue> {
+        // Escolhe a música à sorte, ou o silêncio se não houver nenhuma.
         let bytes = if self.0.is_empty() {
             silence()
         } else {
             filesystem.read(&self.0[random.below(self.0.len())])?
         };
-        // Streamed, as a long track would take long to decode up front.
+        // Toca-a aos bocados, enquanto a lê, porque uma música comprida demora a ler toda.
         let music = audio.stream(bytes)?;
         Ok(audio.play_with(&music, Play::new().volume(0.5).looping(true)))
     }
 }
 
-/// Whether `path` is a kind of file the game can play as music, by its extension.
+/// Se o ficheiro `path` é uma música que o jogo sabe tocar, pela terminação do nome.
 fn is_music(path: &str) -> bool {
     path.rsplit_once('.')
         .is_some_and(|(_, extension)| is_audio(extension))

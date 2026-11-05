@@ -1,3 +1,5 @@
+//! Os maus, que andam para trás e para a frente, cada um no seu caminho.
+
 use olivia::{
     ecs::{CBody, CSprite, CTransform, World},
     math::Vec2,
@@ -11,24 +13,24 @@ use super::{
 };
 use crate::{assets::Textures, depth, sprite::sized};
 
-/// How fast a floating enemy sways up and down, in radians per second.
+/// A rapidez com que o mau que flutua sobe e desce.
 const SWAY_SPEED: f32 = 2.5;
-/// How far a floating enemy sways above and below where it started, in metres.
+/// Quanto o mau que flutua sobe e desce, para cima e para baixo de onde começou, em metros.
 const SWAY_HEIGHT: f32 = 0.5;
 
-/// How an enemy moves.
+/// Os tipos de maus, cada um com a sua maneira de andar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
-    /// Long and low, slowly along the ground.
+    /// Comprido e baixinho, rasteja devagar pelo chão.
     Crawl,
-    /// Round, quickly along the ground, turning as it goes.
+    /// Redondo, rebola depressa pelo chão.
     Roll,
-    /// Through the air, swaying up and down.
+    /// Anda pelo ar, a subir e a descer.
     Float,
 }
 
 impl Kind {
-    /// The size of its box.
+    /// O tamanho da caixa do mau, em metros.
     const fn size(self) -> Vec2 {
         match self {
             Self::Crawl => Vec2::new(1.5, 0.87),
@@ -37,7 +39,7 @@ impl Kind {
         }
     }
 
-    /// How fast it goes, in metres per second.
+    /// A rapidez do mau, em metros por segundo.
     const fn speed(self) -> f32 {
         match self {
             Self::Crawl => 0.7,
@@ -47,31 +49,35 @@ impl Kind {
     }
 }
 
-/// The height an enemy walks at.
+/// A altura a que um mau anda.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Lane {
-    /// Standing on the ground.
+    /// Pelo chão.
     Ground,
-    /// In the air, its centre at this y.
+    /// Pelo ar, com o meio do mau a esta altura.
     Air(f32),
 }
 
-/// The stretch an enemy walks, from its left end to its right one.
+/// O caminho de um mau, da ponta da esquerda à ponta da direita.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Span {
+    /// A ponta da esquerda.
     pub(super) left: f32,
+    /// A ponta da direita.
     pub(super) right: f32,
 }
 
-/// Which way an enemy walks.
+/// Para que lado anda um mau.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Direction {
+    /// Para a esquerda.
     Left,
+    /// Para a direita.
     Right,
 }
 
 impl Direction {
-    /// The sign of its x: -1 for left, 1 for right.
+    /// O sinal do lado: -1 para a esquerda, que é para onde o x diminui, e 1 para a direita.
     const fn sign(self) -> f32 {
         match self {
             Self::Left => -1.0,
@@ -80,15 +86,19 @@ impl Direction {
     }
 }
 
-/// Where an enemy of a kind walks.
+/// Onde anda um mau de um tipo: o mapa do nível tem um destes para cada mau.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Patrol {
+    /// O tipo de mau.
     kind: Kind,
+    /// O caminho que ele anda.
     span: Span,
+    /// A altura a que anda.
     lane: Lane,
 }
 
 impl Patrol {
+    /// Um mau do tipo `kind`, a andar de `left` a `right`, à altura `lane`.
     pub(super) const fn new(kind: Kind, left: f32, right: f32, lane: Lane) -> Self {
         Self {
             kind,
@@ -97,33 +107,80 @@ impl Patrol {
         }
     }
 
-    /// The y of its centre.
+    /// A altura do meio do mau.
     fn y(self) -> f32 {
         match self.lane {
+            // Pelo chão, o meio fica meia altura do mau acima do chão.
             Lane::Ground => GROUND - self.kind.size().y / 2.0,
             Lane::Air(y) => y,
         }
     }
 }
 
-/// An enemy walking its stretch.
+/// Um mau no seu caminho, e o que ele tem de lembrar.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct CEnemy {
+    /// O tipo de mau.
     kind: Kind,
+    /// O caminho que ele anda.
     span: Span,
+    /// Para que lado está a andar agora.
     direction: Direction,
+    /// O relógio do mau, em segundos: só o que flutua o usa, para subir e descer.
     time: f32,
 }
 
-/// Every enemy, each at the right end of its walk, walking left.
+impl CEnemy {
+    /// Dá meia-volta se já passou de uma das pontas do caminho. O x do mau é `x`.
+    ///
+    /// Só dá meia-volta depois de passar a ponta, e entre as pontas continua como estava. Assim
+    /// anda sempre para trás e para a frente, sem sair do caminho.
+    fn turn_round(&mut self, x: f32) {
+        if x < self.span.left {
+            self.direction = Direction::Right;
+        } else if x > self.span.right {
+            self.direction = Direction::Left;
+        }
+    }
+
+    /// A velocidade do mau: para o lado para onde anda e, se flutuar, a subir ou a descer.
+    fn velocity(&self) -> Vec2 {
+        let across = self.direction.sign() * self.kind.speed();
+        // Para subir e descer devagarinho, como um barco nas ondas, usa-se o cosseno do relógio.
+        let sway = match self.kind {
+            Kind::Float => (self.time * SWAY_SPEED).cos() * SWAY_SPEED * SWAY_HEIGHT,
+            Kind::Crawl | Kind::Roll => 0.0,
+        };
+        Vec2::new(across, sway)
+    }
+
+    /// A rapidez com que o mau que rebola dá voltas: a certa para rolar sem escorregar, como uma
+    /// roda de bicicleta. Para a esquerda, roda ao contrário.
+    fn spin(&self) -> f32 {
+        let radius = self.kind.size().x / 2.0;
+        self.direction.sign() * self.kind.speed() / radius
+    }
+
+    /// Vira o desenho `sprite` do mau para o lado para onde ele anda, como num espelho.
+    fn face(&self, sprite: &mut CSprite) {
+        let scale = self.kind.size() / sprite.texture.size();
+        sprite.draw = sprite
+            .draw
+            .scale(scale * Vec2::new(self.direction.sign(), 1.0));
+    }
+}
+
+/// Põe no nível todos os maus, cada um na ponta da direita do seu caminho, a andar para a esquerda.
 pub(super) fn spawn(world: &mut World, textures: &Textures) {
     for patrol in ENEMIES {
         spawn_enemy(world, textures, patrol);
     }
 }
 
+/// Põe no nível o mau que anda como diz `patrol`.
 fn spawn_enemy(world: &mut World, textures: &Textures, patrol: Patrol) {
     let Patrol { kind, span, .. } = patrol;
+    // Escolhe o desenho do tipo de mau.
     let texture = match kind {
         Kind::Crawl => &textures.crawl,
         Kind::Roll => &textures.roll,
@@ -136,6 +193,7 @@ fn spawn_enemy(world: &mut World, textures: &Textures, patrol: Patrol) {
         direction: Direction::Left,
         time: 0.0,
     };
+    // Dá-lhe um corpo que o jogo mexe, e põe-no na ponta da direita.
     let (body, collider) = moved(kind.size());
     let sprite = CSprite::new(texture.clone()).draw(draw);
     world.spawn((
@@ -148,43 +206,22 @@ fn spawn_enemy(world: &mut World, textures: &Textures, patrol: Patrol) {
     ));
 }
 
-/// Moves every enemy one fixed step of `dt` seconds, back and forth along its span.
+/// Mexe todos os maus durante um passo de `dt` segundos, para trás e para a frente no seu caminho.
 pub(super) fn update(world: &mut World, physics: &mut physics::World, dt: f32) {
     for (CBody(body), transform, enemy, sprite) in
         world.query_mut::<(&CBody, &CTransform, &mut CEnemy, &mut CSprite)>()
     {
-        // Its own clock, which only the floater's sway reads.
+        // O relógio do mau anda.
         enemy.time += dt;
-        // It turns round only once past an end, and keeps on as it was in between, so it always
-        // walks back and forth within its span.
-        if transform.position.x < enemy.span.left {
-            enemy.direction = Direction::Right;
-        } else if transform.position.x > enemy.span.right {
-            enemy.direction = Direction::Left;
-        }
-        let sign = enemy.direction.sign();
-        let speed = enemy.kind.speed();
-        // The derivative of `sin(t · SWAY_SPEED) · SWAY_HEIGHT`, so that the floater's height
-        // swings smoothly by `SWAY_HEIGHT` either way.
-        let sway = match enemy.kind {
-            Kind::Float => (enemy.time * SWAY_SPEED).cos() * SWAY_SPEED * SWAY_HEIGHT,
-            Kind::Crawl | Kind::Roll => 0.0,
-        };
-        // Its body is kinematic and moved by velocity, so the game sets it every step.
+        // Dá meia-volta, se já chegou a uma ponta.
+        enemy.turn_round(transform.position.x);
+        // O corpo dos maus não cai nem é empurrado: o jogo diz-lhe a velocidade em cada passo.
         let body = physics.body_mut(*body);
-        body.set_linvel(Vec2::new(sign * speed, sway), true);
+        body.set_linvel(enemy.velocity(), true);
+        // O que rebola dá voltas, e o que rasteja, o único com frente e trás, vira-se.
         match enemy.kind {
-            // At `v / r` it rolls without slipping, backwards when it goes left.
-            Kind::Roll => {
-                let radius = enemy.kind.size().x / 2.0;
-                body.set_angvel(sign * speed / radius, true);
-            }
-            // The only one with a front and a back: it mirrors around its centre to face where it
-            // goes.
-            Kind::Crawl => {
-                let scale = enemy.kind.size() / sprite.texture.size();
-                sprite.draw = sprite.draw.scale(scale * Vec2::new(sign, 1.0));
-            }
+            Kind::Roll => body.set_angvel(enemy.spin(), true),
+            Kind::Crawl => enemy.face(sprite),
             Kind::Float => {}
         }
     }

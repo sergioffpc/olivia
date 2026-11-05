@@ -1,3 +1,5 @@
+//! As moedas que o herói apanha pelo caminho.
+
 use olivia::{
     ecs::{CSprite, CTransform, World},
     graphics::Texture,
@@ -7,13 +9,13 @@ use olivia::{
 use super::{CActor, layout::COINS, moved};
 use crate::{depth, sprite::sized};
 
-/// What the hero picks up by touching it.
+/// Uma etiqueta para o que o herói apanha quando lhe toca.
 pub(super) struct CCoin;
 
-/// The size of a coin, as drawn and as touched.
+/// O tamanho de uma moeda, para se ver e para se tocar.
 const COIN_SIZE: Vec2 = Vec2::splat(1.0);
 
-/// Every coin, each showing `coin`.
+/// Põe no nível todas as moedas, cada uma com o desenho `coin`.
 pub(super) fn spawn(world: &mut World, coin: &Texture) {
     for pos in COINS {
         let draw = sized(coin, COIN_SIZE).depth(depth::THING);

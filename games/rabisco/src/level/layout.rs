@@ -1,18 +1,24 @@
-//! Where everything on the level is, in metres, with y growing downwards.
+//! Onde está cada coisa no nível, como num mapa.
+//!
+//! As medidas são em metros. O x cresce para a direita e o y cresce para baixo: quanto maior o y,
+//! mais abaixo fica a coisa.
 
 use olivia::math::{Rect, Vec2};
 
 use super::enemies::{Kind, Lane, Patrol};
 
-/// The y of the ground's top.
+/// A altura de cima do chão.
 pub(super) const GROUND: f32 = 6.0;
-/// Where the level ends.
+/// Onde o nível acaba.
 pub(super) const WIDTH: f32 = 44.0;
-/// The y where a fall begins to cost a life.
+/// A altura a partir da qual uma queda custa uma vida.
 pub(super) const PIT: f32 = 8.4;
 
-/// What the hero stands on. They are solid, so anything over a walkway leaves room for the hero's
-/// head, and the ones that do need the extra jump to reach.
+/// As plataformas onde o herói anda: cada uma com o x e o y do canto de cima à esquerda, a
+/// largura e a altura.
+///
+/// As primeiras quatro são o chão, com buracos entre elas. As outras estão no ar: deixam espaço
+/// para a cabeça do herói passar por baixo, e as mais altas só se alcançam com o salto extra.
 pub(super) const PLATFORMS: [Rect; 10] = [
     Rect::new(0.0, GROUND, 13.0, 1.2),
     Rect::new(15.0, GROUND, 9.0, 1.2),
@@ -26,15 +32,15 @@ pub(super) const PLATFORMS: [Rect; 10] = [
     Rect::new(34.4, 3.8, 3.0, 0.34),
 ];
 
-/// The x of the cage the princess is held in, standing on the ground.
+/// O x da jaula onde a princesa está presa, em cima do chão.
 pub(super) const GOAL: f32 = 41.5;
-/// How near the cage the hero comes before the princess calls for help.
+/// A que distância da jaula o herói tem de chegar para ouvir a princesa pedir ajuda.
 pub(super) const HELP_DISTANCE: f32 = 5.2;
 
-/// Where the hero starts over after a fall, on the ground: the last one passed.
+/// Os sítios no chão onde o herói volta a começar depois de cair: o último por onde passou.
 pub(super) const CHECKPOINTS: [f32; 4] = [1.2, 15.6, 26.2, 33.0];
 
-/// Where the things to pick up are.
+/// Onde estão as moedas.
 pub(super) const COINS: [Vec2; 14] = [
     Vec2::new(3.0, 5.4),
     Vec2::new(4.2, 5.4),
@@ -52,7 +58,7 @@ pub(super) const COINS: [Vec2; 14] = [
     Vec2::new(36.6, 3.2),
 ];
 
-/// Who walks where.
+/// Os maus: de que tipo é cada um, entre que pontas anda, e a que altura.
 pub(super) const ENEMIES: [Patrol; 7] = [
     Patrol::new(Kind::Crawl, 5.0, 12.0, Lane::Ground),
     Patrol::new(Kind::Float, 10.4, 14.6, Lane::Air(4.0)),

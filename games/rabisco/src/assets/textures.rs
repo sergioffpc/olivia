@@ -1,3 +1,5 @@
+//! Os desenhos do jogo, feitos pela turma nas folhas de desenho.
+
 use olivia::{
     Result,
     filesystem::Filesystem,
@@ -6,24 +8,37 @@ use olivia::{
 
 use super::{fallback::no_texture, read};
 
+/// Todos os desenhos do jogo, menos as partes das personagens.
 #[derive(Debug)]
 pub(crate) struct Textures {
+    /// O cenário que se vê ao longe, atrás de tudo.
     pub(crate) background: Texture,
+    /// O chão e as plataformas.
     pub(crate) platform: Texture,
+    /// Uma vida que o herói ainda tem.
     pub(crate) life: Texture,
+    /// Uma vida que o herói já perdeu.
     pub(crate) life_lost: Texture,
-    /// The digits 0 to 9, each at its own index.
+    /// Os algarismos de 0 a 9, cada um no seu lugar: o 3 está na posição 3.
     pub(crate) digits: [Texture; 10],
+    /// O que o herói dispara.
     pub(crate) projectile: Texture,
+    /// A nuvem que sai no salto extra.
     pub(crate) fart: Texture,
+    /// O que o herói apanha pelo caminho.
     pub(crate) coin: Texture,
+    /// A jaula onde a princesa está presa.
     pub(crate) goal: Texture,
+    /// O mau que rasteja.
     pub(crate) crawl: Texture,
+    /// O mau que rebola.
     pub(crate) roll: Texture,
+    /// O mau que flutua.
     pub(crate) float: Texture,
 }
 
 impl Textures {
+    /// Vai buscar à pasta `textures/` todos os desenhos.
     pub(crate) fn load(filesystem: &Filesystem, graphics: &mut Graphics) -> Result<Self> {
         let mut named = |name: &str| texture(filesystem, graphics, &path(name));
         Ok(Self {
@@ -54,12 +69,12 @@ impl Textures {
     }
 }
 
-/// Where the texture `name` is.
+/// O sítio do ficheiro do desenho `name`.
 pub(super) fn path(name: &str) -> String {
     format!("textures/{name}.png")
 }
 
-/// The texture at `path`, or a square of a colour of its own if it is not there yet.
+/// O desenho do ficheiro `path`, ou um quadrado de uma cor só se ele ainda não estiver na pasta.
 pub(super) fn texture(
     filesystem: &Filesystem,
     graphics: &mut Graphics,

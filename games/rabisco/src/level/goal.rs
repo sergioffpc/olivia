@@ -1,3 +1,5 @@
+//! A jaula no fim do nível, onde a princesa está presa à espera do herói.
+
 use olivia::{
     Result,
     animation::{Character, Play},
@@ -18,35 +20,39 @@ use crate::{
     status::{CStatus, Outcome},
 };
 
-/// How long her calling takes to give way to her freed animation.
+/// Quanto tempo leva a princesa a passar de pedir ajuda a ficar contente, em segundos.
 const CROSSFADE: f32 = 0.1;
-/// The size of the cage the princess is held in.
+/// O tamanho da jaula, em metros.
 const GOAL_SIZE: Vec2 = Vec2::new(2.2, 3.0);
 
-/// The cage that saves the princess when the hero reaches it.
+/// Uma etiqueta para a jaula: quando o herói lhe toca, a princesa fica livre.
 pub(super) struct CGoal;
-/// The stretch close enough to the cage for the hero to hear the princess.
+/// Uma etiqueta para o pedaço do nível, perto da jaula, onde o herói já ouve a princesa.
 pub(super) struct CEarshot;
-/// The princess, held in the cage.
+/// Uma etiqueta para a princesa.
 struct CPrincess;
 
+/// A jaula com a princesa, e o que é preciso lembrar dela.
 #[derive(Debug)]
 pub(super) struct Goal {
+    /// Onde a princesa está guardada no mundo do jogo.
     princess: Entity,
 }
 
-/// The cage standing on the ground at [`GOAL`], the princess in it calling for help, and the
-/// stretch from which the hero hears her.
+/// Põe no nível a jaula, a princesa lá dentro, e o pedaço de onde o herói a ouve.
 pub(super) fn spawn(world: &mut World, assets: &Assets) -> Result<Goal> {
-    let Assets {
-        animations,
-        characters,
-        textures,
-        ..
-    } = assets;
+    spawn_cage(world, assets);
+    spawn_earshot(world);
+    let princess = spawn_princess(world, assets)?;
+    Ok(Goal { princess })
+}
+
+/// A jaula, em cima do chão, em [`GOAL`].
+fn spawn_cage(world: &mut World, assets: &Assets) {
+    let texture = &assets.textures.goal;
     let centre = GROUND - GOAL_SIZE.y / 2.0;
-    let draw = sized(&textures.goal, GOAL_SIZE).depth(depth::GOAL);
-    let sprite = CSprite::new(textures.goal.clone()).draw(draw);
+    let draw = sized(texture, GOAL_SIZE).depth(depth::GOAL);
+    let sprite = CSprite::new(texture.clone()).draw(draw);
     world.spawn((
         CActor,
         CGoal,
@@ -54,7 +60,11 @@ pub(super) fn spawn(world: &mut World, assets: &Assets) -> Result<Goal> {
         zone(GOAL_SIZE),
         sprite,
     ));
+}
 
+/// O pedaço invisível de onde o herói ouve a princesa: desde [`HELP_DISTANCE`] antes da jaula
+/// até ao fim do nível, de cima a baixo.
+fn spawn_earshot(world: &mut World) {
     let earshot = Vec2::new(WIDTH - (GOAL - HELP_DISTANCE), VIEW.y);
     world.spawn((
         CActor,
@@ -62,21 +72,26 @@ pub(super) fn spawn(world: &mut World, assets: &Assets) -> Result<Goal> {
         CTransform::at(WIDTH - earshot.x / 2.0, VIEW.y / 2.0),
         zone(earshot),
     ));
+}
 
-    let mut princess = characters.princess.clone();
-    // Fails if the animation names a joint the skeleton lacks, as with the default skeleton.
-    princess.play(&animations.princess.calling, Play::new().looping(true))?;
-    let princess = world.spawn((
+/// A princesa, de pé dentro da jaula, a pedir ajuda sem parar. Diz onde ficou guardada.
+fn spawn_princess(world: &mut World, assets: &Assets) -> Result<Entity> {
+    let mut princess = assets.characters.princess.clone();
+    // Dá erro se o movimento mexer uma parte que o esqueleto não tem, como no esqueleto que está
+    // no lugar de um que falta.
+    princess.play(
+        &assets.animations.princess.calling,
+        Play::new().looping(true),
+    )?;
+    Ok(world.spawn((
         CActor,
         CPrincess,
         CTransform::at(GOAL, GROUND - ROOT_HEIGHT),
         princess,
-    ));
-
-    Ok(Goal { princess })
+    )))
 }
 
-/// Frees the princess once the game is won: she plays her freed animation, once.
+/// Quando se ganha o jogo, a princesa fica contente, uma vez só.
 pub(super) fn update(
     world: &mut World,
     goal: &Goal,
@@ -86,6 +101,7 @@ pub(super) fn update(
     if status.outcome == Outcome::Won {
         let freed = Play::new().crossfade(CROSSFADE);
         let mut princess = world.get::<&mut Character>(goal.princess)?;
+        // Pedir o movimento que já está a tocar não faz nada, por isso pode pedir-se a cada passo.
         princess.play(&assets.animations.princess.freed, freed)?;
     }
     Ok(())

@@ -1,34 +1,36 @@
+//! Como está a correr o jogo: as vidas, os pontos e se já acabou.
+
 use olivia::ecs::{Entity, World};
 
-/// The most lives the hero has.
+/// Quantas vidas o herói tem no começo do jogo.
 pub(crate) const LIVES: u32 = 3;
 
-/// How the game ends, or that it has not yet.
+/// Se o jogo ainda está a decorrer, ou como acabou.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Outcome {
-    /// Still running.
+    /// Ainda estamos a jogar.
     Playing,
-    /// The princess saved.
+    /// Ganhámos: a princesa foi salva!
     Won,
-    /// No lives left.
+    /// Perdemos: o herói ficou sem vidas.
     Lost,
 }
 
-/// What a game has come to, on an entity of its own.
+/// O placar do jogo, guardado numa coisa só para ele no mundo do jogo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CStatus {
-    /// Lives left.
+    /// Quantas vidas faltam ao herói.
     pub(crate) lives: u32,
-    /// Coins picked up.
+    /// Quantas moedas o herói já apanhou.
     pub(crate) score: u32,
-    /// How it stands.
+    /// Se ainda estamos a jogar, ou se já ganhámos ou perdemos.
     pub(crate) outcome: Outcome,
-    /// Whether the princess has called for help.
+    /// Se a princesa já pediu ajuda: ela só pede uma vez em cada jogo.
     pub(crate) has_called: bool,
 }
 
 impl CStatus {
-    /// How a new game starts.
+    /// O placar de um jogo novo: todas as vidas, zero moedas, e a jogar.
     pub(crate) const fn new() -> Self {
         Self {
             lives: LIVES,
@@ -39,7 +41,7 @@ impl CStatus {
     }
 }
 
-/// The entity holding the status of a new game.
+/// Põe no mundo do jogo o placar de um jogo novo, e diz onde ficou guardado.
 pub(crate) fn spawn(world: &mut World) -> Entity {
     world.spawn((CStatus::new(),))
 }
