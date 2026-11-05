@@ -16,7 +16,7 @@ const MIN_TILE: f32 = 1e-3;
 /// A collider nothing passes through, shots included.
 pub(super) struct CSolid;
 /// What swallows a falling hero.
-struct CPit;
+pub(super) struct CPit;
 
 /// The platforms, the walls at the ends and the pit under it all.
 pub(super) fn spawn(world: &mut World, platform: &Texture) {

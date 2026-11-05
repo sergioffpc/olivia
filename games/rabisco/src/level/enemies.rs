@@ -108,7 +108,7 @@ impl Patrol {
 
 /// An enemy walking its stretch.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct CEnemy {
+pub(super) struct CEnemy {
     kind: Kind,
     span: Span,
     direction: Direction,

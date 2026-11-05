@@ -1,4 +1,5 @@
 use olivia::{
+    Result,
     ecs::{CSprite, CTransform, Entity, World},
     graphics::Texture,
     math::Vec2,
@@ -32,4 +33,14 @@ pub(super) fn spawn(world: &mut World, background: &Texture) -> Vec<Tile> {
         home += width;
     }
     tiles
+}
+
+/// Places every tile for the camera at `camera`: the further the camera has gone, the further the
+/// tiles go with it, so that they scroll past slower than the level.
+pub(super) fn scroll(world: &mut World, tiles: &[Tile], camera: f32) -> Result<()> {
+    for tile in tiles {
+        world.get::<&mut CTransform>(tile.entity)?.position.x =
+            tile.home + camera * (1.0 - PARALLAX);
+    }
+    Ok(())
 }

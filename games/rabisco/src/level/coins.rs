@@ -7,6 +7,9 @@ use olivia::{
 use super::{CActor, layout::COINS, moved};
 use crate::{depth, sprite::sized};
 
+/// What the hero picks up by touching it.
+pub(super) struct CCoin;
+
 /// The size of a coin, as drawn and as touched.
 const COIN_SIZE: Vec2 = Vec2::splat(1.0);
 
@@ -16,6 +19,13 @@ pub(super) fn spawn(world: &mut World, coin: &Texture) {
         let draw = sized(coin, COIN_SIZE).depth(depth::THING);
         let (body, collider) = moved(COIN_SIZE);
         let sprite = CSprite::new(coin.clone()).draw(draw);
-        world.spawn((CActor, CTransform::at(pos.x, pos.y), body, collider, sprite));
+        world.spawn((
+            CActor,
+            CCoin,
+            CTransform::at(pos.x, pos.y),
+            body,
+            collider,
+            sprite,
+        ));
     }
 }

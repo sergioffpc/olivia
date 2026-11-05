@@ -6,13 +6,18 @@ use olivia::{
     },
     input::Key,
     math::Vec2,
-    physics::{self, LockedAxes},
+    physics::{self, Cuboid, LockedAxes},
 };
 
 use super::{
     CActor,
+    coins::CCoin,
+    enemies::CEnemy,
+    goal::{CEarshot, CGoal},
     layout::{CHECKPOINTS, GROUND},
-    terrain::CSolid,
+    shots,
+    terrain::{CPit, CSolid},
+    touching,
 };
 use crate::{
     assets::{Assets, Characters, ROOT_HEIGHT},
@@ -40,24 +45,16 @@ const SHOT_COOLDOWN: f32 = 0.45;
 const SHOT_DELAY: f32 = 0.16;
 /// How long the shoot animation takes to come in over what plays.
 const OVERLAY_FADE: f32 = 0.06;
-/// How fast a shot leaves, in metres per second.
-const SHOT_SPEED: f32 = 7.2;
-/// How much gravity pulls a shot: an arc, so that it comes down on what crawls along the ground.
-const SHOT_GRAVITY: f32 = 0.4;
-/// The side of a shot.
-const SHOT_SIZE: f32 = 0.48;
 /// How far along the launcher a shot appears, from the hand.
 const MUZZLE: f32 = 0.6;
 /// The side of the cloud the extra jump leaves.
 const FART_SIZE: f32 = 1.5;
 /// How long the cloud lasts.
 const FART_TIME: f32 = 0.9;
-
-/// A shot in flight, with how long it has flown.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct CShot {
-    pub(super) time: f32,
-}
+/// How long the hero shows it is hurt.
+const HURT: f32 = 0.7;
+/// How long after being hurt nothing can hurt the hero again, so that one touch costs one life.
+const INVULNERABLE: f32 = 1.6;
 
 /// The cloud the extra jump leaves, with this much time left.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -236,22 +233,84 @@ fn fire(
     let direction = if hero.is_facing_left { -1.0 } else { 1.0 };
     let centre = root + hand.offset + Vec2::new(direction * MUZZLE, 0.0);
 
-    // Mirrored with the hero, so that it points where it flies.
-    let texture = &assets.textures.projectile;
-    let draw = sized(texture, Vec2::splat(SHOT_SIZE));
-    let draw = draw
-        .scale(draw.scale_value() * Vec2::new(direction, 1.0))
-        .depth(depth::THING);
-    let body = RigidBodyBuilder::dynamic()
-        .gravity_scale(SHOT_GRAVITY)
-        .linvel(Vec2::new(direction * SHOT_SPEED, 0.0));
-    world.spawn((
-        CActor,
-        CShot { time: 0.0 },
-        CTransform::at(centre.x, centre.y),
-        body,
-        ColliderBuilder::ball(SHOT_SIZE / 2.0).sensor(true),
-        CSprite::new(texture.clone()).draw(draw),
-    ));
+    shots::spawn(world, assets, centre, direction);
+    Ok(())
+}
+
+/// Whatever the hero's box touches happens to it: coins are picked up, enemies hurt, the pit
+/// swallows, the princess calls from earshot and the cage wins the game.
+pub(super) fn meet(
+    u: &mut Update<'_>,
+    player: &Player,
+    assets: &Assets,
+    random: &mut Random,
+    status: &mut CStatus,
+) -> Result<()> {
+    let root = u.world.get::<&CTransform>(player.entity)?.position;
+    let centre = root + Vec2::new(0.0, ROOT_HEIGHT - HERO_SIZE.y / 2.0);
+    let area = Cuboid::new(HERO_SIZE / 2.0);
+    let mut is_hurt = false;
+    let mut has_fallen = false;
+    let mut has_won = false;
+    for entity in touching(u.physics, &area, centre) {
+        if u.world.satisfies::<&CCoin>(entity) {
+            u.world.despawn(entity)?;
+            status.score += 1;
+            u.audio.play(assets.sounds.pickup.pick(random));
+        }
+        is_hurt |= u.world.satisfies::<&CEnemy>(entity);
+        has_fallen |= u.world.satisfies::<&CPit>(entity);
+        has_won |= u.world.satisfies::<&CGoal>(entity);
+        // She calls only once a game.
+        if u.world.satisfies::<&CEarshot>(entity) && !status.has_called {
+            status.has_called = true;
+            u.audio.play(assets.sounds.princess.help.pick(random));
+        }
+    }
+
+    let invulnerable = u.world.get::<&CHero>(player.entity)?.invulnerable;
+    if has_fallen {
+        // A fall always costs a life, and the hero stands again at the last checkpoint passed.
+        lose_life(u, player, assets, random, status)?;
+        let reached = CHECKPOINTS.iter().rev().find(|x| **x <= root.x);
+        let x = *reached.unwrap_or(&CHECKPOINTS[0]);
+        let body = u.world.get::<&CBody>(player.entity)?.0;
+        let body = u.physics.body_mut(body);
+        body.set_translation(Vec2::new(x, GROUND - ROOT_HEIGHT), true);
+        body.set_linvel(Vec2::ZERO, true);
+    } else if is_hurt && invulnerable == 0.0 {
+        lose_life(u, player, assets, random, status)?;
+    }
+    // Reaching the cage frees the princess: the cage is gone.
+    if has_won && status.outcome == Outcome::Playing {
+        status.outcome = Outcome::Won;
+        u.audio.play(assets.sounds.hero.win.pick(random));
+        let cage: Vec<Entity> = u.world.query::<Entity>().with::<&CGoal>().iter().collect();
+        for entity in cage {
+            u.world.despawn(entity)?;
+        }
+    }
+    Ok(())
+}
+
+/// Takes a life from the hero, hurting it for a while, and ends the game on the last one.
+fn lose_life(
+    u: &mut Update<'_>,
+    player: &Player,
+    assets: &Assets,
+    random: &mut Random,
+    status: &mut CStatus,
+) -> Result<()> {
+    status.lives -= 1;
+    let mut hero = u.world.get::<&mut CHero>(player.entity)?;
+    hero.hurt = HURT;
+    hero.invulnerable = INVULNERABLE;
+    drop(hero);
+    if status.lives == 0 {
+        status.outcome = Outcome::Lost;
+        u.audio.play(assets.sounds.gameover.pick(random));
+    } else {
+        u.audio.play(assets.sounds.hero.hurt.pick(random));
+    }
     Ok(())
 }

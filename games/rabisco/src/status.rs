@@ -9,10 +9,8 @@ pub(crate) enum Outcome {
     /// Still running.
     Playing,
     /// The princess saved.
-    #[expect(dead_code, reason = "reached once the level has the princess")]
     Won,
     /// No lives left.
-    #[expect(dead_code, reason = "reached once the hero can lose lives")]
     Lost,
 }
 

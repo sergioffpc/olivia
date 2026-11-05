@@ -12,7 +12,7 @@ use crate::{
     hud::Hud,
     level::Level,
     random::Random,
-    status,
+    status::{self, CStatus},
 };
 
 /// The size of the window, in logical pixels.
@@ -72,14 +72,16 @@ impl Game for Rabisco {
         if u.events.contains(&WindowEvent::CloseRequested) {
             u.quit();
         }
-        let Some(status) = self
-            .level
-            .ready_to_play(u.world, u.input, &self.assets, self.status)?
+        let Some(mut status) =
+            self.level
+                .ready_to_play(u.world, u.input, &self.assets, self.status)?
         else {
             return Ok(());
         };
         self.level
-            .update(&mut u, &self.assets, &mut self.random, status)?;
+            .update(&mut u, &self.assets, &mut self.random, &mut status)?;
+        self.camera.update(u.world, &self.level)?;
+        *u.world.get::<&mut CStatus>(self.status)? = status;
 
         Ok(())
     }

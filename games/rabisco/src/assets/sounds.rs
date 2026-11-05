@@ -9,7 +9,6 @@ use crate::random::Random;
 
 /// The sounds of the game, those of each character apart.
 #[derive(Debug)]
-#[expect(dead_code, reason = "played once the update phase plays the game")]
 pub(crate) struct Sounds {
     pub(crate) hero: HeroSounds,
     pub(crate) princess: PrincessSounds,
@@ -19,7 +18,6 @@ pub(crate) struct Sounds {
 }
 
 #[derive(Debug)]
-#[expect(dead_code, reason = "played once the update phase moves the hero")]
 pub(crate) struct HeroSounds {
     pub(crate) jump: Takes,
     pub(crate) fart: Takes,
@@ -29,7 +27,6 @@ pub(crate) struct HeroSounds {
 }
 
 #[derive(Debug)]
-#[expect(dead_code, reason = "played once the level has the princess")]
 pub(crate) struct PrincessSounds {
     pub(crate) help: Takes,
 }

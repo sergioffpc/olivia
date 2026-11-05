@@ -21,9 +21,9 @@ use crate::{
 const GOAL_SIZE: Vec2 = Vec2::new(2.2, 3.0);
 
 /// The cage that saves the princess when the hero reaches it.
-struct CGoal;
+pub(super) struct CGoal;
 /// The stretch close enough to the cage for the hero to hear the princess.
-struct CEarshot;
+pub(super) struct CEarshot;
 /// The princess, held in the cage.
 struct CPrincess;
 

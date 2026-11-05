@@ -6,13 +6,15 @@ mod enemies;
 mod goal;
 mod layout;
 mod player;
+mod shots;
 mod terrain;
 
 use olivia::{
     Result, Update,
-    ecs::{CBody, ColliderBuilder, Entity, RigidBodyBuilder, World},
+    ecs::{CBody, ColliderBuilder, Entity, RigidBodyBuilder, World, entity_of},
     input::{Input, Key},
     math::Vec2,
+    physics::{self, Pose, Shape},
 };
 
 use crate::{
@@ -33,6 +35,9 @@ pub(crate) struct Level {
 }
 
 impl Level {
+    /// Where the level ends.
+    pub(crate) const WIDTH: f32 = layout::WIDTH;
+
     pub(crate) fn spawn(world: &mut World, assets: &Assets) -> Result<Self> {
         let Assets {
             characters,
@@ -63,16 +68,32 @@ impl Level {
     }
 
     /// Plays the level one fixed step: the enemies walk their spans and the hero does as the keys
-    /// say.
+    /// say. While the game is playing, the shots land and the hero meets what it touches, which
+    /// changes `status`.
     pub(crate) fn update(
         &self,
         u: &mut Update<'_>,
         assets: &Assets,
         random: &mut Random,
-        status: CStatus,
+        status: &mut CStatus,
     ) -> Result<()> {
         enemies::update(u.world, u.physics, u.timer.dt());
-        player::update(u, &self.player, assets, random, status)
+        player::update(u, &self.player, assets, random, *status)?;
+        if status.outcome == Outcome::Playing {
+            shots::update(u, assets, random)?;
+            player::meet(u, &self.player, assets, random, status)?;
+        }
+        Ok(())
+    }
+
+    /// The hero's entity.
+    pub(crate) const fn hero(&self) -> Entity {
+        self.player.entity
+    }
+
+    /// Scrolls the background for the camera at `camera`, slower than the level.
+    pub(crate) fn scroll(&self, world: &mut World, camera: f32) -> Result<()> {
+        background::scroll(world, &self.background, camera)
     }
 
     /// The status to play this update on, or `None` while there is nothing to play yet. When the
@@ -107,4 +128,13 @@ fn zone(size: Vec2) -> ColliderBuilder {
 fn moved(size: Vec2) -> (RigidBodyBuilder, ColliderBuilder) {
     let body = RigidBodyBuilder::kinematic_velocity_based();
     (body, zone(size))
+}
+
+/// The entities with a collider touching `shape` at `position`.
+fn touching(physics: &physics::World, shape: &dyn Shape, position: Vec2) -> Vec<Entity> {
+    physics
+        .overlap_shape(shape, Pose::from_translation(position))
+        .into_iter()
+        .filter_map(|collider| entity_of(physics, collider))
+        .collect()
 }
