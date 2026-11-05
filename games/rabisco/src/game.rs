@@ -1,7 +1,7 @@
 use olivia::{
     Game, Result, Setup, Update,
     audio::Cue,
-    ecs::CClear,
+    ecs::{CClear, Entity},
     math::{Color, Vec2},
     window::WindowEvent,
 };
@@ -29,6 +29,8 @@ pub struct Rabisco {
     camera: Camera,
     level: Level,
     hud: Hud,
+    /// The entity with the game's `CStatus`.
+    status: Entity,
 }
 
 impl Rabisco {
@@ -62,6 +64,7 @@ impl Game for Rabisco {
             camera,
             level,
             hud,
+            status,
         })
     }
 
@@ -69,6 +72,13 @@ impl Game for Rabisco {
         if u.events.contains(&WindowEvent::CloseRequested) {
             u.quit();
         }
+        let Some(_status) =
+            self.level
+                .ready_to_play(u.world, u.input, &self.assets, self.status)?
+        else {
+            return Ok(());
+        };
+
         Ok(())
     }
 }

@@ -10,11 +10,15 @@ mod terrain;
 
 use olivia::{
     Result,
-    ecs::{ColliderBuilder, RigidBodyBuilder, World},
+    ecs::{CBody, ColliderBuilder, Entity, RigidBodyBuilder, World},
+    input::{Input, Key},
     math::Vec2,
 };
 
-use crate::assets::Assets;
+use crate::{
+    assets::Assets,
+    status::{CStatus, Outcome},
+};
 
 /// What a new game replaces.
 struct CActor;
@@ -46,6 +50,37 @@ impl Level {
             player,
             goal,
         })
+    }
+
+    pub(crate) fn restart(&mut self, world: &mut World, assets: &Assets) -> Result<()> {
+        let actors: Vec<Entity> = world.query::<Entity>().with::<&CActor>().iter().collect();
+        for actor in actors {
+            world.despawn(actor)?;
+        }
+        self.player = player::spawn(world, &assets.characters);
+        Ok(())
+    }
+
+    /// The status to play this update on, or `None` while there is nothing to play yet. When the
+    /// last game has ended and Enter is pressed, it starts a new one first, and gives `None` until
+    /// the new hero has its body, which the physics adds on the step after its entity.
+    pub(crate) fn ready_to_play(
+        &mut self,
+        world: &mut World,
+        input: &Input,
+        assets: &Assets,
+        status: Entity,
+    ) -> Result<Option<CStatus>> {
+        let mut current = *world.get::<&CStatus>(status)?;
+        if current.outcome != Outcome::Playing && input.pressed(Key::Enter) {
+            self.restart(world, assets)?;
+            current = CStatus::new();
+            *world.get::<&mut CStatus>(status)? = current;
+        }
+        if !world.satisfies::<&CBody>(self.player.entity) {
+            return Ok(None);
+        }
+        Ok(Some(current))
     }
 }
 

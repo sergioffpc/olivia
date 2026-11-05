@@ -46,8 +46,7 @@ impl CHero {
 
 #[derive(Debug)]
 pub(super) struct Player {
-    #[expect(dead_code, reason = "read once the update phase moves the hero")]
-    entity: Entity,
+    pub(super) entity: Entity,
 }
 
 /// The hero, standing on the ground at the first checkpoint.
