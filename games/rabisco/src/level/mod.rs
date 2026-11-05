@@ -3,39 +3,49 @@
 mod background;
 mod coins;
 mod enemies;
+mod goal;
 mod layout;
 mod player;
 mod terrain;
 
 use olivia::{
+    Result,
     ecs::{ColliderBuilder, RigidBodyBuilder, World},
     math::Vec2,
 };
 
-use crate::assets::{Characters, Textures};
+use crate::assets::{Animations, Characters, Textures};
 
 /// What a new game replaces.
 struct CActor;
 
 #[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "read once the update phase scrolls and moves the hero"
-)]
+#[expect(dead_code, reason = "read once the update phase plays the level")]
 pub(crate) struct Level {
     background: Vec<background::Tile>,
     player: player::Player,
+    goal: goal::Goal,
 }
 
 impl Level {
-    pub(crate) fn spawn(world: &mut World, characters: &Characters, textures: &Textures) -> Self {
+    pub(crate) fn spawn(
+        world: &mut World,
+        animations: &Animations,
+        characters: &Characters,
+        textures: &Textures,
+    ) -> Result<Self> {
         let background = background::spawn(world, &textures.background);
         terrain::spawn(world, &textures.platform);
         enemies::spawn(world, textures);
         coins::spawn(world, &textures.coin);
+        let goal = goal::spawn(world, animations, characters, textures)?;
         let player = player::spawn(world, characters);
 
-        Self { background, player }
+        Ok(Self {
+            background,
+            player,
+            goal,
+        })
     }
 }
 

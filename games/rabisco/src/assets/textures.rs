@@ -20,7 +20,6 @@ pub(crate) struct Textures {
     #[expect(dead_code, reason = "shown once the hero double jumps")]
     pub(crate) fart: Texture,
     pub(crate) coin: Texture,
-    #[expect(dead_code, reason = "shown once the level has the princess")]
     pub(crate) goal: Texture,
     pub(crate) crawl: Texture,
     pub(crate) roll: Texture,

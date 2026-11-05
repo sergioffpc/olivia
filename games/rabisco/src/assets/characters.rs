@@ -15,14 +15,14 @@ use crate::depth;
 
 /// Parts are 8 pixels per millimetre of sheet: this turns them into metres.
 const PART_SCALE: f32 = 0.0011;
-/// How far the hero's feet are under its root joint as drawn, in metres: measured on
+/// How far the feet of a character standing as drawn are under its root joint, in metres. Every
+/// character follows the same body sheet, `tools/make_sheets.py`, so they share it: measured on
 /// `skeletons/hero.json` at [`PART_SCALE`], and so to measure again when either changes.
-pub(crate) const HERO_ROOT_HEIGHT: f32 = 0.88;
+pub(crate) const ROOT_HEIGHT: f32 = 0.88;
 
 #[derive(Debug)]
 pub(crate) struct Characters {
     pub(crate) hero: Character,
-    #[expect(dead_code, reason = "spawned once the level has the princess")]
     pub(crate) princess: Character,
 }
 

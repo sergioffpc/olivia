@@ -26,6 +26,11 @@ pub(super) const PLATFORMS: [Rect; 10] = [
     Rect::new(34.4, 3.8, 3.0, 0.34),
 ];
 
+/// The x of the cage the princess is held in, standing on the ground.
+pub(super) const GOAL: f32 = 41.5;
+/// How near the cage the hero comes before the princess calls for help.
+pub(super) const HELP_DISTANCE: f32 = 5.2;
+
 /// Where the hero starts over after a fall, on the ground: the last one passed.
 pub(super) const CHECKPOINTS: [f32; 4] = [1.2, 15.6, 26.2, 33.0];
 

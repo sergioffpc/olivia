@@ -59,7 +59,7 @@ impl Game for Rabisco {
 
         s.world.spawn((CClear(Color::BLUE),));
         let camera = Camera::spawn(s.world);
-        let level = Level::spawn(s.world, &characters, &textures);
+        let level = Level::spawn(s.world, &animations, &characters, &textures)?;
         let status = status::spawn(s.world);
         let hud = Hud::spawn(s.world, &textures, status);
 
