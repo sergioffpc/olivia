@@ -215,7 +215,8 @@ def main():
     story = [(f"H{i}", question, hint, label) for i, (question, hint, label) in enumerate(STORY, 1)]
     write("cartoes_historia.pdf", "Cartões da história", story, story_card)
 
-    tasks = [(SOUND_COLOUR, "SOM", f"S{i}", t, None, task, label + ".wav")
+    # A sound may be recorded many times, as numbered takes the game picks one of at random.
+    tasks = [(SOUND_COLOUR, "SOM", f"S{i}", t, None, task, label + ("_N.wav" if label.startswith("sounds/") else ".wav"))
              for i, (t, task, label) in enumerate(SOUNDS, 1)]
     tasks += [(MOVE_COLOUR, "MOVIMENTO", f"M{i}", t, who, task, label + ".json")
               for i, (t, who, task, label) in enumerate(MOVES, 1)]

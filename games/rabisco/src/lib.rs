@@ -22,6 +22,7 @@ pub const GRAVITY: f32 = 9.81;
 pub struct Rabisco {
     animations: Animations,
     sounds: Sounds,
+    random: Random,
     textures: Textures,
 
     camera: Entity,
@@ -61,6 +62,7 @@ impl Game for Rabisco {
         Ok(Self {
             animations,
             sounds,
+            random: Random::from_clock(),
             textures,
             camera,
         })
@@ -108,35 +110,117 @@ impl Animations {
 }
 
 pub struct Sounds {
-    jump: Sound,
-    fart: Sound,
-    shoot: Sound,
-    hit: Sound,
-    pickup: Sound,
-    hurt: Sound,
-    gameover: Sound,
-    help: Sound,
-    win: Sound,
+    jump: Takes,
+    fart: Takes,
+    shoot: Takes,
+    hit: Takes,
+    pickup: Takes,
+    hurt: Takes,
+    gameover: Takes,
+    help: Takes,
+    win: Takes,
 }
 
 impl Sounds {
     fn load(filesystem: &Filesystem, audio: &mut Audio) -> Result<Self> {
         Ok(Self {
-            jump: Sounds::read(filesystem, audio, "hero_jump")?,
-            fart: Sounds::read(filesystem, audio, "hero_fart")?,
-            shoot: Sounds::read(filesystem, audio, "hero_shoot")?,
-            hit: Sounds::read(filesystem, audio, "hit")?,
-            pickup: Sounds::read(filesystem, audio, "pickup")?,
-            hurt: Sounds::read(filesystem, audio, "hero_hurt")?,
-            gameover: Sounds::read(filesystem, audio, "gameover")?,
-            help: Sounds::read(filesystem, audio, "princess_help")?,
-            win: Sounds::read(filesystem, audio, "hero_win")?,
+            jump: Takes::read(filesystem, audio, "hero_jump")?,
+            fart: Takes::read(filesystem, audio, "hero_fart")?,
+            shoot: Takes::read(filesystem, audio, "hero_shoot")?,
+            hit: Takes::read(filesystem, audio, "hit")?,
+            pickup: Takes::read(filesystem, audio, "pickup")?,
+            hurt: Takes::read(filesystem, audio, "hero_hurt")?,
+            gameover: Takes::read(filesystem, audio, "gameover")?,
+            help: Takes::read(filesystem, audio, "princess_help")?,
+            win: Takes::read(filesystem, audio, "hero_win")?,
         })
     }
+}
 
-    fn read(filesystem: &Filesystem, audio: &mut Audio, name: &str) -> Result<Sound> {
-        let bytes = read(filesystem, &format!("sounds/{name}.wav"))?;
-        Ok(audio.sound(bytes.unwrap_or_else(silence))?)
+/// The recordings of one sound, `sounds/{name}_1.wav`, `sounds/{name}_2.wav` and on, as the sound
+/// page numbers them, with any number missing: each time the sound plays, it is one of them at
+/// random.
+#[derive(Debug)]
+pub struct Takes(Vec<Sound>);
+
+impl Takes {
+    fn read(filesystem: &Filesystem, audio: &mut Audio, name: &str) -> Result<Self> {
+        let files = match filesystem.list("sounds") {
+            Ok(files) => files,
+            Err(filesystem::Error::NotFound(_)) => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        let mut takes = Vec::new();
+        for path in files.iter().filter(|path| is_take(path, name)) {
+            takes.push(audio.sound(filesystem.read(path)?)?);
+        }
+        if takes.is_empty() {
+            tracing::warn!(path = take_path(name, 1), "missing asset, using a default");
+            takes.push(audio.sound(silence())?);
+        }
+        Ok(Self(takes))
+    }
+
+    /// One of the recordings, at random.
+    #[must_use]
+    pub fn pick(&self, random: &mut Random) -> &Sound {
+        &self.0[random.below(self.0.len())]
+    }
+}
+
+fn take_path(name: &str, n: usize) -> String {
+    format!("sounds/{name}_{n}.wav")
+}
+
+/// Whether `path` is a take of the sound `name`: `sounds/{name}_` and a number from 1, without
+/// leading zeros, then `.wav`.
+fn is_take(path: &str, name: &str) -> bool {
+    let number = path
+        .strip_prefix("sounds/")
+        .and_then(|rest| rest.strip_prefix(name))
+        .and_then(|rest| rest.strip_prefix('_'))
+        .and_then(|rest| rest.strip_suffix(".wav"));
+    number.is_some_and(|n| {
+        !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit())
+    })
+}
+
+/// A small generator of numbers that only look random, enough to vary what the game plays:
+/// xorshift64*, seeded from the clock.
+#[derive(Debug)]
+pub struct Random(u64);
+
+impl Random {
+    #[must_use]
+    pub fn from_clock() -> Self {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos());
+        #[allow(clippy::cast_possible_truncation)] // the low bits vary the most
+        Self::new(nanos as u64)
+    }
+
+    /// The same numbers for the same seed.
+    #[must_use]
+    pub fn new(seed: u64) -> Self {
+        // Zero would give only zeros.
+        Self(seed | 1)
+    }
+
+    pub fn next_u64(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+
+    /// A number from 0 up to, but not including, `n`, which must not be 0.
+    pub fn below(&mut self, n: usize) -> usize {
+        assert!(n > 0, "no number is below 0");
+        // The high bits are the best ones; the bias over 64 bits is too small to hear.
+        #[allow(clippy::cast_possible_truncation)]
+        let pick = ((u128::from(self.next_u64()) * n as u128) >> 64) as usize;
+        pick
     }
 }
 
@@ -232,4 +316,48 @@ fn silence() -> Vec<u8> {
     wav.extend_from_slice(&DATA.to_le_bytes());
     wav.resize(44 + DATA as usize, 0);
     wav
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn takes_are_numbered_from_one() {
+        assert_eq!(take_path("hero_fart", 1), "sounds/hero_fart_1.wav");
+        assert_eq!(take_path("hero_fart", 12), "sounds/hero_fart_12.wav");
+    }
+
+    #[test]
+    fn takes_are_only_numbered_files_of_their_sound() {
+        assert!(is_take("sounds/hero_jump_1.wav", "hero_jump"));
+        assert!(is_take("sounds/hero_jump_12.wav", "hero_jump"));
+        assert!(!is_take("sounds/hero_jump.wav", "hero_jump"));
+        assert!(!is_take("sounds/hero_jump_01.wav", "hero_jump"));
+        assert!(!is_take("sounds/hero_jump_x.wav", "hero_jump"));
+        assert!(!is_take("sounds/hero_jump_extra_1.wav", "hero_jump"));
+        assert!(!is_take("sounds/hero_jump_1.wav", "hero"));
+    }
+
+    #[test]
+    fn random_picks_every_take_and_stays_in_range() {
+        let mut random = Random::new(7);
+        let mut seen = [0; 3];
+        for _ in 0..3000 {
+            seen[random.below(3)] += 1;
+        }
+        assert!(seen.iter().all(|&n| n > 800), "{seen:?}");
+    }
+
+    #[test]
+    fn random_repeats_for_the_same_seed() {
+        let a: Vec<_> = std::iter::repeat_with({
+            let mut r = Random::new(42);
+            move || r.next_u64()
+        })
+        .take(5)
+        .collect();
+        let mut r = Random::new(42);
+        assert_eq!(a, (0..5).map(|_| r.next_u64()).collect::<Vec<_>>());
+    }
 }

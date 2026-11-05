@@ -8,7 +8,9 @@ The boxes of the hero and of who is saved follow the humanoid convention of the 
 spec (#82), with the sizes measured on the original template: one box per part, a black dot where
 the part joins the one above it, and ticks outside the arm and leg boxes at the elbow and knee.
 The sheets are in Portuguese, the language of the class; the label at the top right of each sheet
-is where its drawings go under `assets/`. Run it with `uv run tools/make_sheets.py`.
+is where its drawings go under `assets/`. The drawing page, `tools/picture/capture.html`, finds the
+boxes on a photo of a whole sheet from where they lie here, so it keeps the same layout: change both
+together. Run it with `uv run tools/make_sheets.py`.
 """
 
 from pathlib import Path

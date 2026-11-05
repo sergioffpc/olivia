@@ -6,6 +6,12 @@
 
 ## Abrir
 
+As páginas funcionam sem rede. Só a primeira vez, depois de clonar, é preciso descarregar o MediaPipe e o modelo de pose da captura de movimentos, uns 28 MB que o git deixa de fora:
+
+```sh
+uv run games/rabisco/tools/fetch_vendor.py
+```
+
 Serve a pasta a partir de localhost, onde o browser deixa usar a câmara e o microfone:
 
 ```sh
@@ -16,14 +22,15 @@ Abre <http://localhost:8000/> no Chrome ou no Edge, e não no Simple Browser do 
 
 ## Pasta assets
 
-Primeiro escolhe `games/rabisco/assets` lá em cima: todas as páginas a usam. A página verifica que tem as pastas do jogo, `animations/`, `musics/`, `sounds/` e `textures/`, e guarda-a até ser recarregada. Cada página guarda os ficheiros com o nome e a pasta que o cartão ou a folha imprime em baixo ou no canto superior direito:
+Primeiro escolhe `games/rabisco/assets` lá em cima: todas as páginas a usam. A página verifica que tem as pastas do jogo, `animations/`, `musics/`, `skeletons/`, `sounds/` e `textures/`, e guarda-a até ser recarregada. Cada página guarda os ficheiros com o nome e a pasta que o cartão ou a folha imprime em baixo ou no canto superior direito:
 
 | Pasta | O que tem |
 |---|---|
 | `animations/` | Os movimentos, como `animations/hero_walk.json` |
-| `sounds/` | Os sons, como `sounds/hero_jump.wav` |
+| `sounds/` | Os sons, com um número no fim, como `sounds/hero_jump_1.wav` e `sounds/hero_jump_2.wav` |
 | `musics/` | A música, `musics/music.wav` |
-| `textures/` | Os desenhos, como `textures/coin.png`, e as personagens, com o nome da personagem à frente: `textures/hero_head.png`, `textures/hero_skeleton.json` |
+| `skeletons/` | O esqueleto de cada personagem, como `skeletons/hero.json`: onde as partes se ligam |
+| `textures/` | Os desenhos, como `textures/coin.png`, e as personagens, com o nome da personagem à frente: `textures/hero_head.png` |
 
 Gravar, tirar uma foto e guardar esperam pela pasta. A pré-visualização só a lê, e acompanha-a: o que as outras páginas lá guardam aparece logo.
 
@@ -31,7 +38,7 @@ Os browsers sem acesso a pastas, como o Firefox e o Safari, passam sem ela nas p
 
 ## Captura de movimentos
 
-**Movimentos**, `mocap/capture.html`, grava um cartão de movimento a partir da webcam e guarda-o como um ficheiro de animação para o jogo. Vai buscar o MediaPipe e o seu modelo de pose à rede quando abre; as outras páginas não precisam de rede.
+**Movimentos**, `mocap/capture.html`, grava um cartão de movimento a partir da webcam e guarda-o como um ficheiro de animação para o jogo. Usa o MediaPipe e o seu modelo de pose, que ficam em `mocap/vendor/`.
 
 ### Gravar
 
@@ -58,7 +65,7 @@ A vista da esquerda repete a câmara com a pose detetada. A da direita é um bon
 
 ## Captura de sons
 
-**Sons**, `sound/capture.html`, grava um cartão de som a partir do microfone e guarda-o como um ficheiro de som para o jogo: mono, 16 bits, 22 050 Hz, como os outros ficheiros de `assets/sounds/`.
+**Sons**, `sound/capture.html`, grava um cartão de som a partir do microfone e guarda-o como um ficheiro de som para o jogo: mono, 16 bits, 22 050 Hz, como os outros ficheiros de `assets/sounds/`. Um som pode ser gravado muitas vezes, por quem quiser: cada gravação fica com o seu número, e o jogo toca uma delas ao acaso sempre que o som toca.
 
 ### Gravar
 
@@ -82,23 +89,27 @@ A vista de cima é a gravação, com as partes cortadas sombreadas; a de baixo �
 
 ### Guardar
 
-**Guardar** escreve o ficheiro do cartão dentro da pasta assets, como `sounds/hero_jump.wav`, por cima do som que lá estava. A música vai para `musics/music.wav`. Os browsers sem acesso a pastas descarregam o ficheiro.
+**Guardar** escreve uma gravação nova dentro da pasta assets, com o número a seguir ao da última, como `sounds/hero_jump_3.wav` depois de `sounds/hero_jump_1.wav` e `sounds/hero_jump_2.wav`. A escolha ao lado de **Guardar** também a pode pôr por cima de uma gravação que já lá está; para tirar uma, apaga o seu ficheiro. A música é uma só, `musics/music.wav`, e é substituída. Os browsers sem acesso a pastas descarregam o ficheiro, que fica com o número 1: muda-o para o número a seguir ao da última gravação.
 
 ## Captura de desenhos
 
-**Desenhos**, `picture/capture.html`, fotografa uma caixa de uma folha de desenho, recorta o desenho do papel e guarda-o como a imagem do jogo, ao tamanho do ficheiro que substitui.
+**Desenhos**, `picture/capture.html`, fotografa uma folha de desenho inteira, encontra cada uma das suas caixas, recorta os desenhos do papel e guarda-os como as imagens do jogo, ao tamanho dos ficheiros que substituem.
 
 ### Fotografar
 
-1. Escolhe o desenho das folhas de `docs/folhas_para_desenhar.pdf`, com os nomes dos seus títulos. Um braço ou uma perna é um só desenho que a página corta nas quatro partes, esquerda e direita.
-2. Segura a folha direita à frente da câmara, com só a caixa desse desenho à vista e um pouco de papel à volta. A página desenha a caixa a verde quando encontra o seu contorno impresso.
-3. Carrega em **Tirar foto**. Uma foto tirada com um telemóvel também serve: **Abrir uma foto**, ou larga-a na página.
+1. Escolhe a folha de `docs/folhas_para_desenhar.pdf`, pelo seu título. A página conhece onde ficam as caixas de cada folha: a cabeça, o tronco, os braços e as pernas de uma personagem, os dez números ou as duas vidas.
+2. Segura a folha inteira direita à frente da câmara, com todas as caixas à vista. Cada caixa fica contornada a verde, com o seu nome, quando a página encontra o seu contorno impresso.
+3. Com **Tirar sozinha**, ligada à partida, a página tira a foto assim que estão todas verdes e a folha fica quieta por quase um segundo; uma barra verde em baixo mostra quanto falta. Depois de uma foto, só volta a tirar outra sozinha quando a folha sair da vista. Sem ela, ou a qualquer momento, carrega em **Tirar foto**.
+
+Uma foto tirada com um telemóvel também serve, e tem mais pormenor do que uma webcam, que numa folha inteira dá poucos píxeis a cada caixa: **Abrir uma foto**, ou larga-a na página.
+
+Uma caixa cujo contorno não se vê, como quando um desenho sai por cima dele, é posta pelas outras, no sítio onde a folha a imprime.
 
 ### Rever
 
-A vista da esquerda é a foto: arrasta os cantos para os cantos da caixa quando a página não os acertou, e **Procurar a caixa outra vez** para recomeçar. A da direita é a imagem que o jogo recebe, sobre um xadrez onde é transparente. Num braço ou numa perna, uma linha tracejada marca onde dobra.
+A vista da esquerda é a foto, com cada caixa: a verde as encontradas, a laranja as postas pelas outras. Arrasta os cantos de uma caixa para os cantos impressos quando a página não os acertou, e **Procurar as caixas outra vez** para recomeçar. À direita estão as imagens que o jogo recebe, sobre um xadrez onde são transparentes; desmarca as que não são para guardar. Num braço ou numa perna, uma linha tracejada marca onde dobra.
 
-Os estilos definem as cores e o aspeto de uma só vez: **Como desenhado**, **Colorido**, **Desenho animado**, **Pixel art** e **Autocolante**.
+Os estilos e as definições valem para todos os desenhos da folha, e definem as cores e o aspeto de uma só vez: **Como desenhado**, **Colorido**, **Desenho animado**, **Pixel art** e **Autocolante**.
 
 | Definição | O que faz |
 |---|---|
@@ -118,7 +129,7 @@ A página guarda cada desenho ao tamanho do seu ficheiro, por isso uma caixa dev
 
 ### Guardar
 
-**Guardar** escreve os ficheiros do desenho dentro da pasta assets, por cima dos que lá estão. As partes de uma personagem levam o seu nome à frente, como `textures/hero_head.png` ou `textures/princess_torso.png`. Um braço ou uma perna escreve as suas quatro partes e muda os cotovelos ou os joelhos no esqueleto da personagem, `textures/hero_skeleton.json` ou `textures/princess_skeleton.json`, para onde o desenho foi cortado; o lançador do herói, `textures/hero_weapon.png`, é encolhido e rodado para ficar ao longo do antebraço, como o `games/astronaut-cat/tools/make_art.py` faz ao lançador. Um jogo a correr apanha-os através do hot reload. Os browsers sem acesso a pastas descarregam as imagens, e não conseguem atualizar o esqueleto.
+**Guardar** escreve os ficheiros dos desenhos marcados dentro da pasta assets, por cima dos que lá estão. As partes de uma personagem levam o seu nome à frente, como `textures/hero_head.png` ou `textures/princess_torso.png`. Cada braço e cada perna é cortado em dois no cotovelo ou no joelho: o da esquerda da folha dá as partes `_left`, tal como foi desenhado, e o da direita as partes `_right`. Os cotovelos e os joelhos mudam no esqueleto da personagem, `skeletons/hero.json` ou `skeletons/princess.json`, para onde o desenho foi cortado. O lançador do herói, `textures/hero_weapon.png`, é encolhido e rodado para ficar ao longo do antebraço, como o `games/astronaut-cat/tools/make_art.py` faz ao lançador. Um jogo a correr apanha-os através do hot reload. Os browsers sem acesso a pastas descarregam as imagens, e não conseguem atualizar o esqueleto.
 
 ## Pré-visualização
 
@@ -126,7 +137,7 @@ A página guarda cada desenho ao tamanho do seu ficheiro, por isso uma caixa dev
 
 ### Escolher
 
-1. Escolhe o movimento. Traz as imagens da sua personagem, o som que o seu cartão toca quando começa, e se se repete; cada um pode ser mudado, por isso as imagens da princesa podem experimentar o andar do herói.
+1. Escolhe o movimento. Traz as imagens da sua personagem, uma das gravações do som que o seu cartão toca quando começa, ao acaso como no jogo, e se se repete; cada um pode ser mudado, por isso as imagens da princesa podem experimentar o andar do herói.
 2. **Por cima** é um movimento tocado uma vez por cima, na sua própria tecla, como o jogo dispara enquanto anda ou salta. Só toca nas articulações que tem, com o seu próprio som.
 
 ### Tocar

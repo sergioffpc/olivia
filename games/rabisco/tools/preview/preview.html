@@ -120,28 +120,29 @@ const GHOST_ROWS = 3;
 const POLL_MS = 1000;
 
 // The movement cards of tools/make_cards.py, with their character's prefix and the sound the game
-// plays as each starts.
+// plays as each starts. A sound is its takes, sounds/hero_jump_1.wav, sounds/hero_jump_2.wav and on,
+// of which the game plays one at random.
 const CARDS = {
   "animations/hero_idle.json": { character: "textures/hero", name: "M1 Parado", loops: true },
   "animations/hero_walk.json": { character: "textures/hero", name: "M2 A andar", loops: true },
-  "animations/hero_jump.json": { character: "textures/hero", name: "M3 Saltar", loops: false, sound: "sounds/hero_jump.wav" },
-  "animations/hero_double_jump.json": { character: "textures/hero", name: "M4 Salto extra", loops: false, sound: "sounds/hero_fart.wav" },
-  "animations/hero_shoot.json": { character: "textures/hero", name: "M5 Disparar", loops: false, sound: "sounds/hero_shoot.wav" },
-  "animations/hero_hurt.json": { character: "textures/hero", name: "M6 Magoar-se", loops: false, sound: "sounds/hero_hurt.wav" },
-  "animations/hero_win.json": { character: "textures/hero", name: "M7 Vitória", loops: false, sound: "sounds/hero_win.wav" },
-  "animations/princess_calling.json": { character: "textures/princess", name: "M8 Socorro!", loops: true, sound: "sounds/princess_help.wav" },
-  "animations/princess_freed.json": { character: "textures/princess", name: "M9 Livre!", loops: false, sound: "sounds/hero_win.wav" },
+  "animations/hero_jump.json": { character: "textures/hero", name: "M3 Saltar", loops: false, sound: "sounds/hero_jump" },
+  "animations/hero_double_jump.json": { character: "textures/hero", name: "M4 Salto extra", loops: false, sound: "sounds/hero_fart" },
+  "animations/hero_shoot.json": { character: "textures/hero", name: "M5 Disparar", loops: false, sound: "sounds/hero_shoot" },
+  "animations/hero_hurt.json": { character: "textures/hero", name: "M6 Magoar-se", loops: false, sound: "sounds/hero_hurt" },
+  "animations/hero_win.json": { character: "textures/hero", name: "M7 Vitória", loops: false, sound: "sounds/hero_win" },
+  "animations/princess_calling.json": { character: "textures/princess", name: "M8 Socorro!", loops: true, sound: "sounds/princess_help" },
+  "animations/princess_freed.json": { character: "textures/princess", name: "M9 Livre!", loops: false, sound: "sounds/hero_win" },
 };
 const SOUNDS = {
-  "sounds/hero_jump.wav": "S1 O herói salta",
-  "sounds/hero_fart.wav": "S2 O salto extra",
-  "sounds/hero_shoot.wav": "S3 O herói dispara",
-  "sounds/hit.wav": "S4 Acertou num mau",
-  "sounds/pickup.wav": "S5 Apanhou uma coisa",
-  "sounds/hero_hurt.wav": "S6 O herói magoa-se",
-  "sounds/gameover.wav": "S7 Fim do jogo",
-  "sounds/princess_help.wav": "S8 Socorro!",
-  "sounds/hero_win.wav": "S9 Vitória",
+  "sounds/hero_jump": "S1 O herói salta",
+  "sounds/hero_fart": "S2 O salto extra",
+  "sounds/hero_shoot": "S3 O herói dispara",
+  "sounds/hit": "S4 Acertou num mau",
+  "sounds/pickup": "S5 Apanhou uma coisa",
+  "sounds/hero_hurt": "S6 O herói magoa-se",
+  "sounds/gameover": "S7 Fim do jogo",
+  "sounds/princess_help": "S8 Socorro!",
+  "sounds/hero_win": "S9 Vitória",
   "musics/music.wav": "S10 A música",
 };
 // The game fires over the walk, the stand and the jumps.
@@ -200,10 +201,13 @@ const readSound = async (file) => audio().decodeAudioData(await file.arrayBuffer
 
 // ---------- Character ----------
 
+/** A character's skeleton, from the prefix of its pictures: textures/hero is skeletons/hero.json. */
+const skeletonOf = (folder) => `skeletons/${folder.slice("textures/".length)}.json`;
+
 /** A character's skeleton with its pictures, as the game's Character holds it: `textures/hero` is
- * `textures/hero_skeleton.json` with `textures/hero_head.png` and the other parts. */
+ * `skeletons/hero.json` with `textures/hero_head.png` and the other parts. */
 async function loadCharacter(folder) {
-  const skeleton = await load(`${folder}_skeleton.json`, readJson);
+  const skeleton = await load(skeletonOf(folder), readJson);
   const entries = skeleton.joints;
   const missing = [];
   const joints = await Promise.all(entries.map(async (entry) => {
@@ -219,7 +223,7 @@ async function loadCharacter(folder) {
   for (let next = 0; next < walk.length; next++) {
     joints.forEach((joint, index) => joint.parent === walk[next] && walk.push(index));
   }
-  if (walk.length !== joints.length) throw new Error(`${folder}_skeleton.json não forma uma só árvore`);
+  if (walk.length !== joints.length) throw new Error(`${skeletonOf(folder)} não forma uma só árvore`);
   const character = { folder, joints, walk, missing };
   character.bounds = bounds(character, poses(character, joints.map(() => 0)));
   return character;
@@ -443,10 +447,16 @@ function fillChoices() {
     for (const [value, label] of options) select.add(new Option(label, value));
     if ([...select.options].some((option) => option.value === kept)) select.value = kept;
   };
-  const characters = paths.filter((p) => p.endsWith("_skeleton.json")).map((p) => p.slice(0, -"_skeleton.json".length));
+  const characters = paths
+    .filter((p) => p.startsWith("skeletons/") && p.endsWith(".json"))
+    .map((p) => `textures/${p.slice("skeletons/".length, -".json".length)}`);
   const animations = paths.filter((p) => p.startsWith("animations/") && p.endsWith(".json"));
   const sounds = paths.filter((p) => p.endsWith(".wav"));
-  const named = (path, names) => [path, names[path] ? `${names[path].name ?? names[path]} (${path})` : path];
+  const named = (path, names) => {
+    const take = path.match(/^(sounds\/\w+)_(\d+)\.wav$/);
+    if (take && names[take[1]]) return [path, `${names[take[1]]}, gravação ${take[2]} (${path})`];
+    return [path, names[path] ? `${names[path].name ?? names[path]} (${path})` : path];
+  };
   fill($("character"), characters.map((folder) => [folder, folder.slice("textures/".length)]));
   fill($("animation"), animations.map((path) => named(path, CARDS)));
   fill($("sound"), sounds.map((path) => named(path, SOUNDS)), "Sem som");
@@ -463,7 +473,8 @@ async function opened() {
   $("settingsSection").hidden = false;
   if (first) {
     if (files.has(OVERLAY)) $("overlay").value = OVERLAY;
-    if (files.has(CARDS[OVERLAY].sound)) $("overlaySound").value = CARDS[OVERLAY].sound;
+    const take = anyTake(CARDS[OVERLAY].sound);
+    if (take) $("overlaySound").value = take;
     if (files.has("animations/hero_walk.json")) $("animation").value = "animations/hero_walk.json";
     animationChosen();
   }
@@ -472,17 +483,24 @@ async function opened() {
 
 // ---------- Choices ----------
 
-/** A movement picks its own character's pictures, its card's sound and whether it loops. */
+/** One of a sound's takes, at random as the game picks it, or null when none was recorded. */
+function anyTake(stem) {
+  const takes = [...files.keys()].filter((path) => new RegExp(`^${stem}_\\d+\\.wav$`).test(path));
+  return takes.length ? takes[Math.floor(Math.random() * takes.length)] : null;
+}
+
+/** A movement picks its own character's pictures, one of its card's sounds and whether it loops. */
 function animationChosen() {
   const path = $("animation").value;
   const card = CARDS[path];
   const folder = card?.character;
   if ([...$("character").options].some((option) => option.value === folder)) $("character").value = folder;
-  $("sound").value = card?.sound && files.has(card.sound) ? card.sound : "";
+  const take = card?.sound && anyTake(card.sound);
+  $("sound").value = take || "";
   $("loop").checked = card?.loops ?? true;
   $("everyLoop").checked = true;
   showSettings();
-  const lacking = card?.sound && !files.has(card.sound) ? `${card.sound} ainda não foi gravado.` : "";
+  const lacking = card?.sound && !take ? `${card.sound}_1.wav ainda não foi gravado.` : "";
   status("pickStatus", lacking, Boolean(lacking));
   refresh(true);
 }
@@ -504,7 +522,7 @@ async function reload(chosen) {
   const path = $("animation").value;
   if (!folder || !path) return;
   const was = character;
-  const skeletonFile = loaded.get(`${folder}_skeleton.json`);
+  const skeletonFile = loaded.get(skeletonOf(folder));
   const heard = sound;
   try {
     character = await loadCharacter(folder);
@@ -520,7 +538,7 @@ async function reload(chosen) {
   overlaySound = $("overlaySound").value ? await load($("overlaySound").value, readSound) : null;
   scenery = files.has(SCENERY) ? await load(SCENERY, readImage) : null;
 
-  const other = was?.folder !== folder || skeletonFile !== loaded.get(`${folder}_skeleton.json`);
+  const other = was?.folder !== folder || skeletonFile !== loaded.get(skeletonOf(folder));
   try {
     if (chosen || other || !base || base.path !== path) {
       const from = !chosen || !was || other || !base ? null : angles();
@@ -553,7 +571,7 @@ setInterval(async () => {
     const before = [...files.keys()].join();
     files = found;
     if ([...found.keys()].join() !== before) fillChoices();
-    const used = [`${$("character").value}_skeleton.json`, $("animation").value, $("overlay").value,
+    const used = [skeletonOf($("character").value), $("animation").value, $("overlay").value,
       $("sound").value, $("overlaySound").value];
     let changed = false;
     for (const path of loaded.keys()) {
