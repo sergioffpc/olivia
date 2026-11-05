@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use olivia::ecs::{Clear, Hud, Sprite, Transform};
+use olivia::ecs::{CClear, CHud, CSprite, CTransform};
 use olivia::graphics::Graphics;
 use olivia::math::{Color, Vec2};
 use olivia::window::Window;
@@ -18,9 +18,9 @@ impl Game for Clears {
     fn load(s: Setup<'_>) -> Result<Self> {
         handle(s.graphics);
         let texture = s.graphics.texture_rgba(1, 1, &[255; 4])?;
-        s.world.spawn((Clear(Color::RED),));
+        s.world.spawn((CClear(Color::RED),));
         s.world
-            .spawn((Hud, Transform::at(1.0, 2.0), Sprite::new(texture)));
+            .spawn((CHud, CTransform::at(1.0, 2.0), CSprite::new(texture)));
         Ok(Self)
     }
 

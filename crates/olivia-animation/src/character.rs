@@ -125,10 +125,8 @@ impl Character {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Filesystem`] if a file is missing or cannot be read, [`Error::Json`] if
-    /// `skeleton.json` is malformed, [`Error::UnknownVersion`] if it has a version this reader does
-    /// not know, [`Error::InvalidSkeleton`] if its joints do not form a tree with one root and one
-    /// joint per name and part, or [`Error::Graphics`] if an image cannot be decoded.
+    /// Returns [`Error::Filesystem`] if a file is missing or cannot be read, [`Error::Graphics`] if
+    /// an image cannot be decoded, or any error of [`Character::parse`].
     ///
     /// # Panics
     ///
@@ -138,10 +136,29 @@ impl Character {
         graphics: &mut Graphics,
         folder: &str,
     ) -> Result<Self, Error> {
-        let skeleton = skeleton::parse(&filesystem.read(&format!("{folder}/skeleton.json"))?)?;
+        let skeleton = filesystem.read(&format!("{folder}/skeleton.json"))?;
+        Self::parse(&skeleton, |part| {
+            let image = filesystem.read(&format!("{folder}/{part}.png"))?;
+            Ok(graphics.texture(&image)?)
+        })
+    }
+
+    /// Makes the character from the bytes of a skeleton file, asking `texture` for the image of
+    /// each part by the part's name, in the order of the file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Json`] if the skeleton is malformed, [`Error::UnknownVersion`] if it has a
+    /// version this reader does not know, or [`Error::InvalidSkeleton`] if its joints do not form
+    /// a tree with one root and one joint per name and part, all converted to `E`; or the first
+    /// error `texture` returns.
+    pub fn parse<E: From<Error>>(
+        skeleton: &[u8],
+        mut texture: impl FnMut(&str) -> Result<Texture, E>,
+    ) -> Result<Self, E> {
+        let skeleton = skeleton::parse(skeleton)?;
         let part = |joint: skeleton::Joint| {
-            let image = filesystem.read(&format!("{folder}/{}.png", joint.part))?;
-            let texture = graphics.texture(&image)?;
+            let texture = texture(&joint.part)?;
             Ok(Part {
                 name: joint.name,
                 origin: joint.point / texture.size(),
@@ -153,7 +170,7 @@ impl Character {
         let parts = skeleton.joints.into_iter().map(part);
         Ok(Self {
             draw: Draw::new(),
-            parts: parts.collect::<Result<_, Error>>()?,
+            parts: parts.collect::<Result<_, E>>()?,
             walk: skeleton.walk.into(),
             base: None,
             overlays: Vec::new(),

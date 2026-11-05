@@ -65,7 +65,7 @@ One thing in the world, defined only by its components.
 _Avoid_: Object, actor
 
 **Component**:
-A piece of data on an entity. Olivia acts on its own, such as `Transform`, `Sprite` and `Body`; a game can add any others.
+A piece of data on an entity. Olivia acts on its own, such as `CTransform`, `CSprite` and `CBody`; a game can add any others. A type made to be a component is named with a `C` prefix.
 _Avoid_: Property, attribute
 
 **Frame**:
@@ -81,7 +81,7 @@ What a frame gives for one camera, and the only thing that draws.
 _Avoid_: Layer, render pass
 
 **HUD**:
-The entities marked `Hud`, drawn in a phase of their own after the world, in logical pixels from the window's top-left corner, with no camera entity.
+The entities marked `CHud`, drawn in a phase of their own after the world, in logical pixels from the window's top-left corner, with no camera entity.
 _Avoid_: UI, overlay (an overlay is an animation)
 
 **Sound**:

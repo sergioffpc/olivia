@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Photographs a box of a drawing sheet, cuts it out and saves it as the game's picture.
+  Photographs a whole drawing sheet, finds each of its boxes, cuts the drawings out and saves them
+  as the game's pictures.
   Open it from the tools page, tools/index.html, which chooses the assets folder:
     python3 -m http.server 8000 --directory games/rabisco/tools
   then open http://localhost:8000/#picture.
@@ -28,11 +29,15 @@
   canvas { max-width: 100%; border-radius: 8px; display: block; }
   #liveCanvas, #photoCanvas { width: 100%; background: #000; }
   #photoCanvas { touch-action: none; cursor: crosshair; }
-  #resultCanvas {
-    max-height: 60vh; margin: 0 auto;
-    background: repeating-conic-gradient(#3a3e46 0 25%, #2a2d33 0 50%) 0 0 / 24px 24px;
+  #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; align-items: end; }
+  #results figure { margin: 0; display: grid; gap: 4px; }
+  #results canvas {
+    width: 100%; max-height: 40vh; object-fit: contain;
+    background: repeating-conic-gradient(#3a3e46 0 25%, #2a2d33 0 50%) 0 0 / 16px 16px;
   }
-  #resultCanvas.pixels { image-rendering: pixelated; }
+  #results canvas.pixels { image-rendering: pixelated; }
+  #results figcaption { font-size: 12px; color: var(--dim); }
+  #results figure.off canvas { opacity: .3; }
   select, button {
     font: inherit; color: var(--text); background: #262a31; border: 1px solid var(--line);
     border-radius: 6px; padding: 7px 12px; max-width: 100%;
@@ -47,6 +52,7 @@
   .settings label { display: grid; gap: 2px; }
   .settings label span { color: var(--dim); font-size: 12px; }
   .settings label.check { display: flex; gap: 8px; align-items: center; }
+  .check-inline { display: flex; gap: 6px; align-items: center; color: var(--dim); }
   .settings small { color: var(--dim); font-size: 12px; }
   .settings > div { display: grid; gap: 2px; align-content: start; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
@@ -57,9 +63,9 @@
 <body>
 <main>
   <section>
-    <h2>1 · Desenho</h2>
+    <h2>1 · Folha</h2>
     <div class="row">
-      <select id="card"></select>
+      <select id="sheet"></select>
       <span id="cardInfo" class="card"></span>
     </div>
   </section>
@@ -69,28 +75,29 @@
     <canvas id="liveCanvas" width="960" height="540"></canvas>
     <div class="row" style="margin-top:10px">
       <select id="camera" title="Câmara"></select>
+      <label class="check-inline"><input id="auto" type="checkbox" checked> Tirar sozinha</label>
       <button id="capture" class="primary" disabled>Tirar foto</button>
       <button id="openPhoto">Abrir uma foto</button>
       <input id="photoFile" type="file" accept="image/*" hidden>
       <span id="liveStatus" class="status">A ligar a câmara…</span>
     </div>
-    <p class="status">Segura a folha direita, só com a caixa do desenho à vista e um pouco de papel à volta. A caixa fica verde quando a página a encontra. Também serve uma foto tirada com o telemóvel: abre-a, ou larga-a na página.</p>
+    <p class="status">Segura a folha inteira direita à frente da câmara, com todas as caixas à vista. Cada caixa fica contornada a verde quando a página a encontra. Com <b>Tirar sozinha</b>, a foto é tirada assim que estão todas verdes e a folha fica quieta por um momento; sem ela, carrega em <b>Tirar foto</b>. Também serve uma foto tirada com o telemóvel, que tem mais pormenor: abre-a, ou larga-a na página.</p>
   </section>
 
   <section id="review" hidden>
     <h2>3 · Rever</h2>
     <div class="views">
       <div>
-        <h3>Foto: arrasta os cantos para os cantos da caixa</h3>
+        <h3>Foto: arrasta os cantos de uma caixa para os cantos impressos</h3>
         <canvas id="photoCanvas"></canvas>
       </div>
       <div>
-        <h3>Resultado: o que o jogo recebe</h3>
-        <canvas id="resultCanvas"></canvas>
+        <h3>Resultado: o que o jogo recebe; desmarca o que não é para guardar</h3>
+        <div id="results"></div>
       </div>
     </div>
     <div class="row" style="margin-top:10px">
-      <button id="findAgain">Procurar a caixa outra vez</button>
+      <button id="findAgain">Procurar as caixas outra vez</button>
       <span id="summary" class="status"></span>
     </div>
 
@@ -186,36 +193,64 @@ const MAX_PHOTO = 4000;
 const INK = [35, 30, 40];
 const WHITE = [250, 250, 245];
 
-// The sheets of docs/folhas_para_desenhar.pdf, from tools/make_sheets.py, named as printed. The
-// character boxes are measured, at 8 pixels per millimetre of sheet, as in
-// games/astronaut-cat/tools/make_art.py; single drawings are saved at their file's size, whose
-// shape the sheet's box keeps.
-const CARDS = [];
-for (const [folder, who] of [["hero", "O herói"], ["princess", "Quem é salvo"]]) {
-  CARDS.push(
-    { name: `${who}: cabeça`, file: `${folder}/head.png`, size: [511, 456] },
-    { name: `${who}: tronco`, file: `${folder}/torso.png`, size: [484, 654] },
-    { name: `${who}: braço`, size: [325, 654], limb: { folder, part: "arm", joint: "elbow", tick: 347 } },
-    { name: `${who}: perna`, size: [383, 570], limb: { folder, part: "leg", joint: "knee", tick: 307 } },
-  );
+// The sheets of docs/folhas_para_desenhar.pdf, from tools/make_sheets.py, named as printed. Each box
+// is [x, y, width, height] in millimetres, as the sheet prints it next to the others; only where the
+// boxes lie relative to each other matters. The character parts are measured, at 8 pixels per
+// millimetre of sheet, as in games/astronaut-cat/tools/make_art.py; single drawings are saved at
+// their file's size, whose shape the sheet's box keeps.
+const HEAD = [63.9, 57.0];
+const TORSO = [60.5, 81.75];
+const ARM = [40.6, 81.75];
+const LEG = [47.9, 71.25];
+const SHEETS = [];
+for (const [folder, name] of [["textures/hero", "O herói"], ["textures/princess", "Quem é salvo"]]) {
+  const torso = -TORSO[0] / 2;
+  const row = HEAD[1] + 8;
+  const legs = row + TORSO[1] + 8;
+  // The limb drawn on the left of the sheet is saved as it is drawn, as the left side; the one on
+  // the right, its mirror image, as the right side, so the two may differ.
+  const arm = (side) => ({ size: [325, 654], limb: { folder, part: "arm", joint: "elbow", tick: 347, side } });
+  const leg = (side) => ({ size: [383, 570], limb: { folder, part: "leg", joint: "knee", tick: 307, side } });
+  SHEETS.push({
+    name,
+    parts: [
+      { name: "cabeça", box: [-HEAD[0] / 2, 0, ...HEAD], file: `${folder}_head.png`, size: [511, 456] },
+      { name: "tronco", box: [torso, row, ...TORSO], file: `${folder}_torso.png`, size: [484, 654] },
+      { name: "braço da esquerda", box: [torso - 8 - ARM[0], row, ...ARM], ...arm("left") },
+      { name: "braço da direita", box: [torso + TORSO[0] + 8, row, ...ARM], ...arm("right") },
+      { name: "perna da esquerda", box: [-4 - LEG[0], legs, ...LEG], ...leg("left") },
+      { name: "perna da direita", box: [4, legs, ...LEG], ...leg("right") },
+    ],
+  });
 }
-CARDS.push(
+const single = (name, file, box, size, more) => ({ name, parts: [{ name, box: [0, 0, ...box], file, size, ...more }] });
+SHEETS.push(
   // Shrunk and turned to lie along the forearm when saved, as games/astronaut-cat/tools/make_art.py does.
-  { name: "O lançador do herói", file: "hero/weapon.png", size: [1333, 740], weapon: { scale: 0.45 } },
-  { name: "O que o herói dispara", file: "fx/projectile.png", size: [256, 256] },
-  { name: "A nuvem do pum", file: "fx/fart.png", size: [384, 384] },
-  { name: "Um mau que rasteja", file: "enemy_crawl.png", size: [860, 500] },
-  { name: "Um mau que rebola", file: "enemy_roll.png", size: [512, 512] },
-  { name: "Um mau que flutua", file: "enemy_float.png", size: [440, 600] },
-  { name: "O cenário", file: "level/background.png", size: [1920, 1114], paper: false },
-  { name: "O chão", file: "level/platform.png", size: [1024, 230], paper: false },
-  { name: "O que o herói apanha", file: "level/coin.png", size: [256, 256] },
+  single("O lançador do herói", "textures/hero_weapon.png", [166.6, 92.5], [1333, 740], { weapon: { scale: 0.45 } }),
+  single("O que o herói dispara", "textures/projectile.png", [130, 130], [256, 256]),
+  single("A nuvem do pum", "textures/fart.png", [150, 150], [384, 384]),
+  single("Um mau que rasteja", "textures/enemy_crawl.png", [190, 110], [860, 500]),
+  single("Um mau que rebola", "textures/enemy_roll.png", [170, 170], [512, 512]),
+  single("Um mau que flutua", "textures/enemy_float.png", [150, 205], [440, 600]),
+  single("O cenário", "textures/background.png", [277, 161], [1920, 1114], { paper: false }),
+  single("O chão", "textures/platform.png", [277, 62], [1024, 230], { paper: false }),
+  single("O que o herói apanha", "textures/coin.png", [130, 130], [256, 256]),
   // The bars of a cage leave gaps that must stay see-through.
-  { name: "Onde está preso", file: "level/goal.png", size: [440, 600], holes: false },
-  // The middle of a 0, 6, 8 or 9 is a hole too.
-  ...Array.from({ length: 10 }, (_, d) => ({ name: `Os números: ${d}`, file: `hud/digit_${d}.png`, size: [256, 256], holes: false })),
-  { name: "As vidas: uma vida", file: "hud/life.png", size: [256, 256] },
-  { name: "As vidas: uma vida perdida", file: "hud/life_lost.png", size: [256, 256] },
+  single("Onde está preso", "textures/goal.png", [150, 205], [440, 600], { holes: false }),
+  {
+    name: "Os números",
+    // Three to a row, 12 mm apart. The middle of a 0, 6, 8 or 9 is a hole too.
+    parts: Array.from({ length: 10 }, (_, d) => ({
+      name: `${d}`, box: [(d % 3) * 64, Math.floor(d / 3) * 64, 52, 52], file: `textures/hud_digit_${d}.png`, size: [256, 256], holes: false,
+    })),
+  },
+  {
+    name: "As vidas",
+    parts: [
+      { name: "uma vida", box: [0, 0, 80, 80], file: "textures/hud_life.png", size: [256, 256] },
+      { name: "uma vida perdida", box: [88.5, 0, 80, 80], file: "textures/hud_life_lost.png", size: [256, 256] },
+    ],
+  },
 );
 
 // The joints a limb bends at, as the page names them.
@@ -232,14 +267,14 @@ const LOOKS = {
 const $ = (id) => document.getElementById(id);
 const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 
-/** The files a card writes, under the assets folder. */
-function files(c) {
-  if (!c.limb) return [c.file];
-  const { folder, part } = c.limb;
-  return [
-    ...["upper", "lower"].flatMap((half) => ["left", "right"].map((side) => `${folder}/${half}_${part}_${side}.png`)),
-    `${folder}/skeleton.json`,
-  ];
+/** A character's skeleton, from the prefix of its pictures: textures/hero is skeletons/hero.json. */
+const skeletonOf = (folder) => `skeletons/${folder.slice("textures/".length)}.json`;
+
+/** The files a part of a sheet writes, under the assets folder. */
+function files(p) {
+  if (!p.limb) return [p.file];
+  const { folder, part, side } = p.limb;
+  return [`${folder}_upper_${part}_${side}.png`, `${folder}_lower_${part}_${side}.png`, skeletonOf(folder)];
 }
 
 /** The same numbers on every run, so moving a slider back gives back the same picture. */
@@ -264,11 +299,12 @@ function canvasOf(width, height) {
 const detect = canvasOf(1, 1).getContext("2d", { willReadFrequently: true });
 
 /**
- * The corners of the box's printed border in source, clockwise from the top left, or null.
- * The border is the largest thin dark line that does not touch the photo's edges: a drawing
- * touching it joins it, but stays inside, so the outermost points are still the border's corners.
+ * The corners of every box's printed border in source, each clockwise from the top left. A border
+ * is a thin dark line that does not touch the photo's edges and spans at least `least` of the
+ * photo's width or height: a drawing touching it joins it, but stays inside, so the outermost
+ * points are still the border's corners.
  */
-function findBox(source, maxSide) {
+function findBoxes(source, maxSide, least) {
   const sw = source.videoWidth ?? source.width;
   const sh = source.videoHeight ?? source.height;
   const scale = Math.min(1, maxSide / Math.max(sw, sh));
@@ -278,19 +314,34 @@ function findBox(source, maxSide) {
   detect.canvas.height = h;
   detect.drawImage(source, 0, 0, w, h);
   const { data } = detect.getImageData(0, 0, w, h);
+  return bordersIn(data, w, h, least).map((quad) => quad.map(([x, y]) => [(x + 0.5) / scale, (y + 0.5) / scale]));
+}
 
+/** The borders in RGBA pixels, as findBoxes finds them. */
+function bordersIn(data, w, h, least) {
   const grey = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) grey[i] = (0.299 * data[4 * i] + 0.587 * data[4 * i + 1] + 0.114 * data[4 * i + 2]) / 255;
-  // Darker than the paper around it: the mean over a window, from an integral image.
+  // Darker than the paper around it: the mean over a window of the pixels light enough to be
+  // paper, from integral images. The desk beside the sheet is left out, so it does not hide a
+  // line near the sheet's edge.
+  const light = otsu(grey);
   const W1 = w + 1;
   const sum = new Float64Array(W1 * (h + 1));
+  const paper = new Float64Array(W1 * (h + 1));
   for (let y = 0; y < h; y++) {
     let row = 0;
+    let rowPaper = 0;
     for (let x = 0; x < w; x++) {
-      row += grey[y * w + x];
+      const g = grey[y * w + x];
+      if (g > light) {
+        row += g;
+        rowPaper++;
+      }
       sum[(y + 1) * W1 + x + 1] = sum[y * W1 + x + 1] + row;
+      paper[(y + 1) * W1 + x + 1] = paper[y * W1 + x + 1] + rowPaper;
     }
   }
+  const box = (table, x0, y0, x1, y1) => table[y1 * W1 + x1] - table[y0 * W1 + x1] - table[y1 * W1 + x0] + table[y0 * W1 + x0];
   const r = Math.max(4, Math.round(Math.max(w, h) / 24));
   const dark = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
@@ -299,13 +350,13 @@ function findBox(source, maxSide) {
     for (let x = 0; x < w; x++) {
       const x0 = Math.max(0, x - r);
       const x1 = Math.min(w, x + r + 1);
-      const mean = (sum[y1 * W1 + x1] - sum[y0 * W1 + x1] - sum[y1 * W1 + x0] + sum[y0 * W1 + x0]) / ((x1 - x0) * (y1 - y0));
-      dark[y * w + x] = grey[y * w + x] < mean - 0.08 ? 1 : 0;
+      const n = box(paper, x0, y0, x1, y1);
+      dark[y * w + x] = n && grey[y * w + x] < box(sum, x0, y0, x1, y1) / n - 0.08 ? 1 : 0;
     }
   }
 
   const stack = new Int32Array(w * h);
-  let best = null;
+  const borders = [];
   for (let start = 0; start < w * h; start++) {
     if (dark[start] !== 1) continue;
     dark[start] = 2;
@@ -346,16 +397,174 @@ function findBox(source, maxSide) {
     }
     const bw = maxX - minX;
     const bh = maxY - minY;
-    if (edge || count < 50 || bw < 0.2 * w || bh < 0.2 * h) continue;
+    if (edge || count < 30 || (bw < least * w && bh < least * h) || bw < 8 || bh < 8) continue;
     // Four points on a bent line, or a drawing alone, make a shape much smaller than its bounds.
     const quad = corner.map(([x, y]) => [x, y]);
     if (area(quad) < 0.6 * bw * bh) continue;
     // A printed line is thin. The desk around the sheet is dark only beside the paper, so it
     // makes a band as wide as the window around each pixel.
     if (count / perimeter(quad) > r / 3) continue;
-    if (!best || bw * bh > best.size) best = { size: bw * bh, quad };
+    borders.push(quad);
   }
-  return best && best.quad.map(([x, y]) => [(x + 0.5) / scale, (y + 0.5) / scale]);
+  return borders;
+}
+
+/** The corners of each of the sheet's boxes in its layout, in millimetres. */
+const layoutOf = (sheet) => sheet.parts.map(({ box: [x, y, w, h] }) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+
+/**
+ * Lays the sheet's boxes over the borders found in a photo. The layout is fitted to the corners
+ * that agree with it most, so a box whose border was not found, or whose corner a drawing runs
+ * out of, still gets its place from the others. Returns, per box, its corners and whether its
+ * border was found, or null when no border has the shape of any box.
+ */
+function placeSheet(sheet, borders) {
+  const layout = layoutOf(sheet);
+  // Each box, and all of them together, for when a drawing joins their borders into one.
+  const xs = layout.flat().map(([x]) => x);
+  const ys = layout.flat().map(([, y]) => y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const shapes = [...layout, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
+  let best = null;
+  for (const border of borders) {
+    for (const box of shapes) {
+      if (Math.abs(Math.log(aspect(border) / aspect(box))) > 0.3) continue;
+      let corners = matchCorners(layout.map((quad) => quad.map(homography(box, border))), borders);
+      // Once more from every corner that agreed, which brings the far boxes closer.
+      const pairs = cornerPairs(layout, corners);
+      if (pairs.from.length >= 8) corners = matchCorners(layout.map((quad) => quad.map(homography(pairs.from, pairs.to))), borders);
+      const count = corners.flat().filter(Boolean).length;
+      // Ties, as with a single box, go to the largest borders: a drawing's own lines are inside.
+      const size = corners.reduce((total, c) => total + (c.every(Boolean) ? area(c) : 0), 0);
+      if (!best || count > best.count || (count === best.count && size > best.size)) best = { count, size, corners };
+    }
+  }
+  if (!best) return null;
+  // A corner a drawing or a box's name pulls out of place is still near enough to be matched:
+  // those off where the whole sheet puts them are put there instead.
+  const corners = best.corners.map((found) => [...found]);
+  let map = null;
+  for (let pass = 0; pass < 3; pass++) {
+    const { from, to } = cornerPairs(layout, corners);
+    if (from.length < 4) break;
+    map = homography(from, to);
+    corners.forEach((found, i) => {
+      // Two pixels more for the small photos looked at live.
+      const off = 0.03 * Math.sqrt(area(layout[i].map(map))) + 2;
+      found.forEach((corner, k) => {
+        const [x, y] = map(layout[i][k]);
+        if (corner && Math.hypot(corner[0] - x, corner[1] - y) > off) found[k] = null;
+      });
+    });
+  }
+  map ??= homography(cornerPairs(layout, best.corners).from, cornerPairs(layout, best.corners).to);
+  return layout.map((quad, i) => ({
+    quad: quad.map((point, k) => corners[i][k] ?? map(point)),
+    found: best.corners[i].every(Boolean),
+  }));
+}
+
+/** The layout's corners paired with where they were found. */
+function cornerPairs(layout, corners) {
+  const from = [];
+  const to = [];
+  layout.forEach((quad, i) => quad.forEach((point, k) => {
+    if (!corners[i][k]) return;
+    from.push(point);
+    to.push(corners[i][k]);
+  }));
+  return { from, to };
+}
+
+/**
+ * For each quad, the corners of the border on top of it: each where it was found, or null where
+ * it is too far, as when a drawing runs out of the box there. A border needs two corners in place,
+ * and may give some to one box and some to another when a drawing joined their borders.
+ */
+function matchCorners(quads, borders) {
+  return quads.map((quad) => {
+    const near = 0.12 * Math.sqrt(area(quad));
+    let best = null;
+    borders.forEach((border, j) => {
+      const errors = quad.map(([x, y], k) => Math.hypot(border[k][0] - x, border[k][1] - y));
+      const good = errors.filter((e) => e < near).length;
+      const error = errors.reduce((total, e) => total + Math.min(e, near), 0);
+      if (good >= 2 && (!best || good > best.good || (good === best.good && error < best.error))) best = { j, good, error, errors };
+    });
+    if (!best) return [null, null, null, null];
+    return borders[best.j].map((corner, k) => (best.errors[k] < near ? [...corner] : null));
+  });
+}
+
+/** Width over height of a quad, clockwise from the top left. */
+function aspect([a, b, c, d]) {
+  const len = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+  return (len(a, b) + len(d, c)) / (len(a, d) + len(b, c));
+}
+
+/** The perspective map taking the points `from` onto `to`, four pairs or more, least squares. */
+function homography(from, to) {
+  // Centred and scaled, so that millimetres and pixels weigh alike.
+  const normal = (points) => {
+    const cx = points.reduce((s, [x]) => s + x, 0) / points.length;
+    const cy = points.reduce((s, [, y]) => s + y, 0) / points.length;
+    const spread = points.reduce((s, [x, y]) => s + Math.hypot(x - cx, y - cy), 0) / points.length || 1;
+    return [cx, cy, Math.SQRT2 / spread];
+  };
+  const [ax, ay, as] = normal(from);
+  const [bx, by, bs] = normal(to);
+  const m = Array.from({ length: 8 }, () => new Float64Array(9));
+  from.forEach(([fx, fy], k) => {
+    const x = (fx - ax) * as;
+    const y = (fy - ay) * as;
+    const u = (to[k][0] - bx) * bs;
+    const v = (to[k][1] - by) * bs;
+    for (const [row, rhs] of [[[x, y, 1, 0, 0, 0, -u * x, -u * y], u], [[0, 0, 0, x, y, 1, -v * x, -v * y], v]]) {
+      for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) m[i][j] += row[i] * row[j];
+        m[i][8] += row[i] * rhs;
+      }
+    }
+  });
+  // Gaussian elimination, with the largest pivot.
+  for (let c = 0; c < 8; c++) {
+    let p = c;
+    for (let r = c + 1; r < 8; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    [m[c], m[p]] = [m[p], m[c]];
+    for (let r = 0; r < 8; r++) {
+      if (r === c || !m[c][c]) continue;
+      const f = m[r][c] / m[c][c];
+      for (let j = c; j < 9; j++) m[r][j] -= f * m[c][j];
+    }
+  }
+  const k = m.map((row, i) => row[8] / row[i]);
+  return ([px, py]) => {
+    const x = (px - ax) * as;
+    const y = (py - ay) * as;
+    const z = k[6] * x + k[7] * y + 1;
+    return [(k[0] * x + k[1] * y + k[2]) / z / bs + bx, (k[3] * x + k[4] * y + k[5]) / z / bs + by];
+  };
+}
+
+/** The grey that best splits the pixels in two, the dark and the light, by Otsu's method. */
+function otsu(grey) {
+  const bins = new Float64Array(256);
+  for (const g of grey) bins[Math.min(255, Math.floor(g * 256))]++;
+  let total = 0;
+  for (let i = 0; i < 256; i++) total += i * bins[i];
+  let below = 0;
+  let belowSum = 0;
+  let best = 0;
+  let split = 128;
+  for (let i = 0; i < 256; i++) {
+    below += bins[i];
+    belowSum += i * bins[i];
+    const above = grey.length - below;
+    if (!below || !above) continue;
+    const between = below * above * (belowSum / below - (total - belowSum) / above) ** 2;
+    if (between > best) [best, split] = [between, i];
+  }
+  return (split + 1) / 256;
 }
 
 function area(quad) {
@@ -497,7 +706,8 @@ function insideBorder(work) {
   const { rgb, ww, hh, mx, my, w, h } = work;
   const isDark = (i, j) => {
     const o = (j * ww + i) * 3;
-    return 0.299 * rgb[o] + 0.587 * rgb[o + 1] + 0.114 * rgb[o + 2] < 0.35;
+    // The border is printed grey, and lighter still where the photo blurs it.
+    return 0.299 * rgb[o] + 0.587 * rgb[o + 1] + 0.114 * rgb[o + 2] < 0.8;
   };
   const darkShare = (along, at, horizontal) => {
     let n = 0;
@@ -841,15 +1051,6 @@ function stylize(base, s) {
 
 // ---------- Parts ----------
 
-function flipped(source) {
-  const canvas = canvasOf(source.width, source.height);
-  const ctx = canvas.getContext("2d");
-  ctx.translate(source.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(source, 0, 0);
-  return canvas;
-}
-
 /**
  * Cuts a limb at its tick, as games/astronaut-cat/tools/make_art.py does: both halves keep a half disc of the
  * drawing around the joint, so the elbow or knee has no gap when it bends.
@@ -885,10 +1086,10 @@ function roundCut(limb, tick) {
   return { upper, lower, joint: [middle, tick], lowerJoint: [middle, tick - top] };
 }
 
-/** The files to write: [path, canvas] pairs, and the joints of skeleton.json that move. */
-function outputs(c, picture) {
-  if (c.weapon) {
-    const [w, h] = c.size.map((v) => Math.round(v * c.weapon.scale));
+/** The files to write: [path, canvas] pairs, and the joints of the character's skeleton that move. */
+function outputs(p, picture) {
+  if (p.weapon) {
+    const [w, h] = p.size.map((v) => Math.round(v * p.weapon.scale));
     // Turned a quarter clockwise, to lie along the forearm.
     const turned = canvasOf(h, w);
     const ctx = turned.getContext("2d");
@@ -896,18 +1097,14 @@ function outputs(c, picture) {
     ctx.translate(h, 0);
     ctx.rotate(Math.PI / 2);
     ctx.drawImage(picture, 0, 0, w, h);
-    return { pictures: [[c.file, turned]], joints: {} };
+    return { pictures: [[p.file, turned]], joints: {} };
   }
-  if (!c.limb) return { pictures: [[c.file, picture]], joints: {} };
-  const { folder, part, joint, tick } = c.limb;
-  const pictures = [];
-  const joints = {};
-  for (const side of ["left", "right"]) {
-    const cut = roundCut(side === "right" ? flipped(picture) : picture, tick);
-    pictures.push([`${folder}/upper_${part}_${side}.png`, cut.upper], [`${folder}/lower_${part}_${side}.png`, cut.lower]);
-    joints[`${joint}_${side}`] = { parent_point: cut.joint, point: cut.lowerJoint };
-    if (part === "arm" && side === "right") joints.hand_right = { parent_point: [cut.lowerJoint[0], cut.lower.height - 40] };
-  }
+  if (!p.limb) return { pictures: [[p.file, picture]], joints: {} };
+  const { folder, part, joint, tick, side } = p.limb;
+  const cut = roundCut(picture, tick);
+  const pictures = [[`${folder}_upper_${part}_${side}.png`, cut.upper], [`${folder}_lower_${part}_${side}.png`, cut.lower]];
+  const joints = { [`${joint}_${side}`]: { parent_point: cut.joint, point: cut.lowerJoint } };
+  if (part === "arm" && side === "right") joints.hand_right = { parent_point: [cut.lowerJoint[0], cut.lower.height - 40] };
   return { pictures, joints };
 }
 
@@ -916,39 +1113,50 @@ function outputs(c, picture) {
 const video = $("video");
 const live = $("liveCanvas").getContext("2d");
 const photoView = $("photoCanvas").getContext("2d");
-const resultView = $("resultCanvas").getContext("2d");
+
+// The share of a photo's width or height a box must span, at least, to be looked at.
+const LEAST_BOX = 0.06;
+// Taking the photo alone: how long every box must be found with none moving, between searches a few
+// frames apart, by more than this share of the picture, so the photo is not blurred.
+const STEADY_MS = 800;
+const STEADY_MOVE = 0.008;
 
 let stream;
 let mode = "live"; // live, review
 let frame = 0;
-let liveQuad = null;
+let livePlaces = null;
+// Since when every box has been found and still, or null; and whether the sheet has left the view since
+// the last photo taken alone, so going back to live does not take the same photo again.
+let steadyFrom = null;
+let armed = true;
 let photo = null; // a canvas
 let photoData = null;
-let quad = null;
-let found = false;
-let base = null;
-let picture = null;
+// Per part of the sheet: its corners in the photo, whether its border was found, the cut-out
+// drawing, the styled picture, and the canvas and the box that shows it.
+let places = [];
+let views = [];
 let pending = false;
-let dragging = -1;
+let dragging = null; // [part, corner]
 let folder = null;
 
-const card = () => CARDS[$("card").value];
+const sheet = () => SHEETS[$("sheet").value];
 // Browsers without folder access, such as Firefox and Safari, download the files instead.
 const canWrite = "showDirectoryPicker" in window;
 
-for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.limb ? `${c.limb.folder}/*_${c.limb.part}_*` : c.file})`, i));
+for (const [i, s] of SHEETS.entries()) $("sheet").add(new Option(s.name, i));
 
-function showCard() {
-  const c = card();
-  const [w, h] = c.size;
-  const saved = files(c).join(", ");
-  $("cardInfo").textContent = `${w} × ${h} · guarda ${saved}`;
-  $("removePaper").checked = c.paper !== false;
-  $("holes").checked = c.holes !== false;
-  if (mode === "review") rebuild();
+function showSheet() {
+  const parts = sheet().parts;
+  const saved = [...new Set(parts.flatMap(files))];
+  const boxes = parts.length === 1 ? "1 caixa" : `${parts.length} caixas`;
+  $("cardInfo").textContent = `${boxes} · guarda ${saved.join(", ")}`;
+  $("removePaper").checked = parts[0].paper !== false;
+  $("holes").checked = parts[0].holes !== false;
+  livePlaces = null;
+  if (mode === "review") findAgain();
 }
-$("card").addEventListener("change", showCard);
-showCard();
+$("sheet").addEventListener("change", showSheet);
+showSheet();
 
 function settings() {
   return {
@@ -1013,13 +1221,30 @@ $("camera").addEventListener("change", () => openCamera($("camera").value).catch
   status("liveStatus", `Não dá para usar a câmara: ${error.message}`, true);
 }));
 
-function drawQuad(ctx, corners, scale, color, handles) {
+const FOUND = "#5ee08a";
+const MISSING = "#ffb547";
+
+/** One box's outline, with its name and, to drag, its corners. */
+function drawQuad(ctx, corners, scale, color, { handles = false, name = "", dashed = false } = {}) {
+  const line = Math.max(2, ctx.canvas.width / 400);
   ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, ctx.canvas.width / 400);
+  ctx.lineWidth = dashed ? line : line * 1.5;
+  ctx.setLineDash(dashed ? [line * 4, line * 3] : []);
   ctx.beginPath();
   corners.forEach(([x, y], i) => (i ? ctx.lineTo(x * scale, y * scale) : ctx.moveTo(x * scale, y * scale)));
   ctx.closePath();
   ctx.stroke();
+  ctx.setLineDash([]);
+  if (name) {
+    const size = Math.max(11, ctx.canvas.width / 70);
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    const [x, y] = corners[0];
+    const width = ctx.measureText(name).width;
+    ctx.fillStyle = color;
+    ctx.fillRect(x * scale, y * scale, width + size * 0.6, size * 1.4);
+    ctx.fillStyle = "#14161a";
+    ctx.fillText(name, x * scale + size * 0.3, y * scale + size * 1.05);
+  }
   if (!handles) return;
   ctx.fillStyle = color;
   for (const [x, y] of corners) {
@@ -1032,6 +1257,13 @@ function drawQuad(ctx, corners, scale, color, handles) {
   }
 }
 
+/** How many of the sheet's boxes were found, for the status lines. */
+function counted(placed) {
+  const found = placed.filter((p) => p.found).length;
+  const all = placed.length;
+  return { found, all, text: all === 1 ? "a caixa" : `${found} de ${all} caixas` };
+}
+
 function tick() {
   requestAnimationFrame(tick);
   if (mode !== "live" || !stream || !video.videoWidth) return;
@@ -1039,18 +1271,53 @@ function tick() {
   const canvas = live.canvas;
   if (canvas.height !== Math.round((canvas.width * vh) / vw)) canvas.height = Math.round((canvas.width * vh) / vw);
   live.drawImage(video, 0, 0, canvas.width, canvas.height);
-  // Finding the box every few frames keeps the preview smooth.
-  if (frame++ % 3 === 0) liveQuad = findBox(video, 480);
-  if (liveQuad) drawQuad(live, liveQuad, canvas.width / vw, "#5ee08a");
+  // Finding the boxes every few frames keeps the preview smooth.
+  if (frame++ % 3 === 0) {
+    const before = livePlaces;
+    livePlaces = placeSheet(sheet(), findBoxes(video, 800, LEAST_BOX));
+    const all = livePlaces?.every((p) => p.found);
+    if (!all) armed = true;
+    const still = all && before?.length === livePlaces.length && livePlaces.every((p, i) =>
+      p.quad.every(([x, y], k) => Math.hypot(x - before[i].quad[k][0], y - before[i].quad[k][1]) < STEADY_MOVE * Math.max(vw, vh)));
+    if (!still) steadyFrom = null;
+    else steadyFrom ??= performance.now();
+  }
+  const steady = steadyFrom === null ? 0 : (performance.now() - steadyFrom) / STEADY_MS;
+  const ready = !(canWrite && !folder);
+  const auto = $("auto").checked && armed && ready;
+  if (auto && steady >= 1) {
+    armed = false;
+    steadyFrom = null;
+    takePhoto();
+    return;
+  }
+  const parts = sheet().parts;
+  // Only the boxes found are outlined in green: the photo is ready when they all are.
+  livePlaces?.forEach((p, i) => {
+    if (p.found) drawQuad(live, p.quad, canvas.width / vw, FOUND, { name: parts.length > 1 ? parts[i].name : "" });
+  });
+  const count = livePlaces && counted(livePlaces);
   if (canWrite && !folder) status("liveStatus", "Escolhe primeiro a pasta assets, lá em cima.", true);
-  else if (liveQuad) status("liveStatus", "Caixa encontrada: tira a foto.");
-  else status("liveStatus", "À procura da caixa…", true);
+  else if (count && count.found === count.all && auto) {
+    status("liveStatus", `${count.all === 1 ? "Caixa encontrada" : "Todas as caixas encontradas"}: segura a folha quieta…`);
+    // How near the photo is.
+    live.fillStyle = FOUND;
+    live.fillRect(0, canvas.height - 8, canvas.width * Math.min(steady, 1), 8);
+  } else if (count && count.found === count.all) {
+    status("liveStatus", `${count.all === 1 ? "Caixa encontrada" : "Todas as caixas encontradas"}: ${armed ? "tira a foto" : "tira outra foto, ou tira a folha da vista para a página a tirar sozinha"}.`);
+  }
+  else if (count?.found) status("liveStatus", `Encontradas ${count.text}: mostra a folha inteira, direita e bem iluminada.`, true);
+  else status("liveStatus", "À procura das caixas…", true);
 }
 
-$("capture").addEventListener("click", () => {
+function takePhoto() {
   const canvas = canvasOf(video.videoWidth, video.videoHeight);
   canvas.getContext("2d").drawImage(video, 0, 0);
   usePhoto(canvas);
+}
+$("capture").addEventListener("click", () => {
+  armed = false;
+  takePhoto();
 });
 
 $("openPhoto").addEventListener("click", () => $("photoFile").click());
@@ -1094,6 +1361,7 @@ function usePhoto(canvas) {
 
 function reset() {
   mode = "live";
+  steadyFrom = null;
   $("live").hidden = false;
   $("review").hidden = true;
   $("save").hidden = true;
@@ -1102,30 +1370,47 @@ $("again").addEventListener("click", reset);
 
 // ---------- Review ----------
 
+/** Finds the sheet's boxes in the photo again, and a view for each part's picture. */
 function findAgain() {
-  quad = findBox(photo, 1000);
-  found = !!quad;
-  if (!quad) {
-    const { width: w, height: h } = photo;
-    quad = [[w * 0.15, h * 0.15], [w * 0.85, h * 0.15], [w * 0.85, h * 0.85], [w * 0.15, h * 0.85]];
-  }
-  rebuild();
+  const s = sheet();
+  // Finer than live, for the thin lines of a whole sheet.
+  places = placeSheet(s, findBoxes(photo, 1600, LEAST_BOX)) ?? placeAnyway(s, photo.width, photo.height);
+  $("results").replaceChildren();
+  views = s.parts.map((part) => {
+    const figure = document.createElement("figure");
+    const canvas = document.createElement("canvas");
+    const caption = document.createElement("figcaption");
+    const label = document.createElement("label");
+    const keep = document.createElement("input");
+    keep.type = "checkbox";
+    keep.checked = true;
+    keep.addEventListener("input", () => figure.classList.toggle("off", !keep.checked));
+    label.append(keep, ` ${s.parts.length > 1 ? part.name : "guardar"}`);
+    caption.append(label);
+    figure.append(canvas, caption);
+    $("results").append(figure);
+    return { canvas, keep, base: null, picture: null };
+  });
+  places.forEach((_, i) => cut(i));
+  drawPhoto();
+  restyle();
 }
 $("findAgain").addEventListener("click", findAgain);
 
 function drawPhoto() {
   const view = photoView.canvas;
   const scale = view.width / photo.width;
+  const parts = sheet().parts;
   photoView.drawImage(photo, 0, 0, view.width, view.height);
-  drawQuad(photoView, quad, scale, found || dragging >= 0 ? "#5ee08a" : "#ffb547", true);
+  places.forEach((p, i) => {
+    drawQuad(photoView, p.quad, scale, p.found ? FOUND : MISSING, { handles: true, name: parts.length > 1 ? parts[i].name : "", dashed: !p.found });
+  });
 }
 
-/** Straightens the box again: after the corners, the card or the light change. */
-function rebuild() {
-  const [w, h] = card().size;
-  base = cutOut(warp(photoData, quad, w, h), $("evenLight").checked);
-  drawPhoto();
-  restyle();
+/** Straightens one part's box again: after its corners or the light change. */
+function cut(i) {
+  const [w, h] = sheet().parts[i].size;
+  views[i].base = cutOut(warp(photoData, places[i].quad, w, h), $("evenLight").checked);
 }
 
 function restyle() {
@@ -1151,33 +1436,44 @@ function showResult(s) {
   for (const id of ["paper", "holes", "specks", "outline", "outlineWidth"]) $(id).disabled = !s.removePaper;
   $("outlineWidth").disabled ||= s.outline === "none";
 
-  picture = stylize(base, s);
-  const view = resultView.canvas;
-  view.width = picture.width;
-  view.height = picture.height;
-  view.classList.toggle("pixels", s.pixel > 1);
-  resultView.drawImage(picture, 0, 0);
-  const c = card();
-  if (c.limb) {
-    // Where the limb bends.
-    resultView.strokeStyle = "#ffb547";
-    resultView.lineWidth = 3;
-    resultView.setLineDash([12, 8]);
-    resultView.beginPath();
-    resultView.moveTo(0, c.limb.tick);
-    resultView.lineTo(view.width, c.limb.tick);
-    resultView.stroke();
-  }
-  const notes = [`${picture.width} × ${picture.height}`];
-  if (!found) notes.push("a caixa não foi encontrada: arrasta os cantos para cima dela");
-  if (c.limb) notes.push(`a linha tracejada é onde o ${JOINT_NAMES[c.limb.joint]} dobra`);
-  status("summary", notes.join(" · "), !found);
+  const parts = sheet().parts;
+  views.forEach((v, i) => {
+    v.picture = stylize(v.base, s);
+    const { canvas } = v;
+    const ctx = canvas.getContext("2d");
+    canvas.width = v.picture.width;
+    canvas.height = v.picture.height;
+    canvas.classList.toggle("pixels", s.pixel > 1);
+    ctx.drawImage(v.picture, 0, 0);
+    const { limb } = parts[i];
+    if (limb) {
+      // Where the limb bends.
+      ctx.strokeStyle = MISSING;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([16, 10]);
+      ctx.beginPath();
+      ctx.moveTo(0, limb.tick);
+      ctx.lineTo(canvas.width, limb.tick);
+      ctx.stroke();
+    }
+  });
+  const count = counted(places);
+  const notes = [];
+  if (count.found < count.all) notes.push(`${count.all === 1 ? "a caixa não foi encontrada" : `encontradas ${count.text}`}: arrasta os cantos a laranja para cima dos cantos impressos`);
+  else notes.push(count.all === 1 ? "caixa encontrada" : "todas as caixas encontradas");
+  const limb = parts.find((p) => p.limb)?.limb;
+  if (limb) notes.push(`a linha tracejada é onde o ${JOINT_NAMES[limb.joint]} dobra`);
+  status("summary", notes.join(" · "), count.found < count.all);
 }
 
 for (const id of ["removePaper", "paper", "holes", "specks", "saturation", "brightness", "contrast", "hue", "smooth", "colours", "pixel", "outline", "outlineWidth"]) {
   $(id).addEventListener("input", restyle);
 }
-$("evenLight").addEventListener("input", () => mode === "review" && rebuild());
+$("evenLight").addEventListener("input", () => {
+  if (mode !== "review") return;
+  places.forEach((_, i) => cut(i));
+  restyle();
+});
 
 for (const button of document.querySelectorAll("[data-look]")) {
   button.addEventListener("click", () => {
@@ -1186,8 +1482,8 @@ for (const button of document.querySelectorAll("[data-look]")) {
   });
 }
 
-// Dragging a corner.
-const handleRadius = () => photoView.canvas.width / 70;
+// Dragging a corner of any box.
+const handleRadius = () => photoView.canvas.width / 90;
 function photoPoint(event) {
   const rect = photoView.canvas.getBoundingClientRect();
   const scale = photo.width / rect.width;
@@ -1195,27 +1491,28 @@ function photoPoint(event) {
 }
 $("photoCanvas").addEventListener("pointerdown", (event) => {
   const [x, y] = photoPoint(event);
-  const reach = (handleRadius() * 3 * photo.width) / photoView.canvas.width;
-  let nearest = -1;
-  quad.forEach(([qx, qy], i) => {
+  let reach = (handleRadius() * 3 * photo.width) / photoView.canvas.width;
+  dragging = null;
+  places.forEach((p, i) => p.quad.forEach(([qx, qy], k) => {
     const d = Math.hypot(qx - x, qy - y);
-    if (d < reach && (nearest < 0 || d < Math.hypot(quad[nearest][0] - x, quad[nearest][1] - y))) nearest = i;
-  });
-  if (nearest < 0) return;
-  dragging = nearest;
-  $("photoCanvas").setPointerCapture(event.pointerId);
+    if (d < reach) [reach, dragging] = [d, [i, k]];
+  }));
+  if (dragging) $("photoCanvas").setPointerCapture(event.pointerId);
 });
 $("photoCanvas").addEventListener("pointermove", (event) => {
-  if (dragging < 0) return;
+  if (!dragging) return;
   const [x, y] = photoPoint(event);
-  quad[dragging] = [clamp(x, 0, photo.width), clamp(y, 0, photo.height)];
+  const [i, k] = dragging;
+  places[i].quad[k] = [clamp(x, 0, photo.width), clamp(y, 0, photo.height)];
+  places[i].found = true;
   drawPhoto();
 });
 $("photoCanvas").addEventListener("pointerup", () => {
-  if (dragging < 0) return;
-  dragging = -1;
-  found = true;
-  rebuild();
+  if (!dragging) return;
+  const [i] = dragging;
+  dragging = null;
+  cut(i);
+  restyle();
 });
 
 // ---------- Folder ----------
@@ -1246,9 +1543,18 @@ async function write(path, data) {
 }
 
 $("saveButton").addEventListener("click", async () => {
-  if (!picture) return;
-  const c = card();
-  const { pictures, joints } = outputs(c, picture);
+  const parts = sheet().parts;
+  const kept = views.flatMap((v, i) => (v.keep.checked && v.picture ? [outputs(parts[i], v.picture)] : []));
+  if (!kept.length) return status("saveStatus", "Nada para guardar: marca pelo menos um desenho.", true);
+  const pictures = kept.flatMap((o) => o.pictures);
+  // The joints that move, per skeleton.
+  const skeletons = new Map();
+  views.forEach((v, i) => {
+    const { limb } = parts[i];
+    if (!limb || !v.keep.checked) return;
+    const path = skeletonOf(limb.folder);
+    skeletons.set(path, Object.assign(skeletons.get(path) ?? {}, outputs(parts[i], v.picture).joints));
+  });
   if (!canWrite) {
     for (const [path, canvas] of pictures) {
       const link = document.createElement("a");
@@ -1257,8 +1563,8 @@ $("saveButton").addEventListener("click", async () => {
       link.click();
     }
     const moved = pictures.map(([path]) => `assets/${path}`).join(", ");
-    const warning = c.limb ? ` O skeleton.json não foi atualizado, por isso os ${JOINT_NAMES[c.limb.joint]}s podem ficar um pouco fora do sítio.` : "";
-    return status("saveStatus", `Descarregado: move-os para ${moved}, no jogo.${warning}`, !!c.limb);
+    const warning = skeletons.size ? ` O esqueleto não foi atualizado, por isso os cotovelos e os joelhos podem ficar um pouco fora do sítio.` : "";
+    return status("saveStatus", `Descarregado: move-os para ${moved}, no jogo.${warning}`, !!skeletons.size);
   }
   if (!folder) return status("saveStatus", "Escolhe primeiro a pasta assets, lá em cima.", true);
   $("saveButton").disabled = true;
@@ -1269,9 +1575,8 @@ $("saveButton").addEventListener("click", async () => {
     }
     for (const [path, canvas] of pictures) await write(path, await png(canvas));
     const written = pictures.map(([path]) => path);
-    if (c.limb) {
-      // The joints follow where the limb was cut, so the halves meet.
-      const path = `${c.limb.folder}/skeleton.json`;
+    for (const [path, joints] of skeletons) {
+      // The joints follow where the limbs were cut, so the halves meet.
       const skeleton = JSON.parse(await (await (await fileIn(path, false)).getFile()).text());
       for (const entry of skeleton.joints) Object.assign(entry, joints[entry.name] ?? {});
       await write(path, `${JSON.stringify(skeleton, null, 2)}\n`);

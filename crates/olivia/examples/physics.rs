@@ -6,8 +6,8 @@
 //! Run it with `cargo run --example physics`.
 
 use olivia::ecs::{
-    Camera, Clear, ColliderBuilder, ColliderLines, Entity, Geometry, Hud, RigidBodyBuilder, Shape,
-    Text, Transform, World, entity_of,
+    CClear, CColliderLines, CHud, CShape, CText, CTransform, Camera, ColliderBuilder, Entity,
+    Geometry, RigidBodyBuilder, World, entity_of,
 };
 use olivia::graphics::Draw;
 use olivia::input::{Key, Mouse};
@@ -38,7 +38,7 @@ const DIAGNOSTICS_COLOUR: Color = Color::rgb(1.0, 0.9, 0.2);
 const FONT_SIZE: f32 = 18.0;
 
 /// A box the player can remove.
-struct Crate;
+struct CCrate;
 
 struct Demo {
     frame_rate: Entity,
@@ -54,11 +54,11 @@ impl Demo {
         let size = BOX_HALF_SIZE * 2.0;
         let centred = Draw::new().origin(Vec2::splat(0.5)).color(tint);
         world.spawn((
-            Crate,
-            Transform::at(position.x, position.y),
+            CCrate,
+            CTransform::at(position.x, position.y),
             RigidBodyBuilder::dynamic(),
             ColliderBuilder::cuboid(BOX_HALF_SIZE.x, BOX_HALF_SIZE.y),
-            Shape::new(Geometry::Rect(size)).draw(centred),
+            CShape::new(Geometry::Rect(size)).draw(centred),
         ));
     }
 
@@ -69,7 +69,7 @@ impl Demo {
             return Ok(());
         };
         if let Some(entity) = entity_of(u.physics, collider)
-            && u.world.satisfies::<&Crate>(entity)
+            && u.world.satisfies::<&CCrate>(entity)
         {
             u.world.despawn(entity)?;
         }
@@ -80,7 +80,7 @@ impl Demo {
         if let Some(entity) = self.diagnostics.take() {
             world.despawn(entity)?;
         } else {
-            let lines = world.spawn((ColliderLines(DIAGNOSTICS_COLOUR),));
+            let lines = world.spawn((CColliderLines(DIAGNOSTICS_COLOUR),));
             self.diagnostics = Some(lines);
         }
         Ok(())
@@ -91,23 +91,23 @@ impl Game for Demo {
     fn load(s: Setup<'_>) -> Result<Self> {
         let bytes = s.filesystem.read("DejaVuSansMono.ttf")?;
         let font = s.graphics.font(&bytes)?;
-        s.world.spawn((Clear(Color::rgb(0.1, 0.1, 0.12)),));
+        s.world.spawn((CClear(Color::rgb(0.1, 0.1, 0.12)),));
         s.world.spawn((CAMERA,));
 
         let centred = Draw::new()
             .origin(Vec2::splat(0.5))
             .color(Color::rgb(0.3, 0.3, 0.35));
         s.world.spawn((
-            Transform::at(GROUND_CENTRE.x, GROUND_CENTRE.y),
+            CTransform::at(GROUND_CENTRE.x, GROUND_CENTRE.y),
             ColliderBuilder::cuboid(GROUND_HALF_SIZE.x, GROUND_HALF_SIZE.y),
-            Shape::new(Geometry::Rect(GROUND_HALF_SIZE * 2.0)).draw(centred),
+            CShape::new(Geometry::Rect(GROUND_HALF_SIZE * 2.0)).draw(centred),
         ));
 
         let colour = Draw::new().color(DIAGNOSTICS_COLOUR);
         let frame_rate = s.world.spawn((
-            Hud,
-            Transform::at(8.0, 8.0),
-            Text::new(font, FONT_SIZE, "").draw(colour),
+            CHud,
+            CTransform::at(8.0, 8.0),
+            CText::new(font, FONT_SIZE, "").draw(colour),
         ));
 
         let mut demo = Self {
@@ -137,7 +137,7 @@ impl Game for Demo {
             let cursor = CAMERA.screen_to_world(u.input.cursor(), self.viewport);
             self.click(&mut u, cursor)?;
         }
-        let mut frame_rate = u.world.get::<&mut Text>(self.frame_rate)?;
+        let mut frame_rate = u.world.get::<&mut CText>(self.frame_rate)?;
         frame_rate.text = match self.diagnostics {
             Some(_) => format!("{:.0} FPS", u.timer.frame_rate()),
             None => String::new(),

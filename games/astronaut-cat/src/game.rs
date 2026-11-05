@@ -1,8 +1,8 @@
 use olivia::animation::{Animation, Character, Play};
 use olivia::audio::{Audio, Play as PlaySound, Sound};
 use olivia::ecs::{
-    Body, Camera, Clear, ColliderBuilder, ColliderLines, Entity, Hud, RigidBodyBuilder, Sprite,
-    Transform, World, entity_of,
+    CBody, CClear, CColliderLines, CHud, CSprite, CTransform, Camera, ColliderBuilder, Entity,
+    RigidBodyBuilder, World, entity_of,
 };
 use olivia::filesystem::Filesystem;
 use olivia::graphics::{Draw, Graphics, Texture, depth};
@@ -81,7 +81,7 @@ pub enum Phase {
 
 /// What a game has come to, on an entity of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Status {
+pub struct CStatus {
     /// Lives left.
     pub lives: u32,
     /// Things picked up.
@@ -94,7 +94,7 @@ pub struct Status {
 
 /// The hero's state, beside its body and its character.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Hero {
+pub struct CHero {
     /// Whether it looks left.
     pub is_facing_left: bool,
     /// Whether it stands on something.
@@ -109,7 +109,7 @@ pub struct Hero {
 
 /// An enemy walking its stretch.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Enemy {
+pub struct CEnemy {
     kind: Kind,
     span: (f32, f32),
     direction: f32,
@@ -118,28 +118,28 @@ pub struct Enemy {
 
 /// A shot in flight.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Shot {
+pub struct CShot {
     time: f32,
 }
 
 /// A collider that stops shots.
-struct Solid;
+struct CSolid;
 /// What the hero picks up by touching it.
-struct Coin;
+struct CCoin;
 /// The place that saves who is held.
-struct Goal;
+struct CGoal;
 /// The stretch close enough to hear who is held.
-struct Earshot;
+struct CEarshot;
 /// What swallows a falling hero.
-struct Pit;
+struct CPit;
 /// Who is held.
-struct Captive;
+struct CCaptive;
 /// A cloud with this much time left.
-struct Fart(f32);
+struct CFart(f32);
 /// A shooting star, which only passes behind the game.
-pub struct Star;
+pub struct CStar;
 /// What a new game replaces.
-struct Actor;
+struct CActor;
 
 /// The sprite's draw, scaled to `size` and centred.
 fn sized(texture: &Texture, size: Vec2) -> Draw {
@@ -276,7 +276,7 @@ impl Moves {
     }
 
     /// What the hero is doing, and whether that repeats.
-    fn of_hero(&self, hero: &Hero, phase: Phase, is_moving: bool) -> (&Animation, bool) {
+    fn of_hero(&self, hero: &CHero, phase: Phase, is_moving: bool) -> (&Animation, bool) {
         if phase == Phase::Won {
             (&self.win, false)
         } else if phase == Phase::Lost || hero.hurt > 0.0 {
@@ -297,8 +297,8 @@ impl Moves {
 fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
     let centre = rect.pos + rect.size / 2.0;
     world.spawn((
-        Solid,
-        Transform::at(centre.x, centre.y),
+        CSolid,
+        CTransform::at(centre.x, centre.y),
         ColliderBuilder::cuboid(rect.size.x / 2.0, rect.size.y / 2.0).friction(0.0),
     ));
     let scale = rect.size.y / platform.size().y;
@@ -309,7 +309,7 @@ fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
         let width = (end - x).min(tile);
         let cut = platform.region(Rect::new(0.0, 0.0, width / scale, platform.size().y));
         let draw = Draw::new().scale(Vec2::splat(scale)).depth(PLATFORM_DEPTH);
-        world.spawn((Transform::at(x, rect.pos.y), Sprite::new(cut).draw(draw)));
+        world.spawn((CTransform::at(x, rect.pos.y), CSprite::new(cut).draw(draw)));
         x += tile;
     }
 }
@@ -318,7 +318,7 @@ fn spawn_platform(world: &mut World, platform: &Texture, rect: Rect) {
 fn spawn_walls(world: &mut World) {
     for x in [-0.5, WIDTH + 0.5] {
         let wall = ColliderBuilder::cuboid(0.5, VIEW.y * 2.0).friction(0.0);
-        world.spawn((Solid, Transform::at(x, VIEW.y / 2.0), wall));
+        world.spawn((CSolid, CTransform::at(x, VIEW.y / 2.0), wall));
     }
 }
 
@@ -329,8 +329,8 @@ fn spawn_backgrounds(world: &mut World, backdrop: &Texture) -> Vec<(Entity, f32)
     let mut home = 0.0;
     while home < WIDTH * PARALLAX + VIEW.x + width {
         let draw = sized(backdrop, size).depth(depth::BACKDROP);
-        let sprite = Sprite::new(backdrop.clone()).draw(draw);
-        let tile = world.spawn((Transform::at(home, VIEW.y / 2.0), sprite));
+        let sprite = CSprite::new(backdrop.clone()).draw(draw);
+        let tile = world.spawn((CTransform::at(home, VIEW.y / 2.0), sprite));
         tiles.push((tile, home));
         home += width;
     }
@@ -351,9 +351,9 @@ fn spawn_row(
     for _ in 0..count {
         let draw = sized(texture, Vec2::splat(HUD_SIZE));
         row.push(world.spawn((
-            Hud,
-            Transform::at(x, y),
-            Sprite::new(texture.clone()).draw(draw),
+            CHud,
+            CTransform::at(x, y),
+            CSprite::new(texture.clone()).draw(draw),
         )));
         x += step;
     }
@@ -395,18 +395,18 @@ impl Platformer {
         for &(kind, left, right, height) in &ENEMIES {
             let texture = textures.enemy(kind);
             let draw = sized(texture, kind.size()).depth(THING_DEPTH);
-            let enemy = Enemy {
+            let enemy = CEnemy {
                 kind,
                 span: (left, right),
                 direction: -1.0,
                 time: 0.0,
             };
             let (body, collider) = moved(kind.size());
-            let sprite = Sprite::new(texture.clone()).draw(draw);
+            let sprite = CSprite::new(texture.clone()).draw(draw);
             world.spawn((
-                Actor,
+                CActor,
                 enemy,
-                Transform::at(right, height),
+                CTransform::at(right, height),
                 body,
                 collider,
                 sprite,
@@ -414,29 +414,40 @@ impl Platformer {
         }
         for coin in COINS {
             let draw = sized(&textures.coin, Vec2::splat(COIN_SIZE)).depth(THING_DEPTH);
-            let sprite = Sprite::new(textures.coin.clone()).draw(draw);
+            let sprite = CSprite::new(textures.coin.clone()).draw(draw);
             let collider = zone(Vec2::splat(COIN_SIZE));
-            world.spawn((Actor, Coin, Transform::at(coin.x, coin.y), collider, sprite));
+            world.spawn((
+                CActor,
+                CCoin,
+                CTransform::at(coin.x, coin.y),
+                collider,
+                sprite,
+            ));
         }
 
         let draw = sized(&textures.goal, GOAL_SIZE).depth(GOAL_DEPTH);
-        let sprite = Sprite::new(textures.goal.clone()).draw(draw);
+        let sprite = CSprite::new(textures.goal.clone()).draw(draw);
         world.spawn((
-            Actor,
-            Goal,
-            Transform::at(GOAL.x, GOAL.y),
+            CActor,
+            CGoal,
+            CTransform::at(GOAL.x, GOAL.y),
             zone(GOAL_SIZE),
             sprite,
         ));
         let earshot = zone(Vec2::new(HELP_DISTANCE * 2.0, VIEW.y));
-        world.spawn((Actor, Earshot, Transform::at(GOAL.x, VIEW.y / 2.0), earshot));
+        world.spawn((
+            CActor,
+            CEarshot,
+            CTransform::at(GOAL.x, VIEW.y / 2.0),
+            earshot,
+        ));
 
         let mut captive = self.captive_character.clone();
         // A character made a moment ago has nothing playing, so this cannot name a missing joint.
         let looped = Play::new().looping(true);
         captive.play(&self.moves.calling, looped).ok();
         let feet = GROUND - ROOT_HEIGHT;
-        world.spawn((Actor, Captive, Transform::at(GOAL.x, feet), captive));
+        world.spawn((CActor, CCaptive, CTransform::at(GOAL.x, feet), captive));
 
         let body = RigidBodyBuilder::dynamic()
             .locked_axes(LockedAxes::ROTATION_LOCKED)
@@ -446,14 +457,14 @@ impl Platformer {
         let collider = ColliderBuilder::cuboid(HERO_SIZE.x / 2.0, HERO_SIZE.y / 2.0)
             .translation(Vec2::new(0.0, centre))
             .friction(0.0);
-        let hero = Hero {
+        let hero = CHero {
             has_extra_jump: true,
-            ..Hero::default()
+            ..CHero::default()
         };
         world.spawn((
-            Actor,
+            CActor,
             hero,
-            Transform::at(CHECKPOINTS[0], GROUND - ROOT_HEIGHT),
+            CTransform::at(CHECKPOINTS[0], GROUND - ROOT_HEIGHT),
             body,
             collider,
             self.hero_character.clone(),
@@ -461,7 +472,7 @@ impl Platformer {
     }
 
     fn restart(&mut self, world: &mut World) -> Result<()> {
-        let actors: Vec<Entity> = world.query::<Entity>().with::<&Actor>().iter().collect();
+        let actors: Vec<Entity> = world.query::<Entity>().with::<&CActor>().iter().collect();
         for actor in actors {
             world.despawn(actor)?;
         }
@@ -471,9 +482,9 @@ impl Platformer {
 
     fn drive_enemies(u: &mut Update<'_>) {
         let dt = u.timer.dt();
-        for (Body(body), transform, enemy, sprite) in
+        for (CBody(body), transform, enemy, sprite) in
             u.world
-                .query_mut::<(&Body, &Transform, &mut Enemy, &mut Sprite)>()
+                .query_mut::<(&CBody, &CTransform, &mut CEnemy, &mut CSprite)>()
         {
             enemy.time += dt;
             if transform.position.x < enemy.span.0 {
@@ -511,11 +522,11 @@ impl Platformer {
             physics
                 .ray_cast(start, Vec2::Y, FOOTING)
                 .and_then(|(collider, _)| entity_of(physics, collider))
-                .is_some_and(|entity| world.satisfies::<&Solid>(entity))
+                .is_some_and(|entity| world.satisfies::<&CSolid>(entity))
         })
     }
 
-    fn drive_hero(&mut self, u: &mut Update<'_>, status: Status) -> Result<()> {
+    fn drive_hero(&mut self, u: &mut Update<'_>, status: CStatus) -> Result<()> {
         let dt = u.timer.dt();
         let is_playing = status.phase == Phase::Playing;
         let left = is_playing && u.input.down(Key::Left);
@@ -523,11 +534,11 @@ impl Platformer {
         let jump = is_playing && (u.input.pressed(Key::Space) || u.input.pressed(Key::Up));
         let shoot = is_playing && u.input.pressed(Key::X);
 
-        let root = u.world.get::<&Transform>(self.hero)?.position;
+        let root = u.world.get::<&CTransform>(self.hero)?.position;
         let feet = root + Vec2::new(0.0, ROOT_HEIGHT);
         let is_grounded = Self::is_standing(u.physics, u.world, feet);
-        let body = u.world.get::<&Body>(self.hero)?.0;
-        let mut hero = *u.world.get::<&Hero>(self.hero)?;
+        let body = u.world.get::<&CBody>(self.hero)?.0;
+        let mut hero = *u.world.get::<&CHero>(self.hero)?;
 
         hero.spin = (hero.spin - dt).max(0.0);
         hero.hurt = (hero.hurt - dt).max(0.0);
@@ -572,24 +583,24 @@ impl Platformer {
             hero.pending_shot = None;
             self.fire(u.world, &hero, root)?;
         }
-        *u.world.get::<&mut Hero>(self.hero)? = hero;
+        *u.world.get::<&mut CHero>(self.hero)? = hero;
         Ok(())
     }
 
     fn spawn_fart(&self, world: &mut World, feet: Vec2) {
         let texture = &self.textures.fart;
         let draw = sized(texture, Vec2::splat(FART_SIZE)).depth(THING_DEPTH);
-        let sprite = Sprite::new(texture.clone()).draw(draw);
+        let sprite = CSprite::new(texture.clone()).draw(draw);
         world.spawn((
-            Actor,
-            Fart(FART_TIME),
-            Transform::at(feet.x, feet.y),
+            CActor,
+            CFart(FART_TIME),
+            CTransform::at(feet.x, feet.y),
             sprite,
         ));
     }
 
     /// Sends a shot from the launcher, straight ahead of how the hero looks.
-    fn fire(&self, world: &mut World, hero: &Hero, root: Vec2) -> Result<()> {
+    fn fire(&self, world: &mut World, hero: &CHero, root: Vec2) -> Result<()> {
         let hand = world.get::<&Character>(self.hero)?.joint("hand_right");
         let hand = hand.ok_or("the hero has no hand_right")?;
         let direction = if hero.is_facing_left { -1.0 } else { 1.0 };
@@ -605,12 +616,12 @@ impl Platformer {
             .gravity_scale(SHOT_GRAVITY)
             .linvel(Vec2::new(direction * SHOT_SPEED, 0.0));
         world.spawn((
-            Actor,
-            Shot { time: 0.0 },
-            Transform::at(centre.x, centre.y),
+            CActor,
+            CShot { time: 0.0 },
+            CTransform::at(centre.x, centre.y),
             body,
             ColliderBuilder::ball(SHOT_SIZE / 2.0).sensor(true),
-            Sprite::new(texture.clone()).draw(draw),
+            CSprite::new(texture.clone()).draw(draw),
         ));
         Ok(())
     }
@@ -628,7 +639,7 @@ impl Platformer {
         let dt = u.timer.dt();
         let shots: Vec<(Entity, Vec2, f32)> = u
             .world
-            .query_mut::<(Entity, &Transform, &mut Shot)>()
+            .query_mut::<(Entity, &CTransform, &mut CShot)>()
             .into_iter()
             .map(|(entity, transform, shot)| {
                 shot.time += dt;
@@ -638,12 +649,12 @@ impl Platformer {
         for (shot, position, time) in shots {
             let area = Ball::new(SHOT_SIZE / 2.0);
             let touched = Self::touching(u, &area, position);
-            let enemy = touched.iter().find(|e| u.world.satisfies::<&Enemy>(**e));
+            let enemy = touched.iter().find(|e| u.world.satisfies::<&CEnemy>(**e));
             if let Some(enemy) = enemy {
                 u.world.despawn(*enemy)?;
                 u.audio.play(&self.sounds.hit);
             }
-            let is_stopped = touched.iter().any(|e| u.world.satisfies::<&Solid>(*e));
+            let is_stopped = touched.iter().any(|e| u.world.satisfies::<&CSolid>(*e));
             if enemy.is_some() || is_stopped || time > SHOT_TIME {
                 u.world.despawn(shot)?;
             }
@@ -652,34 +663,34 @@ impl Platformer {
     }
 
     /// Whatever the hero's box touches happens to it.
-    fn meet(&mut self, u: &mut Update<'_>, status: &mut Status) -> Result<()> {
-        let root = u.world.get::<&Transform>(self.hero)?.position;
+    fn meet(&mut self, u: &mut Update<'_>, status: &mut CStatus) -> Result<()> {
+        let root = u.world.get::<&CTransform>(self.hero)?.position;
         let centre = root + Vec2::new(0.0, ROOT_HEIGHT - HERO_SIZE.y / 2.0);
         let area = Cuboid::new(HERO_SIZE / 2.0);
         let mut is_hurt = false;
         let mut has_fallen = false;
         let mut has_won = false;
         for entity in Self::touching(u, &area, centre) {
-            if u.world.satisfies::<&Coin>(entity) {
+            if u.world.satisfies::<&CCoin>(entity) {
                 u.world.despawn(entity)?;
                 status.score += 1;
                 u.audio.play(&self.sounds.pickup);
             }
-            is_hurt |= u.world.satisfies::<&Enemy>(entity);
-            has_fallen |= u.world.satisfies::<&Pit>(entity);
-            has_won |= u.world.satisfies::<&Goal>(entity);
-            if u.world.satisfies::<&Earshot>(entity) && !status.has_called {
+            is_hurt |= u.world.satisfies::<&CEnemy>(entity);
+            has_fallen |= u.world.satisfies::<&CPit>(entity);
+            has_won |= u.world.satisfies::<&CGoal>(entity);
+            if u.world.satisfies::<&CEarshot>(entity) && !status.has_called {
                 status.has_called = true;
                 u.audio.play(&self.sounds.help);
             }
         }
 
-        let invulnerable = u.world.get::<&Hero>(self.hero)?.invulnerable;
+        let invulnerable = u.world.get::<&CHero>(self.hero)?.invulnerable;
         if has_fallen {
             self.lose_life(u, status)?;
             let reached = CHECKPOINTS.iter().rev().find(|x| **x <= root.x);
             let x = *reached.unwrap_or(&CHECKPOINTS[0]);
-            let body = u.world.get::<&Body>(self.hero)?.0;
+            let body = u.world.get::<&CBody>(self.hero)?.0;
             let body = u.physics.body_mut(body);
             body.set_translation(Vec2::new(x, GROUND - ROOT_HEIGHT), true);
             body.set_linvel(Vec2::ZERO, true);
@@ -689,7 +700,7 @@ impl Platformer {
         if has_won && status.phase == Phase::Playing {
             status.phase = Phase::Won;
             u.audio.play(&self.sounds.win);
-            let cage: Vec<Entity> = u.world.query::<Entity>().with::<&Goal>().iter().collect();
+            let cage: Vec<Entity> = u.world.query::<Entity>().with::<&CGoal>().iter().collect();
             for entity in cage {
                 u.world.despawn(entity)?;
             }
@@ -697,9 +708,9 @@ impl Platformer {
         Ok(())
     }
 
-    fn lose_life(&self, u: &mut Update<'_>, status: &mut Status) -> Result<()> {
+    fn lose_life(&self, u: &mut Update<'_>, status: &mut CStatus) -> Result<()> {
         status.lives -= 1;
-        let mut hero = u.world.get::<&mut Hero>(self.hero)?;
+        let mut hero = u.world.get::<&mut CHero>(self.hero)?;
         hero.hurt = HURT;
         hero.invulnerable = INVULNERABLE;
         drop(hero);
@@ -712,9 +723,9 @@ impl Platformer {
         Ok(())
     }
 
-    fn act(&self, u: &mut Update<'_>, status: Status) -> Result<()> {
-        let hero = *u.world.get::<&Hero>(self.hero)?;
-        let body = u.world.get::<&Body>(self.hero)?.0;
+    fn act(&self, u: &mut Update<'_>, status: CStatus) -> Result<()> {
+        let hero = *u.world.get::<&CHero>(self.hero)?;
+        let body = u.world.get::<&CBody>(self.hero)?.0;
         let is_moving = u.physics.body(body).linvel().x != 0.0;
         let (chosen, looping) = self.moves.of_hero(&hero, status.phase, is_moving);
         let mut character = u.world.get::<&mut Character>(self.hero)?;
@@ -741,7 +752,7 @@ impl Platformer {
 
         if status.phase == Phase::Won {
             let freed = Play::new().crossfade(CROSSFADE);
-            for character in u.world.query_mut::<&mut Character>().with::<&Captive>() {
+            for character in u.world.query_mut::<&mut Character>().with::<&CCaptive>() {
                 character.play(&self.moves.freed, freed)?;
             }
         }
@@ -752,7 +763,8 @@ impl Platformer {
     fn thin_farts(u: &mut Update<'_>) -> Result<()> {
         let dt = u.timer.dt();
         let mut gone = Vec::new();
-        for (entity, Fart(left), sprite) in u.world.query_mut::<(Entity, &mut Fart, &mut Sprite)>()
+        for (entity, CFart(left), sprite) in
+            u.world.query_mut::<(Entity, &mut CFart, &mut CSprite)>()
         {
             *left -= dt;
             let life = (*left / FART_TIME).max(0.0);
@@ -775,11 +787,11 @@ impl Platformer {
     fn spawn_star(&self, world: &mut World, x: f32) {
         let texture = &self.textures.star;
         let draw = sized(texture, STAR_SIZE).depth(depth::BACKDROP + 1.0);
-        let transform = Transform {
+        let transform = CTransform {
             rotation: STAR_VELOCITY.y.atan2(STAR_VELOCITY.x),
-            ..Transform::at(x, -STAR_SIZE.x)
+            ..CTransform::at(x, -STAR_SIZE.x)
         };
-        world.spawn((Star, transform, Sprite::new(texture.clone()).draw(draw)));
+        world.spawn((CStar, transform, CSprite::new(texture.clone()).draw(draw)));
     }
 
     /// Sends a shooting star across the view now and then, and clears those that have passed.
@@ -796,8 +808,8 @@ impl Platformer {
         let mut gone = Vec::new();
         for (entity, transform) in u
             .world
-            .query_mut::<(Entity, &mut Transform)>()
-            .with::<&Star>()
+            .query_mut::<(Entity, &mut CTransform)>()
+            .with::<&CStar>()
         {
             transform.position += STAR_VELOCITY * dt;
             if transform.position.y > VIEW.y + STAR_SIZE.x {
@@ -810,7 +822,7 @@ impl Platformer {
         Ok(())
     }
 
-    fn show_status(&self, world: &World, status: Status) -> Result<()> {
+    fn show_status(&self, world: &World, status: CStatus) -> Result<()> {
         let textures = &self.textures;
         for (index, entity) in (0u32..).zip(&self.lives) {
             let life = if index < status.lives {
@@ -818,11 +830,11 @@ impl Platformer {
             } else {
                 &textures.life_lost
             };
-            world.get::<&mut Sprite>(*entity)?.texture = life.clone();
+            world.get::<&mut CSprite>(*entity)?.texture = life.clone();
         }
         let mut score = status.score as usize;
         for entity in &self.digits {
-            world.get::<&mut Sprite>(*entity)?.texture = textures.digits[score % 10].clone();
+            world.get::<&mut CSprite>(*entity)?.texture = textures.digits[score % 10].clone();
             score /= 10;
         }
         Ok(())
@@ -830,11 +842,11 @@ impl Platformer {
 
     fn follow(&self, world: &World) -> Result<()> {
         let half = VIEW.x / 2.0;
-        let x = world.get::<&Transform>(self.hero)?.position.x;
+        let x = world.get::<&CTransform>(self.hero)?.position.x;
         let x = x.clamp(half, WIDTH - half);
         world.get::<&mut Camera>(self.camera)?.position.x = x;
         for (entity, home) in &self.backgrounds {
-            world.get::<&mut Transform>(*entity)?.position.x = home + x * (1.0 - PARALLAX);
+            world.get::<&mut CTransform>(*entity)?.position.x = home + x * (1.0 - PARALLAX);
         }
         Ok(())
     }
@@ -843,7 +855,7 @@ impl Platformer {
         if let Some(lines) = self.diagnostics.take() {
             world.despawn(lines)?;
         } else {
-            self.diagnostics = Some(world.spawn((ColliderLines(DIAGNOSTICS_COLOUR),)));
+            self.diagnostics = Some(world.spawn((CColliderLines(DIAGNOSTICS_COLOUR),)));
         }
         Ok(())
     }
@@ -865,7 +877,7 @@ impl Game for Platformer {
         let captive_character = captive_character.draw(parts.depth(CAPTIVE_DEPTH));
 
         let world = &mut *s.world;
-        world.spawn((Clear(Color::rgb(0.18, 0.14, 0.43)),));
+        world.spawn((CClear(Color::rgb(0.18, 0.14, 0.43)),));
         let camera = world.spawn((Camera {
             position: VIEW / 2.0,
             zoom: PIXELS_PER_METRE,
@@ -879,13 +891,13 @@ impl Game for Platformer {
         }
         spawn_walls(world);
         let pit = zone(Vec2::new(WIDTH, 1.0));
-        world.spawn((Pit, Transform::at(WIDTH / 2.0, PIT + 0.5), pit));
+        world.spawn((CPit, CTransform::at(WIDTH / 2.0, PIT + 0.5), pit));
 
         let first = HUD_MARGIN + HUD_SIZE / 2.0;
         let lives = spawn_row(world, LIVES as usize, first, HUD_SIZE + 6.0, &textures.life);
         let last = WINDOW.x - first;
         let digits = spawn_row(world, DIGITS, last, -HUD_SIZE, &textures.digits[0]);
-        let status = world.spawn((Status {
+        let status = world.spawn((CStatus {
             lives: LIVES,
             score: 0,
             phase: Phase::Playing,
@@ -919,19 +931,19 @@ impl Game for Platformer {
         if u.input.pressed(Key::Tab) {
             self.toggle_diagnostics(u.world)?;
         }
-        let mut status = *u.world.get::<&Status>(self.status)?;
+        let mut status = *u.world.get::<&CStatus>(self.status)?;
         if status.phase != Phase::Playing && u.input.pressed(Key::Enter) {
             self.restart(u.world)?;
-            status = Status {
+            status = CStatus {
                 lives: LIVES,
                 score: 0,
                 phase: Phase::Playing,
                 has_called: false,
             };
-            *u.world.get::<&mut Status>(self.status)? = status;
+            *u.world.get::<&mut CStatus>(self.status)? = status;
         }
         // A new game's bodies appear on the step after their entities.
-        if !u.world.satisfies::<&Body>(self.hero) {
+        if !u.world.satisfies::<&CBody>(self.hero) {
             return Ok(());
         }
 
@@ -946,7 +958,7 @@ impl Game for Platformer {
         self.show_status(u.world, status)?;
         self.follow(u.world)?;
         self.fall_stars(&mut u)?;
-        *u.world.get::<&mut Status>(self.status)? = status;
+        *u.world.get::<&mut CStatus>(self.status)? = status;
         Ok(())
     }
 }

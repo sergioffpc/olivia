@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use olivia::animation::{Animation, Character, Play};
-use olivia::ecs::{Camera, Entity, Hud, Transform};
+use olivia::ecs::{CHud, CTransform, Camera, Entity};
 use olivia::graphics::Draw;
 use olivia::math::Vec2;
 use olivia::window::Window;
@@ -31,7 +31,7 @@ struct Stage;
 impl Game for Stage {
     fn load(s: Setup<'_>) -> Result<Self> {
         let character = Character::load(s.filesystem, s.graphics, "characters/stand-in")?;
-        s.world.spawn((Transform::default(), character));
+        s.world.spawn((CTransform::default(), character));
         Ok(Self)
     }
 
@@ -84,7 +84,7 @@ fn a_character_is_drawn_at_its_entity() {
     let (mut game_loop, _window, hero) = start();
     let world = game_loop.world();
     world.spawn((CAMERA,));
-    *world.get::<&mut Transform>(hero).unwrap() = Transform::at(300.0, 500.0);
+    *world.get::<&mut CTransform>(hero).unwrap() = CTransform::at(300.0, 500.0);
     let corners = corners(&mut game_loop);
     assert_close(corners[TORSO], Vec2::new(300.0, 500.0) + TORSO_CORNER);
 }
@@ -103,7 +103,7 @@ fn one_marked_hud_is_drawn_after_the_world_and_ignores_the_camera() {
     let (mut game_loop, _window, hero) = start();
     let world = game_loop.world();
     let in_hud = Character::clone(&world.get::<&Character>(hero).unwrap());
-    world.spawn((Hud, Transform::default(), in_hud));
+    world.spawn((CHud, CTransform::default(), in_hud));
     world.spawn((Camera {
         position: Vec2::new(1000.0, 0.0),
         ..CAMERA
@@ -189,7 +189,7 @@ fn a_body_is_drawn_between_its_last_two_steps() {
 
     let drawn = corners(&mut game_loop)[TORSO] - TORSO_CORNER;
     let world = game_loop.world();
-    let stepped = world.get::<&Transform>(hero).unwrap().position;
+    let stepped = world.get::<&CTransform>(hero).unwrap().position;
     assert!(
         drawn.y < stepped.y,
         "{} is not above {}",

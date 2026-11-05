@@ -2,14 +2,14 @@
 //!
 //! Run it with `cargo run --example sprite`.
 
-use olivia::ecs::{Camera, Clear, Entity, Hud, Sprite, Transform};
+use olivia::ecs::{CClear, CHud, CSprite, CTransform, Camera, Entity};
 use olivia::graphics::Draw;
 use olivia::math::{Color, Rect, Vec2};
 use olivia::window::WindowEvent;
 use olivia::{Config, Game, Result, Setup, Update};
 
 /// A sprite that turns with the clock.
-struct Spinning;
+struct CSpinning;
 
 struct Demo {
     camera: Entity,
@@ -22,7 +22,7 @@ impl Game for Demo {
         let hero = s.graphics.texture(&bytes)?;
         let head = hero.region(Rect::new(3.0, 0.0, 10.0, 8.0));
 
-        s.world.spawn((Clear(Color::rgb(0.1, 0.15, 0.2)),));
+        s.world.spawn((CClear(Color::rgb(0.1, 0.15, 0.2)),));
         let camera = s.world.spawn((Camera {
             position: Vec2::ZERO,
             zoom: 4.0,
@@ -30,18 +30,21 @@ impl Game for Demo {
         },));
 
         let centred = Draw::new().origin(Vec2::splat(0.5));
-        let sprite = Sprite::new(hero).draw(centred);
-        s.world.spawn((Transform::at(-30.0, 0.0), sprite.clone()));
+        let sprite = CSprite::new(hero).draw(centred);
+        s.world.spawn((CTransform::at(-30.0, 0.0), sprite.clone()));
         let flipped = centred.scale(Vec2::new(-1.0, 1.0));
         s.world
-            .spawn((Transform::default(), sprite.clone().draw(flipped)));
+            .spawn((CTransform::default(), sprite.clone().draw(flipped)));
         let tinted = centred.color(Color::new(0.4, 1.0, 0.4, 0.6));
         s.world
-            .spawn((Spinning, Transform::at(30.0, 0.0), sprite.draw(tinted)));
+            .spawn((CSpinning, CTransform::at(30.0, 0.0), sprite.draw(tinted)));
 
         let scaled = Draw::new().scale(Vec2::splat(3.0));
-        s.world
-            .spawn((Hud, Transform::at(8.0, 8.0), Sprite::new(head).draw(scaled)));
+        s.world.spawn((
+            CHud,
+            CTransform::at(8.0, 8.0),
+            CSprite::new(head).draw(scaled),
+        ));
         Ok(Self { camera, time: 0.0 })
     }
 
@@ -54,7 +57,7 @@ impl Game for Demo {
         camera.position.x = self.time.sin() * 40.0;
         camera.rotation = self.time * 0.25;
         drop(camera);
-        for (_, transform) in u.world.query_mut::<(&Spinning, &mut Transform)>() {
+        for (_, transform) in u.world.query_mut::<(&CSpinning, &mut CTransform)>() {
             transform.rotation = self.time;
         }
         Ok(())

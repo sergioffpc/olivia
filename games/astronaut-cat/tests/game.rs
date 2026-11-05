@@ -4,8 +4,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronaut_cat::level::{CHECKPOINTS, GROUND, PLATFORMS, ROOT_HEIGHT};
-use astronaut_cat::{Enemy, Hero, Phase, Platformer, Star, Status};
-use olivia::ecs::Transform;
+use astronaut_cat::{CEnemy, CHero, CStar, CStatus, Phase, Platformer};
+use olivia::ecs::CTransform;
 use olivia::math::Vec2;
 use olivia::window::Window;
 use olivia::window::raw::ElementState::{Pressed, Released};
@@ -48,20 +48,20 @@ impl Play {
         self.key(code, false);
     }
 
-    fn status(&mut self) -> Status {
+    fn status(&mut self) -> CStatus {
         *self
             .game
             .world()
-            .query_mut::<&Status>()
+            .query_mut::<&CStatus>()
             .into_iter()
             .next()
             .unwrap()
     }
 
-    fn hero(&mut self) -> (Hero, Vec2) {
+    fn hero(&mut self) -> (CHero, Vec2) {
         let world = self.game.world();
         let (hero, transform) = world
-            .query_mut::<(&Hero, &Transform)>()
+            .query_mut::<(&CHero, &CTransform)>()
             .into_iter()
             .next()
             .unwrap();
@@ -73,7 +73,7 @@ impl Play {
     }
 
     fn enemies(&mut self) -> usize {
-        self.game.world().query_mut::<&Enemy>().into_iter().count()
+        self.game.world().query_mut::<&CEnemy>().into_iter().count()
     }
 }
 
@@ -85,7 +85,11 @@ fn shooting_stars_fall_now_and_then_and_go() {
     // Twenty seconds.
     for _ in 0..1200 {
         play.run(1);
-        let star = play.game.world().query_mut::<&Transform>().with::<&Star>();
+        let star = play
+            .game
+            .world()
+            .query_mut::<&CTransform>()
+            .with::<&CStar>();
         let height = star
             .into_iter()
             .next()

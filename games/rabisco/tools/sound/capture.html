@@ -123,6 +123,7 @@
   <section id="save" hidden>
     <h2>4 · Guardar</h2>
     <div class="row">
+      <select id="take" title="Guardar como"></select>
       <button id="saveButton" class="primary">Guardar</button>
       <button id="again">Gravar outra vez</button>
       <span id="saveStatus" class="status"></span>
@@ -140,18 +141,20 @@ const NOISE_SKIP = 0.5;
 const RUMBLE_HZ = 80;
 const CLIP = 0.98;
 
-// The sound cards S1 to S10 of tools/make_cards.py, named as printed.
+// The sound cards S1 to S10 of tools/make_cards.py, named as printed. A sound may be recorded
+// many times, as numbered takes, sounds/hero_jump_1.wav, sounds/hero_jump_2.wav and on, of which
+// the game plays one at random; the music is one file.
 const CARDS = [
-  { name: "S1 O herói salta", when: "o herói dá um salto normal", loops: false, file: "sfx/jump.wav" },
-  { name: "S2 O salto extra", when: "o herói dá o salto extra no ar (o do pum)", loops: false, file: "sfx/fart.wav" },
-  { name: "S3 O herói dispara", when: "o herói dispara o lançador", loops: false, file: "sfx/shoot.wav" },
-  { name: "S4 Acertou num mau", when: "o tiro do herói acerta num mau", loops: false, file: "sfx/hit.wav" },
-  { name: "S5 Apanhou uma coisa", when: "o herói apanha uma coisa pelo caminho", loops: false, file: "sfx/pickup.wav" },
-  { name: "S6 O herói magoa-se", when: "um mau toca no herói, que perde uma vida", loops: false, file: "sfx/hurt.wav" },
-  { name: "S7 Fim do jogo", when: "o herói perde a última vida", loops: false, file: "sfx/gameover.wav" },
-  { name: "S8 Socorro!", when: "quem está preso pede ajuda ao herói", loops: false, file: "sfx/help.wav" },
-  { name: "S9 Vitória", when: "o herói salva quem estava preso", loops: false, file: "sfx/win.wav" },
-  { name: "S10 A música", when: "toca durante o jogo todo", loops: true, file: "sfx/music.wav" },
+  { name: "S1 O herói salta", when: "o herói dá um salto normal", loops: false, takes: "sounds/hero_jump" },
+  { name: "S2 O salto extra", when: "o herói dá o salto extra no ar (o do pum)", loops: false, takes: "sounds/hero_fart" },
+  { name: "S3 O herói dispara", when: "o herói dispara o lançador", loops: false, takes: "sounds/hero_shoot" },
+  { name: "S4 Acertou num mau", when: "o tiro do herói acerta num mau", loops: false, takes: "sounds/hit" },
+  { name: "S5 Apanhou uma coisa", when: "o herói apanha uma coisa pelo caminho", loops: false, takes: "sounds/pickup" },
+  { name: "S6 O herói magoa-se", when: "um mau toca no herói, que perde uma vida", loops: false, takes: "sounds/hero_hurt" },
+  { name: "S7 Fim do jogo", when: "o herói perde a última vida", loops: false, takes: "sounds/gameover" },
+  { name: "S8 Socorro!", when: "quem está preso pede ajuda ao herói", loops: false, takes: "sounds/princess_help" },
+  { name: "S9 Vitória", when: "o herói salva quem estava preso", loops: false, takes: "sounds/hero_win" },
+  { name: "S10 A música", when: "toca durante o jogo todo", loops: true, file: "musics/music.wav" },
 ];
 
 // Copies the microphone's samples out of the audio thread.
@@ -403,12 +406,52 @@ const card = () => CARDS[$("card").value];
 // Browsers without folder access, such as Firefox and Safari, download the file instead.
 const canWrite = "showDirectoryPicker" in window;
 
-for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.file})`, i));
+for (const [i, c] of CARDS.entries()) $("card").add(new Option(`${c.name} (${c.takes ? `${c.takes}_N.wav` : c.file})`, i));
+
+const takePath = (c, n) => `${c.takes}_${n}.wav`;
+
+/** The numbers of the card's takes already in the assets folder, in order. */
+async function takesSaved(c) {
+  if (!c.takes || !folder) return [];
+  const [dirName, stem] = c.takes.split("/");
+  let dir;
+  try {
+    dir = await folder.getDirectoryHandle(dirName);
+  } catch {
+    return [];
+  }
+  const numbers = [];
+  for await (const name of dir.keys()) {
+    const n = name.startsWith(`${stem}_`) && name.endsWith(".wav") && name.slice(stem.length + 1, -4);
+    if (n && /^[1-9][0-9]*$/.test(n)) numbers.push(+n);
+  }
+  return numbers.sort((a, b) => a - b);
+}
+
+/** Where Save writes: a new take after the last, or over one already saved. */
+async function showTakes() {
+  const c = card();
+  const select = $("take");
+  select.replaceChildren();
+  select.hidden = !c.takes;
+  if (!c.takes) {
+    $("cardInfo").textContent = `${c.when} · ${c.loops ? "repete sempre" : "uma vez"}`;
+    return;
+  }
+  // Without folder access, the takes are not known, so a new one is the first.
+  const saved = canWrite ? await takesSaved(c) : [];
+  if (c !== card()) return;
+  const next = (saved.at(-1) ?? 0) + 1;
+  select.add(new Option(`nova gravação, ${takePath(c, next).split("/")[1]}`, next));
+  for (const n of saved) select.add(new Option(`por cima de ${takePath(c, n).split("/")[1]}`, n));
+  const count = saved.length === 1 ? "1 gravação guardada" : `${saved.length} gravações guardadas`;
+  $("cardInfo").textContent = `${c.when} · ${c.loops ? "repete sempre" : "uma vez"} · ${count}, o jogo toca uma ao acaso`;
+}
 
 function showCard() {
   const c = card();
-  $("cardInfo").textContent = `${c.when} · ${c.loops ? "repete sempre" : "uma vez"}`;
   $("loop").checked = c.loops;
+  showTakes();
   if (mode === "review") recompute();
 }
 $("card").addEventListener("change", showCard);
@@ -782,20 +825,23 @@ addEventListener("message", (event) => {
   if (event.origin !== location.origin || !("folder" in event.data)) return;
   folder = event.data.folder;
   updateRecord();
+  showTakes();
 });
 
 // ---------- Save ----------
 
 $("saveButton").addEventListener("click", async () => {
   if (!result) return;
-  const path = card().file;
+  const c = card();
+  const path = c.takes ? takePath(c, +$("take").value) : c.file;
   const data = wav(result);
   if (!canWrite) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([data], { type: "audio/wav" }));
     link.download = path.split("/").pop();
     link.click();
-    return status("saveStatus", `Descarregado ${link.download}: move-o para assets/${path} do jogo.`);
+    const renumber = c.takes ? `, com o número a seguir ao da última gravação desse som` : "";
+    return status("saveStatus", `Descarregado ${link.download}: move-o para assets/${path} do jogo${renumber}.`);
   }
   if (!folder) return status("saveStatus", "Escolhe primeiro a pasta assets, lá em cima.", true);
   $("saveButton").disabled = true;
@@ -810,6 +856,7 @@ $("saveButton").addEventListener("click", async () => {
     await writable.write(data);
     await writable.close();
     status("saveStatus", `Guardado em ${folder.name}/${path}.`);
+    await showTakes();
   } catch (error) {
     status("saveStatus", `Não foi possível guardar: ${error.message}`, true);
   } finally {

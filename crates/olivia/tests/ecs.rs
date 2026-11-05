@@ -5,7 +5,7 @@ use std::cell::Cell;
 use std::time::Duration;
 
 use olivia::ecs::{
-    Body, Camera, ColliderBuilder, Entity, Geometry, Hud, RigidBodyBuilder, Shape, Transform,
+    CBody, CHud, CShape, CTransform, Camera, ColliderBuilder, Entity, Geometry, RigidBodyBuilder,
     World, entity_of,
 };
 use olivia::graphics::Draw;
@@ -48,26 +48,26 @@ fn start() -> (GameLoop<Probe>, Window) {
     (game_loop, window)
 }
 
-fn square() -> Shape {
-    Shape::new(Geometry::Rect(Vec2::ONE))
+fn square() -> CShape {
+    CShape::new(Geometry::Rect(Vec2::ONE))
 }
 
-fn transform(world: &World, entity: Entity) -> Transform {
-    *world.get::<&Transform>(entity).unwrap()
+fn transform(world: &World, entity: Entity) -> CTransform {
+    *world.get::<&CTransform>(entity).unwrap()
 }
 
 #[test]
 fn a_rigid_body_falls_and_moves_its_transform() {
     let (mut game_loop, mut window) = start();
     let entity = game_loop.world().spawn((
-        Transform::at(3.0, 1.0),
+        CTransform::at(3.0, 1.0),
         RigidBodyBuilder::dynamic(),
         ColliderBuilder::ball(0.5),
     ));
     game_loop.run_frame(STEP * 5, &mut window).unwrap();
 
     let world = game_loop.world();
-    assert!(world.satisfies::<&Body>(entity));
+    assert!(world.satisfies::<&CBody>(entity));
     assert!(!world.satisfies::<&RigidBodyBuilder>(entity));
     let moved = transform(world, entity);
     assert!((moved.position.x - 3.0).abs() < 1e-3);
@@ -79,11 +79,11 @@ fn a_collider_alone_gets_a_fixed_body() {
     let (mut game_loop, mut window) = start();
     let entity = game_loop
         .world()
-        .spawn((Transform::at(0.0, 1.0), ColliderBuilder::ball(0.5)));
+        .spawn((CTransform::at(0.0, 1.0), ColliderBuilder::ball(0.5)));
     game_loop.run_frame(STEP * 5, &mut window).unwrap();
     assert_eq!(
         transform(game_loop.world(), entity),
-        Transform::at(0.0, 1.0)
+        CTransform::at(0.0, 1.0)
     );
 }
 
@@ -92,7 +92,7 @@ fn a_collider_leads_back_to_its_entity() {
     let (mut game_loop, mut window) = start();
     let entity = game_loop
         .world()
-        .spawn((Transform::default(), ColliderBuilder::ball(0.5)));
+        .spawn((CTransform::default(), ColliderBuilder::ball(0.5)));
     game_loop.run_frame(STEP * 3, &mut window).unwrap();
     assert_eq!(OWNER.get(), Some(entity));
 }
@@ -102,7 +102,7 @@ fn despawning_an_entity_removes_its_body() {
     let (mut game_loop, mut window) = start();
     let entity = game_loop
         .world()
-        .spawn((Transform::default(), ColliderBuilder::ball(0.5)));
+        .spawn((CTransform::default(), ColliderBuilder::ball(0.5)));
     game_loop.run_frame(STEP * 3, &mut window).unwrap();
     assert_eq!(OVERLAPS.get(), 1);
 
@@ -114,7 +114,7 @@ fn despawning_an_entity_removes_its_body() {
 #[test]
 fn nothing_outside_the_hud_is_drawn_without_a_camera() {
     let (mut game_loop, _window) = start();
-    game_loop.world().spawn((Transform::default(), square()));
+    game_loop.world().spawn((CTransform::default(), square()));
     assert_eq!(game_loop.mesh().vertices.len(), 0);
 }
 
@@ -122,7 +122,7 @@ fn nothing_outside_the_hud_is_drawn_without_a_camera() {
 fn every_camera_sees_the_world() {
     let (mut game_loop, _window) = start();
     let world = game_loop.world();
-    world.spawn((Transform::default(), square()));
+    world.spawn((CTransform::default(), square()));
     world.spawn((CAMERA,));
     world.spawn((CAMERA,));
     assert_eq!(game_loop.mesh().vertices.len(), 12);
@@ -132,9 +132,9 @@ fn every_camera_sees_the_world() {
 fn the_hud_is_drawn_after_the_world_and_ignores_the_camera() {
     let (mut game_loop, _window) = start();
     let world = game_loop.world();
-    world.spawn((Hud, Transform::at(5.0, 5.0), square()));
+    world.spawn((CHud, CTransform::at(5.0, 5.0), square()));
     world.spawn((
-        Transform::at(5.0, 5.0),
+        CTransform::at(5.0, 5.0),
         square().draw(Draw::new().depth(9.0)),
     ));
     world.spawn((Camera {
@@ -153,7 +153,7 @@ fn a_body_is_drawn_between_its_last_two_steps() {
     let (mut game_loop, mut window) = start();
     let world = game_loop.world();
     let entity = world.spawn((
-        Transform::default(),
+        CTransform::default(),
         RigidBodyBuilder::dynamic(),
         ColliderBuilder::ball(0.5),
         square(),

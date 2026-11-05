@@ -3,4 +3,4 @@
 mod game;
 pub mod level;
 
-pub use game::{Enemy, Hero, Phase, Platformer, Shot, Star, Status};
+pub use game::{CEnemy, CHero, CShot, CStar, CStatus, Phase, Platformer};

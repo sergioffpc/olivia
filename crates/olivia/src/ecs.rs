@@ -5,8 +5,8 @@
 //! has something to show. A component of the game's own is any `Send + Sync + 'static` type.
 //!
 //! Spawn a [`RigidBodyBuilder`] or a [`ColliderBuilder`], or both, to give an entity a body. On the
-//! next step Olivia consumes them and adds a [`Body`]; a collider alone gets a fixed body. From then
-//! on physics owns the entity's [`Transform`], and despawning the entity removes its body.
+//! next step Olivia consumes them and adds a [`CBody`]; a collider alone gets a fixed body. From then
+//! on physics owns the entity's [`CTransform`], and despawning the entity removes its body.
 
 pub use hecs::{Bundle, CommandBuffer, Entity, Query, With, Without, World};
 #[cfg(feature = "graphics")]
@@ -24,14 +24,14 @@ pub use olivia_graphics::Camera;
 
 /// Where an entity is, in the game's coordinates.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Transform {
+pub struct CTransform {
     /// The point the entity's pivot sits on.
     pub position: Vec2,
     /// How far the entity is turned clockwise, in radians.
     pub rotation: f32,
 }
 
-impl Transform {
+impl CTransform {
     /// An entity at `(x, y)`, not turned.
     #[must_use]
     pub const fn at(x: f32, y: f32) -> Self {
@@ -45,7 +45,7 @@ impl Transform {
 /// An entity's body in the physics world, added by Olivia.
 #[cfg(feature = "physics")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Body(pub RigidBodyHandle);
+pub struct CBody(pub RigidBodyHandle);
 
 /// The entity whose body holds `collider`, if it has one.
 ///
@@ -58,10 +58,10 @@ pub fn entity_of(physics: &physics::World, collider: ColliderHandle) -> Option<E
     Entity::from_bits(u64::try_from(physics.collider(collider).user_data).ok()?)
 }
 
-/// Shows a texture at an entity's [`Transform`], which overrides `draw`'s rotation.
+/// Shows a texture at an entity's [`CTransform`], which overrides `draw`'s rotation.
 #[cfg(feature = "graphics")]
 #[derive(Clone, Debug)]
-pub struct Sprite {
+pub struct CSprite {
     /// The image to show.
     pub texture: Texture,
     /// How to show it.
@@ -69,7 +69,7 @@ pub struct Sprite {
 }
 
 #[cfg(feature = "graphics")]
-impl Sprite {
+impl CSprite {
     /// Shows `texture` with the default [`Draw`].
     #[must_use]
     pub fn new(texture: Texture) -> Self {
@@ -87,10 +87,10 @@ impl Sprite {
     }
 }
 
-/// Shows text at an entity's [`Transform`], which overrides `draw`'s rotation.
+/// Shows text at an entity's [`CTransform`], which overrides `draw`'s rotation.
 #[cfg(feature = "graphics")]
 #[derive(Clone, Debug)]
-pub struct Text {
+pub struct CText {
     /// The font to set it in.
     pub font: Font,
     /// The font size. Must be positive and finite.
@@ -104,7 +104,7 @@ pub struct Text {
 }
 
 #[cfg(feature = "graphics")]
-impl Text {
+impl CText {
     /// Shows `text` in `font` at `size`, unwrapped, with the default [`Draw`].
     #[must_use]
     pub fn new(font: Font, size: f32, text: impl Into<String>) -> Self {
@@ -132,7 +132,7 @@ impl Text {
     }
 }
 
-/// The outline of a [`Shape`], placed at an entity's [`Transform`].
+/// The outline of a [`CShape`], placed at an entity's [`CTransform`].
 #[cfg(feature = "graphics")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Geometry {
@@ -152,10 +152,10 @@ pub enum Geometry {
     Line(Vec2, f32),
 }
 
-/// Shows a geometry at an entity's [`Transform`], which overrides `draw`'s rotation.
+/// Shows a geometry at an entity's [`CTransform`], which overrides `draw`'s rotation.
 #[cfg(feature = "graphics")]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Shape {
+pub struct CShape {
     /// What to show.
     pub geometry: Geometry,
     /// How to show it.
@@ -163,7 +163,7 @@ pub struct Shape {
 }
 
 #[cfg(feature = "graphics")]
-impl Shape {
+impl CShape {
     /// Shows `geometry` with the default [`Draw`].
     #[must_use]
     pub fn new(geometry: Geometry) -> Self {
@@ -182,17 +182,17 @@ impl Shape {
 }
 
 /// Marks an entity as part of the HUD: it is drawn after everything seen through a [`Camera`], with
-/// its [`Transform`] in logical pixels from the top-left corner of the window.
+/// its [`CTransform`] in logical pixels from the top-left corner of the window.
 #[cfg(feature = "graphics")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Hud;
+pub struct CHud;
 
 /// The colour a frame clears to, on any entity. A frame with none clears to black.
 #[cfg(feature = "graphics")]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Clear(pub Color);
+pub struct CClear(pub Color);
 
 /// Draws every collider and its bounding box through each [`Camera`], in this colour, on any entity.
 #[cfg(all(feature = "graphics", feature = "physics"))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ColliderLines(pub Color);
+pub struct CColliderLines(pub Color);

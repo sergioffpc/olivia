@@ -6,9 +6,9 @@ use olivia_math::{Rect, Vec2};
 #[cfg(feature = "physics")]
 use olivia_physics::World;
 
-use crate::ecs::{self, Clear, Entity, Geometry, Hud, Shape, Sprite, Text, Transform};
+use crate::ecs::{self, CClear, CHud, CShape, CSprite, CText, CTransform, Entity, Geometry};
 #[cfg(feature = "physics")]
-use crate::ecs::{Body, ColliderLines};
+use crate::ecs::{CBody, CColliderLines};
 
 /// Where the entities are for this frame.
 #[derive(Clone, Copy, Debug)]
@@ -25,10 +25,10 @@ impl Poses<'_> {
     /// `transform`, moved between the last two steps if `entity` has a body.
     #[cfg_attr(not(feature = "physics"), expect(clippy::unused_self))]
     #[cfg_attr(not(feature = "physics"), expect(unused_variables))]
-    fn of(self, world: &ecs::World, entity: Entity, transform: Transform) -> Transform {
+    fn of(self, world: &ecs::World, entity: Entity, transform: CTransform) -> CTransform {
         #[cfg(feature = "physics")]
-        if let Ok(body) = world.get::<&Body>(entity) {
-            return Transform {
+        if let Ok(body) = world.get::<&CBody>(entity) {
+            return CTransform {
                 position: self.physics.interpolated_position(body.0, self.factor),
                 rotation: self.physics.interpolated_angle(body.0, self.factor),
             };
@@ -39,7 +39,7 @@ impl Poses<'_> {
 
 /// Draws a frame: everything through each camera in spawn order, then the HUD.
 pub(crate) fn render(world: &ecs::World, poses: Poses<'_>, target: &mut Target<'_>) {
-    if let Some(Clear(color)) = world.query::<&Clear>().iter().next() {
+    if let Some(CClear(color)) = world.query::<&CClear>().iter().next() {
         target.clear(*color);
     }
 
@@ -63,12 +63,12 @@ pub(crate) fn render(world: &ecs::World, poses: Poses<'_>, target: &mut Target<'
 
 /// Draws the entities that are part of the HUD, or the ones that are not.
 fn draw_entities(world: &ecs::World, poses: Poses<'_>, view: &mut View<'_>, hud: bool) {
-    each_entity(world, poses, hud, |sprite: &Sprite, pose| {
+    each_entity(world, poses, hud, |sprite: &CSprite, pose| {
         let draw = sprite.draw.rotation(pose.rotation);
         view.sprite(&sprite.texture, pose.position, draw);
     });
 
-    each_entity(world, poses, hud, |text: &Text, pose| {
+    each_entity(world, poses, hud, |text: &CText, pose| {
         let draw = text.draw.rotation(pose.rotation);
         let (font, size, string) = (&text.font, text.size, &text.text);
         match text.width {
@@ -77,7 +77,7 @@ fn draw_entities(world: &ecs::World, poses: Poses<'_>, view: &mut View<'_>, hud:
         }
     });
 
-    each_entity(world, poses, hud, |shape: &Shape, pose| {
+    each_entity(world, poses, hud, |shape: &CShape, pose| {
         draw_shape(view, shape, pose);
     });
 
@@ -93,9 +93,9 @@ fn each_entity<C: Component>(
     world: &ecs::World,
     poses: Poses<'_>,
     hud: bool,
-    mut draw: impl FnMut(&C, Transform),
+    mut draw: impl FnMut(&C, CTransform),
 ) {
-    let mut entities = world.query::<(Entity, &Transform, &C, Option<&Hud>)>();
+    let mut entities = world.query::<(Entity, &CTransform, &C, Option<&CHud>)>();
     for (entity, transform, component, marker) in &mut entities {
         if marker.is_some() == hud {
             draw(component, poses.of(world, entity, *transform));
@@ -103,7 +103,7 @@ fn each_entity<C: Component>(
     }
 }
 
-fn draw_shape(view: &mut View<'_>, shape: &Shape, pose: Transform) {
+fn draw_shape(view: &mut View<'_>, shape: &CShape, pose: CTransform) {
     let draw = shape.draw.rotation(pose.rotation);
     let pos = pose.position;
     let rect = |size: Vec2| Rect::new(pos.x, pos.y, size.x, size.y);
@@ -120,8 +120,8 @@ fn draw_shape(view: &mut View<'_>, shape: &Shape, pose: Transform) {
 
 #[cfg(feature = "physics")]
 fn draw_collider_lines(world: &ecs::World, poses: Poses<'_>, view: &mut View<'_>, camera: Camera) {
-    let mut lines = world.query::<&ColliderLines>();
-    let Some(ColliderLines(color)) = lines.iter().next() else {
+    let mut lines = world.query::<&CColliderLines>();
+    let Some(CColliderLines(color)) = lines.iter().next() else {
         return;
     };
     let draw = olivia_graphics::Draw::new().color(*color);

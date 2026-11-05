@@ -3,7 +3,7 @@
 //!
 //! Run it with `RUST_LOG=olivia_graphics=debug cargo run --example device_loss`.
 
-use olivia::ecs::{Clear, Entity, Hud, Sprite, Text, Transform};
+use olivia::ecs::{CClear, CHud, CSprite, CText, CTransform, Entity};
 use olivia::graphics::Draw;
 use olivia::math::{Color, Vec2};
 use olivia::window::WindowEvent;
@@ -24,17 +24,17 @@ impl Game for Demo {
         let hero = s.graphics.texture(&hero)?;
         let font = s.graphics.font(&font)?;
 
-        s.world.spawn((Clear(Color::rgb(0.1, 0.15, 0.2)),));
+        s.world.spawn((CClear(Color::rgb(0.1, 0.15, 0.2)),));
         let scaled = Draw::new().scale(Vec2::splat(4.0));
         s.world.spawn((
-            Hud,
-            Transform::at(16.0, 16.0),
-            Sprite::new(hero).draw(scaled),
+            CHud,
+            CTransform::at(16.0, 16.0),
+            CSprite::new(hero).draw(scaled),
         ));
         let count = s.world.spawn((
-            Hud,
-            Transform::at(16.0, 120.0),
-            Text::new(font, 24.0, "devices lost: 0"),
+            CHud,
+            CTransform::at(16.0, 120.0),
+            CText::new(font, 24.0, "devices lost: 0"),
         ));
         Ok(Self {
             count,
@@ -51,7 +51,7 @@ impl Game for Demo {
         if self.until_loss <= 0.0 {
             self.until_loss = SECONDS_BETWEEN_LOSSES;
             self.losses += 1;
-            u.world.get::<&mut Text>(self.count)?.text = format!("devices lost: {}", self.losses);
+            u.world.get::<&mut CText>(self.count)?.text = format!("devices lost: {}", self.losses);
             u.graphics.raw().0.destroy();
         }
         Ok(())

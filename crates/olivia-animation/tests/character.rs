@@ -289,3 +289,30 @@ fn a_joint_with_a_parent_and_no_parent_point_fails() {
     let joint = r#"{ "name": "x", "parent": "a", "part": "b", "point": [0, 0] }"#;
     assert_invalid(&format!("{ROOT},{joint}"), "parent_point");
 }
+
+#[test]
+fn a_character_parses_with_textures_from_anywhere() {
+    let mut graphics = graphics();
+    let mut asked = Vec::new();
+    let character = Character::parse(SKELETON.as_bytes(), |part| {
+        asked.push(part.to_owned());
+        let (_, width, height) = IMAGES.iter().find(|(name, ..)| *name == part).unwrap();
+        Ok::<_, Error>(graphics.texture(&png(*width, *height))?)
+    })
+    .unwrap();
+    assert_eq!(asked, ["forearm", "torso", "arm"]);
+    let positions = |mesh: &Mesh| mesh.vertices.iter().map(|v| v.position).collect::<Vec<_>>();
+    let parsed = mesh(&character, Vec2::ZERO, 0.0);
+    let loaded = mesh(&self::character(), Vec2::ZERO, 0.0);
+    assert_eq!(positions(&parsed), positions(&loaded));
+}
+
+#[test]
+fn the_first_error_of_a_texture_stops_parsing() {
+    let missing = |part: &str| olivia_filesystem::Error::NotFound(part.to_owned()).into();
+    let error = Character::parse(SKELETON.as_bytes(), |part| Err(missing(part))).unwrap_err();
+    assert!(matches!(
+        error,
+        Error::Filesystem(olivia_filesystem::Error::NotFound(part)) if part == "forearm"
+    ));
+}
