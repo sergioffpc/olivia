@@ -60,7 +60,7 @@ const OVERLAY_FADE: f32 = 0.06;
 /// A que distância da mão aparece o tiro, ao longo do lançador, em metros.
 const MUZZLE: f32 = 0.6;
 /// O tamanho da nuvem que sai no salto extra, em metros.
-const FART_SIZE: f32 = 1.5;
+const FART_SIZE: f32 = 0.75;
 /// Quanto tempo dura a nuvem, em segundos.
 const FART_TIME: f32 = 0.9;
 /// Quanto tempo leva um movimento a dar lugar ao seguinte, em segundos.
