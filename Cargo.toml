@@ -16,7 +16,7 @@ olivia-input = { path = "crates/olivia-input" }
 olivia-math = { path = "crates/olivia-math" }
 olivia-physics = { path = "crates/olivia-physics" }
 olivia-window = { path = "crates/olivia-window" }
-base64 = "0.22"
+base64 = "0.23"
 bytemuck = { version = "1", features = ["derive"] }
 console_error_panic_hook = "0.1"
 # No fontconfig: a font comes only from the bytes a game hands over.
